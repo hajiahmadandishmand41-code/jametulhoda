@@ -1,0 +1,2 @@
+-- PostgreSQL installations: run php bin/migrate.php.
+-- The canonical idempotent schema is database.sql.
