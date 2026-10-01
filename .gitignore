@@ -1,0 +1,6 @@
+# Private runtime configuration
+/config/local.php
+/config/install.lock
+
+# Runtime logs and temporary uploads
+/storage/logs/*
