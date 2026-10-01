@@ -1,0 +1,15 @@
+{
+  "name": "jametulhoda-tests",
+  "private": true,
+  "scripts": {
+    "test:http": "node tests/http.mjs",
+    "test:routes": "node tests/route-smoke.mjs",
+    "test:browser": "node tests/browser.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  },
+  "dependencies": {
+    "@platformatic/php-node": "^1.4.0"
+  }
+}

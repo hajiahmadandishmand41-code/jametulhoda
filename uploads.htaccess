@@ -1,0 +1,17 @@
+# uploads/ — user media and documents.
+# Files are served as-is by Apache (the document-root .htaccess bypasses the
+# router for real files); anything else is answered 404 by router.php, which
+# only serves an allowlist of media/document extensions.
+# No `Require all denied` here on purpose: Apache evaluates it before mod_rewrite,
+# so it would answer 403 for paths that do not even exist (the site contract is a
+# uniform 404). Script execution is blocked by removing the handler instead.
+Options -Indexes -ExecCGI
+
+<IfModule mod_mime.c>
+    RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .php8 .phar .cgi .pl .py
+    RemoveType .php .phtml .php3 .php4 .php5 .php7 .php8 .phar
+</IfModule>
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+</IfModule>

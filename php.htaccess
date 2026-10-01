@@ -1,0 +1,4 @@
+# The installer is reached through router.php as /php/install (a public route).
+# Direct file access is answered by router.php too, so no access control here:
+# a `Require all denied` would run before mod_rewrite and break the installer.
+Options -Indexes

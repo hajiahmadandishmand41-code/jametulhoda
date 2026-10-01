@@ -1,0 +1,4 @@
+# Internal directory — the files here are loaded by PHP (router.php/controllers) only.
+# Every direct HTTP request is forwarded to router.php by the document-root .htaccess
+# and answered with a 404; directory listing is disabled as an extra safeguard.
+Options -Indexes

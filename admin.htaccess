@@ -1,0 +1,6 @@
+# admin/ — controllers are reached through router.php only; authentication and
+# CSRF are enforced in PHP (includes/auth.php), not by Apache.
+# The document-root .htaccess already forwards every request (this directory
+# included) to router.php, so nothing here may rewrite again: a second rewrite
+# would either loop or bypass the route allowlist.
+Options -Indexes -MultiViews

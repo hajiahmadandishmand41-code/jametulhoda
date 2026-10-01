@@ -1,0 +1,25 @@
+{
+  "name": "jametulhoda/website",
+  "type": "project",
+  "require": {
+    "php": "^8.3",
+    "ext-pdo": "*",
+    "ext-pdo_pgsql": "*",
+    "ext-mbstring": "*",
+    "ext-fileinfo": "*",
+    "ext-gd": "*",
+    "ext-dom": "*",
+    "ext-curl": "*",
+    "ext-zip": "*",
+    "aws/aws-sdk-php": "^3.0"
+  },
+  "config": {
+    "sort-packages": true,
+    "allow-plugins": false,
+    "platform": {
+      "ext-gd": "8.3"
+    }
+  },
+  "description": "Persian RTL Islamic education website with PostgreSQL and configurable persistent storage.",
+  "license": "proprietary"
+}
