@@ -289,7 +289,7 @@ function postgresDatabaseUrl(): string {
     // Vercel Storage exposes the connection under STORAGE_* names. Prefer the
     // direct/unpooled URL for PHP serverless requests, while retaining support
     // for DATABASE_URL and the Prisma-compatible alias used by older links.
-    foreach (['DATABASE_URL', 'STORAGE_POSTGRES_URL_NON_POOLING', 'STORAGE_DATABASE_URL_UNPOOLED', 'STORAGE_POSTGRES_URL', 'STORAGE_POSTGRES_PRISMA_URL', 'STORAGE_DATABASE_URL'] as $key) {
+    foreach (['STORAGE_POSTGRES_URL_NON_POOLING', 'STORAGE_DATABASE_URL_UNPOOLED', 'STORAGE_POSTGRES_URL', 'STORAGE_POSTGRES_PRISMA_URL', 'STORAGE_DATABASE_URL', 'DATABASE_URL'] as $key) {
         $value = trim(env_value($key));
         if ($value !== '') return $value;
     }
