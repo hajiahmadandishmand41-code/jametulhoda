@@ -44,7 +44,7 @@ define('SITE_NAME',   'جامعة‌الهدی');
 define('SITE_SLOGAN', 'مرکز علمی، آموزشی و پژوهشی در پرتو قرآن و عترت');
 // Default canonical origin follows the domain supplied for this installation;
 // custom domains must override SITE_URL in the environment/local config.
-define('SITE_URL',    env_value('SITE_URL', env_value('VERCEL') ? 'https://jametulhoda1.vercel.app' : 'https://jametulhoda.gt.tc'));
+define('SITE_URL',    env_value('SITE_URL', env_value('VERCEL') ? 'https://jametulhoda.vercel.app' : 'https://jametulhoda.gt.tc'));
 define('SITE_EMAIL',  env_value('SITE_EMAIL', 'hajiahmads299@gmail.com'));
 define('SITE_PHONE',  env_value('SITE_PHONE', '0798228441'));
 define('SITE_ADDRESS',env_value('SITE_ADDRESS', 'کابل، افغانستان'));
