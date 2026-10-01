@@ -3,7 +3,7 @@ require_once __DIR__ . '/config.php';
 
 /**
  * Database connection:
- * - PostgreSQL/Neon remains supported through DATABASE_URL.
+ * - PostgreSQL / Supabase / Neon remains supported through DATABASE_URL.
  * - MySQL/MariaDB is supported for InfinityFree through DB_* settings.
  * - SQLite (DB_DRIVER=sqlite) is a local development/testing driver only and
  *   is refused in production. It lets link audits, HTTP tests and UI work run
@@ -278,7 +278,7 @@ class DatabaseUnavailableException extends PDOException {}
 /**
  * Active driver for the current deployment.
  *
- *   Vercel            → always pgsql (PostgreSQL/Neon via DATABASE_URL).
+ *   Vercel            → always pgsql (PostgreSQL / Supabase / Neon via DATABASE_URL).
  *                       Vercel must never dial the InfinityFree MySQL host:
  *                       that database only accepts connections from inside the
  *                       shared host, so the attempt can only ever time out.
@@ -379,7 +379,7 @@ function newDatabaseConnection(): PDO {
         // MySQL host of another deployment).
         throw new DatabaseUnavailableException(
             env_value('VERCEL') !== ''
-                ? 'DATABASE_URL is not set on Vercel: attach a PostgreSQL (Neon) database to this project.'
+                ? 'DATABASE_URL is not set on Vercel: set DATABASE_URL to the PostgreSQL connection string (Supabase or Neon).'
                 : 'DATABASE_URL is not set.'
         );
     }
@@ -388,15 +388,12 @@ function newDatabaseConnection(): PDO {
         throw new DatabaseUnavailableException('DATABASE_URL must be a PostgreSQL URL.');
     }
     parse_str($url['query'] ?? '', $options);
-    $ssl = $options['sslmode'] ?? 'verify-full';
-    if (!in_array($ssl, ['disable', 'require', 'verify-ca', 'verify-full'], true)) {
-        throw new DatabaseUnavailableException('Unsupported sslmode in DATABASE_URL.');
-    }
-    if (APP_ENV === 'production' && !in_array($ssl, ['verify-ca', 'verify-full'], true)) {
-        // Managed providers (Neon/Vercel Postgres) hand out URLs with
-        // sslmode=require. Production is upgraded to a verified channel
-        // instead of being refused — never downgraded to plaintext.
-        $ssl = 'verify-full';
+    // Supabase and Neon commonly provide sslmode=require. Keep that mode:
+    // it encrypts the connection without assuming a provider-specific CA
+    // bundle is present on the Vercel PHP runtime.
+    $ssl = $options['sslmode'] ?? 'require';
+    if (!in_array($ssl, ['require', 'verify-ca', 'verify-full'], true)) {
+        throw new DatabaseUnavailableException('Unsupported sslmode in DATABASE_URL. Use sslmode=require for Supabase/Neon.');
     }
     $host = $url['host'] ?? '';
     $name = rawurldecode(ltrim($url['path'] ?? '', '/'));
@@ -409,7 +406,10 @@ function newDatabaseConnection(): PDO {
     if (isset($options['options']) && is_string($options['options']) && $options['options'] !== '') {
         $dsn .= ';options=' . $options['options'];
     }
-    if ($ssl === 'verify-full' || $ssl === 'verify-ca') $dsn .= ';sslrootcert=/etc/ssl/certs/ca-certificates.crt';
+    if ($ssl === 'verify-full' || $ssl === 'verify-ca') {
+        $ca = '/etc/ssl/certs/ca-certificates.crt';
+        if (is_file($ca)) $dsn .= ';sslrootcert=' . $ca;
+    }
     $pdo = new PDO($dsn, rawurldecode($url['user'] ?? ''), rawurldecode($url['pass'] ?? ''), [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
