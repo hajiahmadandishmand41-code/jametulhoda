@@ -1,0 +1,6 @@
+# User files only: no directory listing, no script execution (see uploads/.htaccess).
+Options -Indexes -ExecCGI
+<IfModule mod_mime.c>
+    RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .php8 .phar .cgi .pl .py
+    RemoveType .php .phtml .php3 .php4 .php5 .php7 .php8 .phar
+</IfModule>
