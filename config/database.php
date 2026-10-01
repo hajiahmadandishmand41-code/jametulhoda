@@ -285,6 +285,14 @@ class DatabaseUnavailableException extends PDOException {}
  *   InfinityFree/etc. → mysql through DB_* (or pgsql when DATABASE_URL is set).
  *   Local development → sqlite when DB_DRIVER=sqlite (refused in production).
  */
+function postgresDatabaseUrl(): string {
+    foreach (['DATABASE_URL', 'STORAGE_POSTGRES_URL_NON_POOLING', 'STORAGE_DATABASE_URL_UNPOOLED', 'STORAGE_POSTGRES_URL', 'STORAGE_DATABASE_URL'] as $key) {
+        $value = trim(env_value($key));
+        if ($value !== '') return $value;
+    }
+    return '';
+}
+
 function databaseDriver(): string {
     $configured = strtolower(trim(env_value('DB_DRIVER')));
     $onVercel = env_value('VERCEL') !== '';
@@ -296,7 +304,7 @@ function databaseDriver(): string {
     }
     if ($onVercel) return 'pgsql';
     if ($configured === 'mysql' || $configured === 'pgsql') return $configured;
-    return env_value('DATABASE_URL') !== '' ? 'pgsql' : 'mysql';
+    return postgresDatabaseUrl() !== '' ? 'pgsql' : 'mysql';
 }
 
 /**
@@ -374,7 +382,8 @@ function newDatabaseConnection(): PDO {
         return new JametulhodaMySqlPDO($dsn, $user, $pass, $options);
     }
 
-    if (env_value('DATABASE_URL') === '') {
+    $databaseUrl = postgresDatabaseUrl();
+    if ($databaseUrl === '') {
         // Explicit, non-guessing diagnosis (never silently fall back to the
         // MySQL host of another deployment).
         throw new DatabaseUnavailableException(
@@ -383,7 +392,7 @@ function newDatabaseConnection(): PDO {
                 : 'DATABASE_URL is not set.'
         );
     }
-    $url = parse_url(env_value('DATABASE_URL'));
+    $url = parse_url($databaseUrl);
     if (!$url || !in_array($url['scheme'] ?? '', ['postgres', 'postgresql'], true)) {
         throw new DatabaseUnavailableException('DATABASE_URL must be a PostgreSQL URL.');
     }
