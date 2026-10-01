@@ -471,6 +471,18 @@ function databaseConfigFingerprint(): string {
         env_value('DB_USER'),
         env_value('DB_PASS'),
         env_value('DATABASE_URL'),
+        env_value('STORAGE_POSTGRES_URL_NON_POOLING'),
+        env_value('STORAGE_DATABASE_URL_UNPOOLED'),
+        env_value('STORAGE_POSTGRES_URL'),
+        env_value('STORAGE_POSTGRES_PRISMA_URL'),
+        env_value('STORAGE_DATABASE_URL'),
+        env_value('STORAGE_PGHOST_UNPOOLED'),
+        env_value('STORAGE_PGHOST'),
+        env_value('STORAGE_PGPORT', '5432'),
+        env_value('STORAGE_PGUSER'),
+        env_value('STORAGE_PGPASSWORD'),
+        env_value('STORAGE_PGDATABASE'),
+        env_value('STORAGE_POSTGRES_DATABASE'),
         env_value('SQLITE_PATH'),
     ]));
 }

@@ -1,0 +1,149 @@
+{
+  "base": "http://127.0.0.1:8080",
+  "cases": 17,
+  "negativeCases": 6,
+  "failures": [
+    {
+      "path": "/",
+      "expected": 200,
+      "actual": "network error",
+      "error": "fetch failed"
+    },
+    {
+      "path": "/news",
+      "expected": 200,
+      "actual": "network error",
+      "error": "fetch failed"
+    },
+    {
+      "path": "/articles",
+      "expected": 200,
+      "actual": "network error",
+      "error": "fetch failed"
+    },
+    {
+      "path": "/reports",
+      "expected": 200,
+      "actual": "network error",
+      "error": "fetch failed"
+    },
+    {
+      "path": "/events",
+      "expected": 200,
+      "actual": "network error",
+      "error": "fetch failed"
+    },
+    {
+      "path": "/books",
+      "expected": 200,
+      "actual": "network error",
+      "error": "fetch failed"
+    },
+    {
+      "path": "/lessons",
+      "expected": 200,
+      "actual": "network error",
+      "error": "fetch failed"
+    },
+    {
+      "path": "/research",
+      "expected": 200,
+      "actual": "network error",
+      "error": "fetch failed"
+    },
+    {
+      "path": "/media",
+      "expected": 200,
+      "actual": "network error",
+      "error": "fetch failed"
+    },
+    {
+      "path": "/videos",
+      "expected": 200,
+      "actual": "network error",
+      "error": "fetch failed"
+    },
+    {
+      "path": "/audios",
+      "expected": 200,
+      "actual": "network error",
+      "error": "fetch failed"
+    },
+    {
+      "path": "/topics",
+      "expected": 200,
+      "actual": "network error",
+      "error": "fetch failed"
+    },
+    {
+      "path": "/search",
+      "expected": 200,
+      "actual": "network error",
+      "error": "fetch failed"
+    },
+    {
+      "path": "/about",
+      "expected": 200,
+      "actual": "network error",
+      "error": "fetch failed"
+    },
+    {
+      "path": "/contact",
+      "expected": 200,
+      "actual": "network error",
+      "error": "fetch failed"
+    },
+    {
+      "path": "/qa",
+      "expected": 200,
+      "actual": "network error",
+      "error": "fetch failed"
+    },
+    {
+      "path": "/login",
+      "expected": 200,
+      "actual": "network error",
+      "error": "fetch failed"
+    },
+    {
+      "path": "/",
+      "error": "homepage news-link assertion: fetch failed"
+    },
+    {
+      "path": "/__jhd_route_missing__",
+      "expected": 404,
+      "actual": "network error",
+      "error": "fetch failed"
+    },
+    {
+      "path": "/install.php",
+      "expected": 404,
+      "actual": "network error",
+      "error": "fetch failed"
+    },
+    {
+      "path": "/config/database.php",
+      "expected": 404,
+      "actual": "network error",
+      "error": "fetch failed"
+    },
+    {
+      "path": "/pages/news.php",
+      "expected": 404,
+      "actual": "network error",
+      "error": "fetch failed"
+    },
+    {
+      "path": "/includes/functions.php",
+      "expected": 404,
+      "actual": "network error",
+      "error": "fetch failed"
+    },
+    {
+      "path": "/.env",
+      "expected": 404,
+      "actual": "network error",
+      "error": "fetch failed"
+    }
+  ]
+}

@@ -36,13 +36,24 @@ final class DatabaseSessionHandler implements SessionHandlerInterface, SessionUp
         // PHP may call read() more than once per request (e.g. after
         // session_regenerate_id()); keep the existing row-lock transaction
         // instead of failing with "already an active transaction".
-        if ($this->usesRowLocks() && !$db->inTransaction()) $db->beginTransaction();
-        // ON CONFLICT DO NOTHING is normalized to INSERT IGNORE on MySQL.
-        $db->prepare("INSERT INTO app_sessions (id,data,expires_at) VALUES (?, '', " . $this->nowExpr() . ') ON CONFLICT DO NOTHING')->execute([$id]);
-        $lock = $this->usesRowLocks() ? ' FOR UPDATE' : '';
-        $s = $db->prepare('SELECT data, expires_at>' . $this->nowExpr() . ' AS valid FROM app_sessions WHERE id=?' . $lock);
-        $s->execute([$id]); $row = $s->fetch();
-        return $row && $row['valid'] ? (base64_decode($row['data'], true) ?: '') : '';
+        $startedTransaction = $this->usesRowLocks() && !$db->inTransaction();
+        if ($startedTransaction) $db->beginTransaction();
+
+        try {
+            // ON CONFLICT DO NOTHING is normalized to INSERT IGNORE on MySQL.
+            $db->prepare("INSERT INTO app_sessions (id,data,expires_at) VALUES (?, '', " . $this->nowExpr() . ') ON CONFLICT DO NOTHING')->execute([$id]);
+            $lock = $this->usesRowLocks() ? ' FOR UPDATE' : '';
+            $s = $db->prepare('SELECT data, expires_at>' . $this->nowExpr() . ' AS valid FROM app_sessions WHERE id=?' . $lock);
+            $s->execute([$id]);
+            $row = $s->fetch();
+            return $row && $row['valid'] ? (base64_decode($row['data'], true) ?: '') : '';
+        } catch (Throwable $error) {
+            // PostgreSQL marks the whole transaction aborted after any failed
+            // statement. Roll it back before PHP reuses this handler, otherwise
+            // every later session query becomes the misleading SQLSTATE[25P02].
+            if ($startedTransaction && $db->inTransaction()) $db->rollBack();
+            throw $error;
+        }
     }
     public function write(string $id, string $data): bool {
         $payload = base64_encode($data);
