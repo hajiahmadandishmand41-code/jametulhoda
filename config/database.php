@@ -318,7 +318,7 @@ function databaseConfigured(): bool {
     } catch (Throwable $e) {
         return false;
     }
-    if ($driver === 'pgsql') return env_value('DATABASE_URL') !== '';
+    if ($driver === 'pgsql') return postgresDatabaseUrl() !== '';
     if ($driver === 'sqlite') return true;
     return env_value('DB_HOST') !== '' && env_value('DB_NAME') !== '' && env_value('DB_USER') !== '';
 }
