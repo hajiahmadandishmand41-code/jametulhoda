@@ -286,9 +286,24 @@ class DatabaseUnavailableException extends PDOException {}
  *   Local development → sqlite when DB_DRIVER=sqlite (refused in production).
  */
 function postgresDatabaseUrl(): string {
-    foreach (['DATABASE_URL', 'STORAGE_POSTGRES_URL_NON_POOLING', 'STORAGE_DATABASE_URL_UNPOOLED', 'STORAGE_POSTGRES_URL', 'STORAGE_DATABASE_URL'] as $key) {
+    // Vercel Storage exposes the connection under STORAGE_* names. Prefer the
+    // direct/unpooled URL for PHP serverless requests, while retaining support
+    // for DATABASE_URL and the Prisma-compatible alias used by older links.
+    foreach (['STORAGE_POSTGRES_URL_NON_POOLING', 'STORAGE_DATABASE_URL_UNPOOLED', 'STORAGE_POSTGRES_URL', 'STORAGE_POSTGRES_PRISMA_URL', 'STORAGE_DATABASE_URL', 'DATABASE_URL'] as $key) {
         $value = trim(env_value($key));
         if ($value !== '') return $value;
+    }
+
+    // Last-resort construction from the platform-provided components. This
+    // keeps the app connected when a deployment has component variables but
+    // does not expose a complete URL to the PHP runtime.
+    $host = trim(env_value('STORAGE_PGHOST_UNPOOLED', env_value('STORAGE_PGHOST')));
+    $user = trim(env_value('STORAGE_PGUSER'));
+    $password = env_value('STORAGE_PGPASSWORD');
+    $database = trim(env_value('STORAGE_PGDATABASE', env_value('STORAGE_POSTGRES_DATABASE')));
+    if ($host !== '' && $user !== '' && $password !== '' && $database !== '') {
+        $port = trim(env_value('STORAGE_PGPORT', '5432'));
+        return 'postgresql://' . rawurlencode($user) . ':' . rawurlencode($password) . '@' . $host . ':' . $port . '/' . rawurlencode($database) . '?sslmode=require';
     }
     return '';
 }
@@ -318,7 +333,7 @@ function databaseConfigured(): bool {
     } catch (Throwable $e) {
         return false;
     }
-    if ($driver === 'pgsql') return env_value('DATABASE_URL') !== '';
+    if ($driver === 'pgsql') return postgresDatabaseUrl() !== '';
     if ($driver === 'sqlite') return true;
     return env_value('DB_HOST') !== '' && env_value('DB_NAME') !== '' && env_value('DB_USER') !== '';
 }
@@ -345,7 +360,7 @@ function newDatabaseConnection(): PDO {
             PDO::ATTR_PERSISTENT => false,
         ]);
         $pdo->exec('PRAGMA foreign_keys=ON');
-        // WAL + مهلت کوتاه قفل: چند اتصال هم‌زمان (نشست، ژورنال آپلود) روی یک
+        // WAL + مهلت ��وتاه قفل: چند اتصال هم‌زمان (نشست، ژورنال آپلود) روی یک
         // فایل SQLite بدون خطای «database is locked» کار می‌کنند.
         try { $pdo->exec('PRAGMA journal_mode=WAL'); $pdo->exec('PRAGMA busy_timeout=5000'); } catch (Throwable $e) { }
         return $pdo;
