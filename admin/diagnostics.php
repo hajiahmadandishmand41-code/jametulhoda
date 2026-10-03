@@ -84,7 +84,7 @@ try {
     <div class="admin-card-header">فضای ذخیره‌سازی رسانه</div>
     <div class="admin-card-body">
         <p class="mb-2">
-            Storage driver = <strong><?= sanitize($storage['driver']) ?></strong>
+            Storage driver = <strong><?= sanitize($storage['driver'] === 'vercel-blob' ? 'Vercel Blob' : $storage['driver']) ?></strong>
             <?php if ($storage['ok']): ?>
                 <span class="text-success">— آمادهٔ ذخیره‌سازی</span>
             <?php else: ?>

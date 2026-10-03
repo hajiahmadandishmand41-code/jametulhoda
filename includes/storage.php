@@ -132,9 +132,9 @@ function storageDriver(): string {
         return $configured === 'blob' ? 'vercel-blob' : $configured;
     }
     // Vercel must never fall back to local storage: its writable filesystem is
-    // ephemeral (/tmp) and would leave dead database URLs. Keep the driver
-    // explicit even before the Blob store is connected so diagnostics can give
-    // the precise dashboard action instead of reporting "local".
+    // ephemeral (/tmp) and would leave dead database URLs. Keep the Blob driver
+    // explicit even before the store is connected so diagnostics can give the
+    // precise dashboard action instead of reporting "local".
     if (env_value('VERCEL') !== '') return 'vercel-blob';
     return 'local';
 }
