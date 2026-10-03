@@ -93,7 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if ($featImg) scheduleFileDeletion($featImg);
                         $featImg = $up;
                     } else {
-                        $error = 'خطا در آپلود تصویر شاخص.';
+                        $error = 'خطا در آپلود تصویر شاخص.' . storageFailureHint();
                     }
                 }
             }
@@ -120,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if ($featVid) scheduleFileDeletion($featVid);
                         $featVid = $upV;
                     } else {
-                        $error = 'خطا در آپلود ویدیو شاخص. فرمت‌های مجاز: MP4، WebM، MOV، MKV (حداکثر 200MB)';
+                        $error = 'خطا در آپلود ویدیو شاخص. فرمت‌های مجاز: MP4، WebM، MOV، MKV (حداکثر 200MB)' . storageFailureHint();
                     }
                 }
             }
@@ -183,7 +183,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             // بدون امکان رکورد تکراری؛ همان مسیر دوبار ثبت نمی‌شود.
                             addPostImageUnique($id, $imgPath, (string)($_POST['image_alts'][$k] ?? ''), false);
                         } else {
-                            $imageErrors[] = 'یکی از تصاویر پیوست معتبر نیست (فرمت JPG/PNG/GIF/WebP و حداکثر ۲۰ مگابایت).';
+                            $imageErrors[] = 'یکی از تصاویر پیوست معتبر نیست (فرمت JPG/PNG/GIF/WebP و حداکثر ۲۰ مگابایت).' . storageFailureHint();
                         }
                     }
                     if ($imageErrors) {

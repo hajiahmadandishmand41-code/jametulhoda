@@ -4,3 +4,10 @@
 
 # Runtime logs and temporary uploads
 /storage/logs/*
+
+# Local tooling and test artifacts (never committed)
+/node_modules/
+/test-results/
+
+# Uploaded media is never committed (only the folder placeholders are)
+/uploads/*/

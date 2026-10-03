@@ -17,6 +17,9 @@ $report = [
     'admin_session' => isLoggedIn() ? 'yes' : 'no',
 ];
 
+require_once __DIR__ . '/../includes/storage.php';
+$storage = storageConfigurationStatus();
+
 $dbOk = false;
 $tables = [];
 $account = null;
@@ -74,6 +77,37 @@ try {
             <li><strong><?= sanitize((string)$k) ?>:</strong> <?= sanitize((string)$v) ?></li>
             <?php endforeach; ?>
         </ul>
+    </div>
+</div>
+
+<div class="admin-card mb-3">
+    <div class="admin-card-header">فضای ذخیره‌سازی رسانه</div>
+    <div class="admin-card-body">
+        <p class="mb-2">
+            درایور فعال: <strong><?= sanitize($storage['driver']) ?></strong>
+            <?php if ($storage['ok']): ?>
+                <span class="text-success">— آمادهٔ ذخیره‌سازی</span>
+            <?php else: ?>
+                <span class="text-danger">— آپلود فایل در این وضعیت انجام نمی‌شود</span>
+            <?php endif; ?>
+        </p>
+        <?php if (!$storage['ok']): ?>
+        <ul class="mb-2">
+            <?php foreach ($storage['problems'] as $problem): ?>
+            <li class="text-danger"><?= sanitize($problem) ?></li>
+            <?php endforeach; ?>
+        </ul>
+        <?php endif; ?>
+        <div class="table-responsive">
+            <table class="table admin-table mb-0">
+                <tbody>
+                <?php foreach ($storage['limits'] as $name => $value): ?>
+                <tr><td><?= sanitize((string)$name) ?></td><td><?= sanitize((string)$value) ?></td></tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <p class="text-muted mb-0 mt-2">این گزارش هیچ مقدار محرمانه‌ای را نمایش نمی‌دهد؛ فقط نام متغیرهای پیکربندی‌نشده نوشته می‌شود.</p>
     </div>
 </div>
 

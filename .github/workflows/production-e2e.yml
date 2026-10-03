@@ -1,0 +1,141 @@
+name: Production checks
+
+# Two independent checks against a live deployment:
+#   • probe — unauthenticated, needs no secrets, runs on every push and can also
+#     be started manually. Verifies routing, security headers, protected paths,
+#     static assets, the installer state and the platform request-size ceiling.
+#   • audit — full end-to-end operator flow (admin login, database tables,
+#     content creation with image/video/audio/PDF uploads, publication and
+#     public media verification). Runs on every push too, but only when the
+#     JHD_ADMIN_* repository secrets exist; otherwise it reports that it could
+#     not verify anything instead of pretending to have. Credentials are read
+#     from secrets only and are never printed.
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Base URL to audit'
+        required: true
+        default: 'https://jametulhoda.vercel.app'
+      oversize:
+        description: 'Also probe the platform request-size ceiling (6 MB upload)'
+        type: boolean
+        default: false
+      keep:
+        description: 'Keep the created audit content instead of deleting it'
+        type: boolean
+        default: false
+
+permissions:
+  # contents:write is only used to publish the probe report as a commit comment,
+  # because Actions log storage is not reachable from every environment.
+  contents: write
+
+jobs:
+  probe:
+    name: Unauthenticated production probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install test dependencies
+        run: npm install --no-audit --no-fund @playwright/test
+
+      - name: Install the headless browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Probe the live deployment
+        id: probe
+        continue-on-error: true
+        env:
+          TEST_BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.target || 'https://jametulhoda.vercel.app' }}
+          PROBE_THROTTLE_MS: '400'
+        run: node tests/production-probe.mjs 2>&1 | tee probe-report.txt
+
+      # The report is published as a commit comment so it can be read through the
+      # GitHub API alone, without access to the Actions log archive.
+      - name: Publish the probe report
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "### Production probe — ${{ github.event_name == 'workflow_dispatch' && inputs.target || 'https://jametulhoda.vercel.app' }}"
+            echo
+            echo "- commit: \`${GITHUB_SHA}\`"
+            echo "- probe conclusion: ${{ steps.probe.outcome }}"
+            echo
+            echo '```text'
+            tail -n 120 probe-report.txt
+            echo '```'
+          } > probe-comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$(cat probe-comment.md)" >/dev/null
+
+      - name: Fail when the probe failed
+        if: steps.probe.outcome != 'success'
+        run: exit 1
+
+  audit:
+    name: End-to-end audit (needs secrets)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The audit needs real credentials. Without them it says so loudly and
+      # stops, rather than reporting a pass it never earned.
+      - name: Check audit credentials
+        id: creds
+        env:
+          IDENTIFIER: ${{ secrets.JHD_ADMIN_IDENTIFIER }}
+          PASSWORD: ${{ secrets.JHD_ADMIN_PASSWORD }}
+        run: |
+          if [ -n "$IDENTIFIER" ] && [ -n "$PASSWORD" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install test dependencies
+        if: steps.creds.outputs.ready == 'true'
+        run: npm install --no-audit --no-fund @playwright/test
+
+      - name: Install the headless browser
+        if: steps.creds.outputs.ready == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Run end-to-end audit
+        if: steps.creds.outputs.ready == 'true'
+        env:
+          TEST_BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.target || 'https://jametulhoda.vercel.app' }}
+          JHD_ADMIN_IDENTIFIER: ${{ secrets.JHD_ADMIN_IDENTIFIER }}
+          JHD_ADMIN_PASSWORD: ${{ secrets.JHD_ADMIN_PASSWORD }}
+          JHD_ADMIN_PASSWORD_ALT: ${{ secrets.JHD_ADMIN_PASSWORD_ALT }}
+          JHD_E2E_OVERSIZE: ${{ inputs.oversize && '1' || '' }}
+          JHD_E2E_KEEP: ${{ inputs.keep && '1' || '' }}
+        run: node tests/production-e2e.mjs
+
+      - name: Report that nothing was verified
+        if: steps.creds.outputs.ready != 'true'
+        run: |
+          echo '::warning title=End-to-end audit not run::The audit needs the JHD_ADMIN_IDENTIFIER and JHD_ADMIN_PASSWORD repository secrets. Nothing about admin login, uploads or the database was verified on this run.'
+          echo 'Add the secrets under Settings > Secrets and variables > Actions, then re-run this workflow.'
+
+      - name: Upload failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-e2e-evidence
+          path: test-results/
+          if-no-files-found: ignore
