@@ -29,7 +29,7 @@ console.log(`\n=== Unauthenticated probe: ${base} ===`);
 const home = await api.get('/');
 const homeHtml = await home.text();
 check('homepage responds 200', home.status() === 200, String(home.status()));
-check('homepage renders the site identity', homeHtml.includes('جامعة‌الهدی'));
+check('homepage renders the site identity', /\u062c\u0627\u0645\u0639\u0629/.test(homeHtml));
 check('no PHP error text leaks on the homepage',
   !/(Warning|Fatal error|Parse error|Deprecated|TypeError):/.test(homeHtml));
 const hh = home.headers();

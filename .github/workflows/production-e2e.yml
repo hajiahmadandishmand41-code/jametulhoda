@@ -27,7 +27,9 @@ on:
         default: false
 
 permissions:
-  contents: read
+  # contents:write is only used to publish the probe report as a commit comment,
+  # because Actions log storage is not reachable from every environment.
+  contents: write
 
 jobs:
   probe:
@@ -45,9 +47,35 @@ jobs:
         run: npm install --no-audit --no-fund @playwright/test
 
       - name: Probe the live deployment
+        id: probe
+        continue-on-error: true
         env:
           TEST_BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.target || 'https://jametulhoda.vercel.app' }}
-        run: node tests/production-probe.mjs
+        run: node tests/production-probe.mjs 2>&1 | tee probe-report.txt
+
+      # The report is published as a commit comment so it can be read through the
+      # GitHub API alone, without access to the Actions log archive.
+      - name: Publish the probe report
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "### Production probe — ${{ github.event_name == 'workflow_dispatch' && inputs.target || 'https://jametulhoda.vercel.app' }}"
+            echo
+            echo "- commit: \`${{ github.sha }}\`"
+            echo "- probe conclusion: ${{ steps.probe.outcome }}"
+            echo
+            echo '```text'
+            cat probe-report.txt
+            echo '```'
+          } > probe-comment.md
+          gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \
+            -f body="$(cat probe-comment.md)" --jq '.html_url'
+
+      - name: Fail when the probe failed
+        if: steps.probe.outcome != 'success'
+        run: exit 1
 
   audit:
     name: End-to-end audit (needs secrets)
