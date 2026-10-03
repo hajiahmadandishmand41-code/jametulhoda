@@ -316,11 +316,18 @@ function storageConfigurationStatus(): array {
         $credentials = blobCredentials();
         if ($credentials['kind'] === 'none') {
             $problems[] = 'هیچ اعتبارنامه‌ای برای Blob یافت نشد (BLOB_READ_WRITE_TOKEN یا VERCEL_OIDC_TOKEN). در داشبورد Vercel یک Blob Store به پروژه متصل کنید تا خودکار تزریق شوند.';
-        } elseif ($credentials['store_id'] === '') {
+        } elseif ($credentials['kind'] === 'oidc' && $credentials['store_id'] === '') {
             $problems[] = 'BLOB_STORE_ID تنظیم نشده است؛ استفاده از VERCEL_OIDC_TOKEN بدون شناسهٔ فروشگاه پذیرفته نمی‌شود.';
         }
     } elseif (env_value('VERCEL') !== '') {
-        $problems[] = 'روی Vercel فایل‌سیستم فقط‌خواندنی و /tmp موقتی است؛ UPLOAD_STORAGE=s3 یا یک Vercel Blob Store لازم است.';
+        $credentials = blobCredentials();
+        if ($credentials['kind'] === 'oidc' && $credentials['store_id'] === '') {
+            // Nearly configured: the store is connected (an OIDC token exists)
+            // but the store id is missing, so the API would reject every call.
+            $problems[] = 'اتصال Blob ناقص است: VERCEL_OIDC_TOKEN وجود دارد ولی BLOB_STORE_ID تنظیم نشده است. در بخش Storage پروژهٔ Vercel، فروشگاه را دوباره به پروژه متصل کنید (یا UPLOAD_STORAGE=vercel-blob را همراه BLOB_STORE_ID تنظیم کنید).';
+        } else {
+            $problems[] = 'روی Vercel فایل‌سیستم فقط‌خواندنی و /tmp موقتی است؛ UPLOAD_STORAGE=s3 یا یک Vercel Blob Store لازم است.';
+        }
     }
 
     if ($driver !== 'local' && !str_starts_with(UPLOAD_BASE_URL, 'https://')) {

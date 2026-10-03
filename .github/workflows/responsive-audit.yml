@@ -86,7 +86,7 @@ jobs:
         run: node tests/responsive-audit.mjs 2>&1 | tee layout-report.txt
 
       - name: Save the HTML snapshots
-        if: ${{ inputs.snapshot }}
+        if: ${{ inputs.snapshot || contains(github.event.head_commit.message, '[snapshot]') }}
         continue-on-error: true
         run: |
           git config user.name "github-actions[bot]"
@@ -150,7 +150,6 @@ jobs:
           BLOB_READ_WRITE_TOKEN: vercel_blob_rw_mockstore_secret
           BLOB_API_BASE: http://127.0.0.1:9111
           UPLOAD_BASE_URL: http://127.0.0.1:9111/public
-          VERCEL: '1'
         run: php tests/storage-blob-e2e.php 2>&1 | tee storage-report.txt
 
       - name: Upload the same files with GD disabled (the Vercel runtime)
@@ -165,7 +164,6 @@ jobs:
           BLOB_READ_WRITE_TOKEN: vercel_blob_rw_mockstore_secret
           BLOB_API_BASE: http://127.0.0.1:9111
           UPLOAD_BASE_URL: http://127.0.0.1:9111/public
-          VERCEL: '1'
         run: |
           php -d disable_functions=imagecreatefromstring,imagecreatefromjpeg,imagecreatefrompng,imagecreatefromgif,imagecreatefromwebp,imagescale,imagewebp,imagepng,imagejpeg \
               tests/storage-blob-e2e.php 2>&1 | tee storage-report-nogd.txt
@@ -173,6 +171,8 @@ jobs:
       - name: Driver selection rules
         id: drivers
         continue-on-error: true
+        env:
+          APP_ENV: development
         run: php tests/storage-drivers.php 2>&1 | tee drivers-report.txt
 
       - name: Publish the storage report
