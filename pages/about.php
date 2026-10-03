@@ -2,8 +2,8 @@
 /**
  * about.php — درباره مدرسه
  */
-$pageTitle = 'درباره ما';
-$pageDesc = 'با جامعة‌الهدی، مرکز علمی، آموزشی و پژوهشی علوم اسلامی در کابل آشنا شوید؛ اهداف آموزشی، پژوهشی و راه‌های ارتباط با مجموعه.';
+$pageTitle = 'مدرسه علمیه جامعه‌الهدی در کابل';
+$pageDesc = 'معرفی مدرسه علمیه جامعه‌الهدی در کابل؛ مرکز علمی، آموزشی و پژوهشی علوم اسلامی با تمرکز بر آموزش، پژوهش و معارف قرآن و عترت.';
 require_once __DIR__ . '/../includes/header.php';
 
 $aboutPhone = getSetting('phone', SITE_PHONE);
@@ -29,17 +29,76 @@ $aboutInstagram = safeExternalUrl(getSetting('social_instagram'));
         <?= jhd_page_head([
             'eyebrow' => 'آشنایی با مدرسه',
             'icon' => 'bi-info-circle',
-            'title' => 'درباره مدرسه علمیه جامعه‌الهدی',
-            'lead' => 'مرکزی علمی، آموزشی و پژوهشی در پرتو قرآن و عترت؛ سرآمد مقصدی برای جویندگان معارف اسلامی.',
+            'title' => 'مدرسه علمیه جامعه‌الهدی در کابل',
+            'lead' => 'مرکز علمی، آموزشی و پژوهشی علوم اسلامی در پرتو قرآن و عترت؛ با محوریت آموزش، پژوهش و ترویج معارف اسلامی.',
         ]) ?>
+
+        <?php
+        $organizationName = 'مدرسه علمیه جامعه‌الهدی';
+        $organizationDescription = 'مرکز علمی، آموزشی و پژوهشی علوم اسلامی در کابل، افغانستان؛ با تمرکز بر آموزش علوم اسلامی، تربیت طلاب، پژوهش دینی و ترویج فرهنگ قرآنی و اهل‌بیت (ع).';
+        $organizationSameAs = [];
+        foreach ([
+            safeExternalUrl(getSetting('social_telegram')),
+            safeExternalUrl(getSetting('social_youtube')),
+            safeExternalUrl(getSetting('social_instagram')),
+        ] as $sameAsUrl) {
+            if ($sameAsUrl !== '') $organizationSameAs[] = $sameAsUrl;
+        }
+        $organizationJsonLd = [
+            '@context' => 'https://schema.org',
+            '@type' => 'EducationalOrganization',
+            '@id' => rtrim(SITE_URL, '/') . '/#organization',
+            'name' => $organizationName,
+            'alternateName' => ['جامعة‌الهدی', 'مدرسه علمیه جامعه‌الهدی'],
+            'url' => rtrim(SITE_URL, '/') . '/about',
+            'logo' => canonicalUrl('assets/img/logo.png'),
+            'description' => $organizationDescription,
+            'areaServed' => [
+                '@type' => 'Country',
+                'name' => 'Afghanistan',
+            ],
+            'address' => [
+                '@type' => 'PostalAddress',
+                'addressLocality' => 'کابل',
+                'addressCountry' => 'AF',
+            ],
+            'founder' => [
+                '@type' => 'Person',
+                'name' => 'آیت‌الله محمدحسین حلیمی',
+            ],
+            'knowsAbout' => [
+                'فقه و اصول',
+                'تفسیر قرآن',
+                'حدیث شناسی',
+                'کلام و فلسفه',
+                'ادبیات عرب',
+                'تاریخ اسلام',
+            ],
+        ];
+        $aboutPageJsonLd = [
+            '@context' => 'https://schema.org',
+            '@type' => 'AboutPage',
+            '@id' => rtrim(SITE_URL, '/') . '/about#webpage',
+            'url' => rtrim(SITE_URL, '/') . '/about',
+            'name' => 'مدرسه علمیه جامعه‌الهدی در کابل',
+            'description' => $pageDesc,
+            'mainEntity' => ['@id' => rtrim(SITE_URL, '/') . '/#organization'],
+        ];
+        if ($aboutEmailHref !== '') $organizationJsonLd['email'] = 'mailto:' . $aboutEmailHref;
+        if ($aboutPhoneHref !== '') $organizationJsonLd['telephone'] = $aboutPhone;
+        if ($organizationSameAs) $organizationJsonLd['sameAs'] = $organizationSameAs;
+        ?>
+        <script type="application/ld+json"><?= json_encode($organizationJsonLd, JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?></script>
+        <script type="application/ld+json"><?= json_encode($aboutPageJsonLd, JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?></script>
         <div class="row g-4 align-items-start">
             <div class="col-lg-7">
                 <div class="jhd-prose">
                     <h2 class="about-card-title"><i class="bi bi-star" aria-hidden="true"></i>معرفی مدرسه</h2>
                     <p><?= sanitize(getSetting('about_short', 'مدرسه علمیه جامعه‌الهدی یکی از مراکز علوم دینی در افغانستان است.')) ?></p>
-                    <p>این مدرسه با هدف آموزش علوم اسلامی، تربیت طلاب، و ترویج فرهنگ قرآنی و اهل بیت (ع) تأسیس گردیده است. در این مدرسه علوم مختلف اسلامی از جمله فقه، اصول، تفسیر قرآن، حدیث، کلام، فلسفه و ادبیات عرب تدریس می‌شود.</p>
+                    <p>مدرسه علمیه جامعه‌الهدی در کابل، یک مجموعه علمی، آموزشی و پژوهشی در حوزه علوم اسلامی است که فعالیت خود را بر آموزش معارف اسلامی، تربیت طلاب، پژوهش دینی و ترویج فرهنگ قرآنی و اهل‌بیت (ع) متمرکز کرده است.</p>
+                    <p>در ساختار محتوایی و آموزشی معرفی‌شده برای مدرسه، آموزش علوم اسلامی در کنار پژوهش، برنامه‌های فرهنگی و دسترسی به محتوای علمی و آموزشی دنبال می‌شود. این پایگاه نیز برای گردآوری و عرضه اخبار، مقالات، پژوهش‌ها، گزارش‌ها، کتاب‌ها، دروس و موضوعات مرتبط با جامعه‌الهدی ایجاد شده است.</p>
 
-                    <h2 class="about-card-title mt-4"><i class="bi bi-star" aria-hidden="true"></i>اهداف مدرسه</h2>
+                    <h2 class="about-card-title mt-4"><i class="bi bi-star" aria-hidden="true"></i>اهداف و مأموریت</h2>
                     <ul class="about-list">
                         <li>تربیت طلاب متعهد و آگاه به علوم اسلامی</li>
                         <li>ترویج فرهنگ قرآنی و ارزش‌های اهل بیت (ع)</li>
@@ -48,7 +107,7 @@ $aboutInstagram = safeExternalUrl(getSetting('social_instagram'));
                         <li>تقویت هویت اسلامی در جامعه</li>
                     </ul>
 
-                    <h2 class="about-card-title mt-4"><i class="bi bi-star" aria-hidden="true"></i>رشته‌های تحصیلی</h2>
+                    <h2 class="about-card-title mt-4"><i class="bi bi-star" aria-hidden="true"></i>حوزه‌های آموزشی و علمی</h2>
                     <div class="row g-3">
                         <?php
                         $subjects = [
