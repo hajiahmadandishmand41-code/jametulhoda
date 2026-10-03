@@ -286,10 +286,15 @@ class DatabaseUnavailableException extends PDOException {}
  *   Local development → sqlite when DB_DRIVER=sqlite (refused in production).
  */
 function postgresDatabaseUrl(): string {
-    // Vercel Storage exposes the connection under STORAGE_* names. Prefer the
-    // direct/unpooled URL for PHP serverless requests, while retaining support
-    // for DATABASE_URL and the Prisma-compatible alias used by older links.
-    foreach (['STORAGE_POSTGRES_URL_NON_POOLING', 'STORAGE_DATABASE_URL_UNPOOLED', 'STORAGE_POSTGRES_URL', 'STORAGE_POSTGRES_PRISMA_URL', 'STORAGE_DATABASE_URL', 'DATABASE_URL'] as $key) {
+    // Vercel Storage / Neon exposes the connection under STORAGE_* and POSTGRES_* names.
+    // Prefer the direct/unpooled URL for PHP serverless requests, while retaining support
+    // for DATABASE_URL and the Prisma-compatible aliases used by older links.
+    foreach ([
+        'STORAGE_POSTGRES_URL_NON_POOLING', 'STORAGE_DATABASE_URL_UNPOOLED',
+        'POSTGRES_URL_NON_POOLING', 'DATABASE_URL_UNPOOLED',
+        'STORAGE_POSTGRES_URL', 'STORAGE_POSTGRES_PRISMA_URL', 'STORAGE_DATABASE_URL',
+        'POSTGRES_URL', 'POSTGRES_PRISMA_URL', 'DATABASE_URL'
+    ] as $key) {
         $value = trim(env_value($key));
         if ($value !== '') return $value;
     }
@@ -297,12 +302,12 @@ function postgresDatabaseUrl(): string {
     // Last-resort construction from the platform-provided components. This
     // keeps the app connected when a deployment has component variables but
     // does not expose a complete URL to the PHP runtime.
-    $host = trim(env_value('STORAGE_PGHOST_UNPOOLED', env_value('STORAGE_PGHOST')));
-    $user = trim(env_value('STORAGE_PGUSER'));
-    $password = env_value('STORAGE_PGPASSWORD');
-    $database = trim(env_value('STORAGE_PGDATABASE', env_value('STORAGE_POSTGRES_DATABASE')));
+    $host = trim(env_value('STORAGE_PGHOST_UNPOOLED', env_value('STORAGE_PGHOST', env_value('POSTGRES_HOST', env_value('PGHOST')))));
+    $user = trim(env_value('STORAGE_PGUSER', env_value('POSTGRES_USER', env_value('PGUSER'))));
+    $password = env_value('STORAGE_PGPASSWORD', env_value('POSTGRES_PASSWORD', env_value('PGPASSWORD')));
+    $database = trim(env_value('STORAGE_PGDATABASE', env_value('STORAGE_POSTGRES_DATABASE', env_value('POSTGRES_DATABASE', env_value('PGDATABASE')))));
     if ($host !== '' && $user !== '' && $password !== '' && $database !== '') {
-        $port = trim(env_value('STORAGE_PGPORT', '5432'));
+        $port = trim(env_value('STORAGE_PGPORT', env_value('POSTGRES_PORT', env_value('PGPORT', '5432'))));
         return 'postgresql://' . rawurlencode($user) . ':' . rawurlencode($password) . '@' . $host . ':' . $port . '/' . rawurlencode($database) . '?sslmode=require';
     }
     return '';

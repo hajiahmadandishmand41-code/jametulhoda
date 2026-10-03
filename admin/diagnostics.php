@@ -84,7 +84,7 @@ try {
     <div class="admin-card-header">فضای ذخیره‌سازی رسانه</div>
     <div class="admin-card-body">
         <p class="mb-2">
-            درایور فعال: <strong><?= sanitize($storage['driver']) ?></strong>
+            درایور فعال: <strong><?= sanitize($storage['driver'] === 'vercel-unconfigured' ? 'vercel-unconfigured (فضای Blob متصل نیست)' : $storage['driver']) ?></strong>
             <?php if ($storage['ok']): ?>
                 <span class="text-success">— آمادهٔ ذخیره‌سازی</span>
             <?php else: ?>
