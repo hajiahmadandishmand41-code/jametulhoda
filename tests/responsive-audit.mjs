@@ -26,8 +26,18 @@ import path from 'node:path';
 const BASE = (process.env.TEST_BASE_URL || 'http://127.0.0.1:8080').replace(/\/+$/, '');
 const WIDTHS = (process.env.JHD_WIDTHS || '320,360,390,414,768,1024,1440')
   .split(',').map((w) => parseInt(w.trim(), 10)).filter((w) => w > 0);
-const PAGES = [
+const DEFAULT_PAGES = [
   ['home', '/'],
+  ['speeches', '/speeches'],
+  ['announcements', '/announcements'],
+  ['qa', '/qa'],
+  ['programs', '/programs'],
+  ['events', '/events'],
+  ['religious', '/religious-activities'],
+  ['book', '/book?slug=usul-aqaid'],
+  ['lesson', '/lesson?slug=fiqh-lesson-1'],
+  ['about', '/about'],
+  ['contact', '/contact'],
   ['news', '/news'],
   ['articles', '/articles'],
   ['reports', '/reports'],
@@ -40,8 +50,12 @@ const PAGES = [
   ['search', '/search?q=%D9%82%D8%B1%D8%A2%D9%86'],
   ['post', '/post/new-school-year'],
 ];
-const SNAPSHOT_DIR = process.env.SNAPSHOT_DIR || '';
+// JHD_PAGES lets the same measurement run against saved HTML snapshots
+// (for example [["home","/tests/snapshots/home.html"]]) instead of a live
+// PHP server, so a layout change can be re-measured in seconds.
+const PAGES = process.env.JHD_PAGES ? JSON.parse(process.env.JHD_PAGES) : DEFAULT_PAGES;
 const CHROME_PATH = process.env.JHD_CHROME_PATH || '';
+const SNAPSHOT_DIR = process.env.SNAPSHOT_DIR || '';
 
 /** یک رابط بسیار کوچک روی Playwright یا Puppeteer (هر کدام در دسترس باشد). */
 async function openBrowser() {
@@ -178,6 +192,19 @@ const measure = () => {
   const images = Array.from(document.querySelectorAll('.jhd-card-media img'));
   const brokenImages = images.filter((img) => img.complete && img.naturalWidth === 0).length;
 
+  // Touch targets: the two controls an editor's thumb actually aims at are the
+  // media box and the "read more" button. On mobile the whole card is also a
+  // stretched link, so the real target is the card itself.
+  const sizes = [];
+  for (const selector of ['.jhd-card-media', '.btn-read-more']) {
+    for (const el of document.querySelectorAll('.jhd-card ' + selector)) {
+      const box = el.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0) continue;
+      sizes.push(Math.min(box.width, box.height));
+    }
+  }
+  const smallestControl = sizes.length ? Math.round(Math.min(...sizes) * 10) / 10 : null;
+
   return {
     vw,
     scrollWidth,
@@ -189,6 +216,7 @@ const measure = () => {
     firstCardReachable,
     images: images.length,
     brokenImages,
+    smallestControl,
   };
 };
 
@@ -234,6 +262,7 @@ try {
         fit: data.metrics[0] ? data.metrics[0].imgFit : '-',
         broken: data.brokenImages,
         reachable: data.firstCardReachable,
+        tap: data.smallestControl,
       };
       results.push(row);
       if (data.overflow > 1) row.offenders = data.offenders;
@@ -243,6 +272,7 @@ try {
         ` row=${String(row.perRow).padEnd(6)} card=${row.cardW}x${row.cardH}` +
         ` media=${row.tallestMedia} fit=${row.fit} overflow=${data.overflow}` +
         (row.broken ? ` broken-img=${row.broken}` : '') +
+        (row.tap !== null && row.tap !== undefined ? ` tap=${row.tap}` : '') +
         (row.reachable === false ? ' first-card-covered' : '')
       );
       if (data.overflow > 1) {

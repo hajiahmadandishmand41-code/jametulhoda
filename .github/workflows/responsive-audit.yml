@@ -82,6 +82,9 @@ jobs:
         continue-on-error: true
         env:
           TEST_BASE_URL: http://127.0.0.1:8080
+          # A listing card must stay thumb-sized on a phone. The tallest card we
+          # allow is the editorial hero; everything else is far shorter.
+          JHD_MAX_CARD_HEIGHT: '420'
           SNAPSHOT_DIR: ${{ (inputs.snapshot || contains(github.event.head_commit.message, '[snapshot]')) && 'tests/snapshots' || '' }}
         run: node tests/responsive-audit.mjs 2>&1 | tee layout-report.txt
 
@@ -107,7 +110,7 @@ jobs:
             echo "- conclusion: ${{ steps.measure.outcome }}"
             echo
             echo '```text'
-            tail -n 160 layout-report.txt 2>/dev/null || echo "(no report produced)"
+            tail -n 220 layout-report.txt 2>/dev/null || echo "(no report produced)"
             echo '```'
           } > layout-comment.md
           gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$(cat layout-comment.md)" >/dev/null
