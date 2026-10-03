@@ -7,6 +7,13 @@
     }
   },
   "routes": [
-    { "src": "/(.*)", "dest": "/api/index.php" }
+    {
+      "src": "/google2b2831df6b773d4d.html",
+      "dest": "/google2b2831df6b773d4d.html"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/api/index.php"
+    }
   ]
 }
