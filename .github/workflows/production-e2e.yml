@@ -1,9 +1,16 @@
-name: Production E2E audit
+name: Production checks
 
-# Manual audit of a live deployment: admin login, database tables, content
-# creation with image/video/audio/PDF uploads, publication and public media
-# verification. Credentials come from repository secrets and are never printed.
+# Two independent checks against a live deployment:
+#   • probe — unauthenticated, needs no secrets, runs on every push and can also
+#     be started manually. Verifies routing, security headers, protected paths,
+#     static assets, the installer state and the platform request-size ceiling.
+#   • audit — full end-to-end operator flow (admin login, database tables,
+#     content creation with image/video/audio/PDF uploads, publication and
+#     public media verification). Manual only, credentials come from repository
+#     secrets and are never printed.
 on:
+  push:
+    branches: ['**']
   workflow_dispatch:
     inputs:
       target:
@@ -23,7 +30,28 @@ permissions:
   contents: read
 
 jobs:
+  probe:
+    name: Unauthenticated production probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install test dependencies
+        run: npm install --no-audit --no-fund @playwright/test
+
+      - name: Probe the live deployment
+        env:
+          TEST_BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.target || 'https://jametulhoda.vercel.app' }}
+        run: node tests/production-probe.mjs
+
   audit:
+    name: End-to-end audit (needs secrets)
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -35,7 +63,7 @@ jobs:
 
       # Only the Playwright request API is used (no browser download needed).
       - name: Install test dependencies
-        run: npm install --no-audit --no-fund --omit=optional @playwright/test
+        run: npm install --no-audit --no-fund @playwright/test
 
       - name: Run end-to-end audit
         env:
