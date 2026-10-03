@@ -116,8 +116,55 @@ endif; ?>
 <meta name="twitter:description" content="<?= sanitize($metaDesc) ?>">
 <?php if (!empty($ogImg)): ?><meta name="twitter:image" content="<?= sanitize($ogImg) ?>"><?php endif; ?>
 <?php if (SITE_URL): ?>
-<script type="application/ld+json"><?= json_encode(['@context'=>'https://schema.org','@type'=>'EducationalOrganization','name'=>$siteName,'url'=>SITE_URL,'description'=>$siteSlogan], JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?></script>
-<script type="application/ld+json"><?= json_encode(['@context'=>'https://schema.org','@type'=>'WebSite','name'=>$siteName,'url'=>SITE_URL,'potentialAction'=>['@type'=>'SearchAction','target'=> SITE_URL.'/search?q={search_term_string}','query-input'=>'required name=search_term_string']], JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?></script>
+<?php
+$jhdEntityPath = current_path();
+if ($jhdEntityPath === '/' || $jhdEntityPath === '/about') {
+    $jhdOrgSameAs = [];
+    foreach ([
+        safeExternalUrl(getSetting('social_telegram')),
+        safeExternalUrl(getSetting('social_youtube')),
+        safeExternalUrl(getSetting('social_instagram')),
+    ] as $jhdSameAsUrl) {
+        if ($jhdSameAsUrl !== '') $jhdOrgSameAs[] = $jhdSameAsUrl;
+    }
+
+    $jhdOrganizationJsonLd = [
+        '@context' => 'https://schema.org',
+        '@type' => 'EducationalOrganization',
+        '@id' => rtrim(SITE_URL, '/') . '/#organization',
+        'name' => 'مدرسه علمیه جامعه‌الهدی',
+        'alternateName' => ['جامعة‌الهدی', 'مدرسه علمیه جامعه‌الهدی'],
+        'url' => rtrim(SITE_URL, '/') . '/',
+        'logo' => canonicalUrl('assets/img/logo.png'),
+        'description' => 'مرکز علمی، آموزشی و پژوهشی علوم اسلامی در کابل، افغانستان؛ با تمرکز بر آموزش علوم اسلامی، تربیت طلاب، پژوهش دینی و ترویج فرهنگ قرآنی و اهل‌بیت (ع).',
+        'areaServed' => ['@type' => 'Country', 'name' => 'Afghanistan'],
+        'address' => [
+            '@type' => 'PostalAddress',
+            'addressLocality' => 'کابل',
+            'addressCountry' => 'AF',
+        ],
+        'founder' => [
+            '@type' => 'Person',
+            'name' => 'آیت‌الله محمدحسین حلیمی',
+        ],
+        'knowsAbout' => [
+            'فقه و اصول',
+            'تفسیر قرآن',
+            'حدیث شناسی',
+            'کلام و فلسفه',
+            'ادبیات عرب',
+            'تاریخ اسلام',
+        ],
+    ];
+    $jhdOrgEmail = getSetting('email', SITE_EMAIL);
+    $jhdOrgPhone = getSetting('phone', SITE_PHONE);
+    if (filter_var($jhdOrgEmail, FILTER_VALIDATE_EMAIL)) $jhdOrganizationJsonLd['email'] = 'mailto:' . $jhdOrgEmail;
+    if ($jhdOrgPhone !== '') $jhdOrganizationJsonLd['telephone'] = $jhdOrgPhone;
+    if ($jhdOrgSameAs) $jhdOrganizationJsonLd['sameAs'] = $jhdOrgSameAs;
+}
+?>
+<?php if (!empty($jhdOrganizationJsonLd)): ?><script type="application/ld+json"><?= json_encode($jhdOrganizationJsonLd, JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?></script><?php endif; ?>
+<script type="application/ld+json"><?= json_encode(['@context'=>'https://schema.org','@type'=>'WebSite','name'=>$siteName,'url'=>SITE_URL,'potentialAction'=>['@type'=>'SearchAction','target'=> rtrim(SITE_URL,'/').'/search?q={search_term_string}','query-input'=>'required name=search_term_string']], JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?></script>
 <?php endif; ?>
 <?php if (!empty($breadcrumbsJsonLd)): ?><script type="application/ld+json"><?= $breadcrumbsJsonLd ?></script><?php endif; ?>
 <?php if (!empty($articleJsonLd)): ?><script type="application/ld+json"><?= $articleJsonLd ?></script><?php endif; ?>
