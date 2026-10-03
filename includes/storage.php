@@ -330,7 +330,10 @@ function storageConfigurationStatus(): array {
         }
     }
 
-    if ($driver !== 'local' && !str_starts_with(UPLOAD_BASE_URL, 'https://')) {
+    // HTTPS is mandatory in production (and on Vercel). A development or test
+    // environment may legitimately point at a local simulator over http.
+    $requiresHttps = APP_ENV === 'production' || env_value('VERCEL') !== '';
+    if ($driver !== 'local' && $requiresHttps && !str_starts_with(UPLOAD_BASE_URL, 'https://')) {
         $problems[] = 'UPLOAD_BASE_URL باید نشانی https عمومی فضای ذخیره‌سازی باشد (مقدار فعلی: ' . UPLOAD_BASE_URL . ').';
     }
 

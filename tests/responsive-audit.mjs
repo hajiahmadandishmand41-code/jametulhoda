@@ -203,7 +203,8 @@ try {
         await handle.evaluate(() => new Promise((r) => requestAnimationFrame(() => r())));
       }
       const data = await handle.evaluate(measure);
-      const tallest = data.metrics.reduce((m, x) => Math.max(m, x.h), 0);
+      const tallestCard = data.metrics.reduce((a, b) => (b.h > a.h ? b : a), data.metrics[0] || { h: 0, w: 0, mediaH: 0, imgFit: '-' });
+      const tallest = tallestCard.h;
       const row = {
         page: name, width, status,
         overflow: data.overflow,
@@ -211,6 +212,7 @@ try {
         perRow: data.perRow.slice(0, 3).join('/'),
         cardW: data.metrics[0] ? data.metrics[0].w : 0,
         cardH: tallest,
+        tallestMedia: tallestCard.mediaH || 0,
         mediaH: data.metrics[0] ? data.metrics[0].mediaH : 0,
         fit: data.metrics[0] ? data.metrics[0].imgFit : '-',
         broken: data.brokenImages,
@@ -222,7 +224,7 @@ try {
       console.log(
         `${flag} ${name.padEnd(9)} w=${String(width).padEnd(4)} cards=${String(row.cards).padEnd(3)}` +
         ` row=${String(row.perRow).padEnd(6)} card=${row.cardW}x${row.cardH}` +
-        ` media=${row.mediaH} fit=${row.fit} overflow=${data.overflow}` +
+        ` media=${row.tallestMedia} fit=${row.fit} overflow=${data.overflow}` +
         (row.broken ? ` broken-img=${row.broken}` : '') +
         (row.reachable === false ? ' first-card-covered' : '')
       );
