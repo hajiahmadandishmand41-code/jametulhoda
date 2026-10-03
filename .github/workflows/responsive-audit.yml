@@ -9,6 +9,9 @@ name: Responsive & storage audit
 #     back, registered in stored_files and deleted again. The image case runs
 #     twice: once with GD and once with GD disabled, because the PHP runtime on
 #     Vercel ships without GD.
+#
+# Each job publishes its report as a commit comment, because the Actions log
+# archive is not reachable from every environment (the API is).
 on:
   push:
     branches: ['**']
@@ -17,15 +20,16 @@ on:
       snapshot:
         description: 'Also save the rendered HTML of every page as a snapshot'
         type: boolean
-        default: true
+        default: false
+
+permissions:
+  contents: write
 
 jobs:
   responsive:
     name: Card layout at real viewport widths
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -74,13 +78,16 @@ jobs:
           done
 
       - name: Measure every page at every width
+        id: measure
+        continue-on-error: true
         env:
           TEST_BASE_URL: http://127.0.0.1:8080
           SNAPSHOT_DIR: ${{ inputs.snapshot && 'tests/snapshots' || '' }}
-        run: node tests/responsive-audit.mjs
+        run: node tests/responsive-audit.mjs 2>&1 | tee layout-report.txt
 
       - name: Save the HTML snapshots
         if: ${{ inputs.snapshot }}
+        continue-on-error: true
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -88,6 +95,26 @@ jobs:
           git diff --staged --quiet && echo "no snapshot change" && exit 0
           git commit -m "test: refresh rendered HTML snapshots for local layout work"
           git push origin HEAD:${GITHUB_REF_NAME}
+
+      - name: Publish the layout report
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "### Card layout audit — \`${GITHUB_SHA}\`"
+            echo
+            echo "- conclusion: ${{ steps.measure.outcome }}"
+            echo
+            echo '```text'
+            tail -n 160 layout-report.txt 2>/dev/null || echo "(no report produced)"
+            echo '```'
+          } > layout-comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$(cat layout-comment.md)" >/dev/null
+
+      - name: Fail when the layout is broken
+        if: steps.measure.outcome == 'failure'
+        run: exit 1
 
   storage:
     name: Real upload path against a Blob API simulator
@@ -112,6 +139,8 @@ jobs:
         run: node tests/mock-blob-server.mjs &
 
       - name: Upload image, video, audio and PDF (with GD)
+        id: with_gd
+        continue-on-error: true
         env:
           APP_ENV: development
           DB_DRIVER: sqlite
@@ -122,9 +151,11 @@ jobs:
           BLOB_API_BASE: http://127.0.0.1:9111
           UPLOAD_BASE_URL: http://127.0.0.1:9111/public
           VERCEL: '1'
-        run: php tests/storage-blob-e2e.php
+        run: php tests/storage-blob-e2e.php 2>&1 | tee storage-report.txt
 
       - name: Upload the same files with GD disabled (the Vercel runtime)
+        id: without_gd
+        continue-on-error: true
         env:
           APP_ENV: development
           DB_DRIVER: sqlite
@@ -137,7 +168,36 @@ jobs:
           VERCEL: '1'
         run: |
           php -d disable_functions=imagecreatefromstring,imagecreatefromjpeg,imagecreatefrompng,imagecreatefromgif,imagecreatefromwebp,imagescale,imagewebp,imagepng,imagejpeg \
-              tests/storage-blob-e2e.php
+              tests/storage-blob-e2e.php 2>&1 | tee storage-report-nogd.txt
 
       - name: Driver selection rules
-        run: php tests/storage-drivers.php
+        id: drivers
+        continue-on-error: true
+        run: php tests/storage-drivers.php 2>&1 | tee drivers-report.txt
+
+      - name: Publish the storage report
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "### Storage upload audit — \`${GITHUB_SHA}\`"
+            echo
+            echo "- with GD: ${{ steps.with_gd.outcome }}"
+            echo "- without GD (Vercel runtime): ${{ steps.without_gd.outcome }}"
+            echo "- driver rules: ${{ steps.drivers.outcome }}"
+            echo
+            echo '```text'
+            echo '── with GD ──'
+            tail -n 60 storage-report.txt 2>/dev/null || echo "(no report)"
+            echo '── without GD ──'
+            tail -n 60 storage-report-nogd.txt 2>/dev/null || echo "(no report)"
+            echo '── driver rules ──'
+            tail -n 30 drivers-report.txt 2>/dev/null || echo "(no report)"
+            echo '```'
+          } > storage-comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$(cat storage-comment.md)" >/dev/null
+
+      - name: Fail when an upload path is broken
+        if: steps.with_gd.outcome == 'failure' || steps.without_gd.outcome == 'failure' || steps.drivers.outcome == 'failure'
+        run: exit 1
