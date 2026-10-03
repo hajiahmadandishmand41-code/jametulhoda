@@ -43,6 +43,26 @@ if (str_contains($path, '..') || str_contains($path, "\0") || str_contains($path
     exit;
 }
 
+// Google Search Console HTML verification must be served directly by the
+// same front controller that handles all Vercel requests. This exact-match
+// exception runs before the application route table, so it cannot become a
+// site 404 and it does not alter any existing PHP routes.
+if ($path === '/google2b2831df6b773d4d.html') {
+    $googleFile = __DIR__ . '/google2b2831df6b773d4d.html';
+    if (!is_file($googleFile)) {
+        http_response_code(404);
+        header('Content-Type: text/plain; charset=utf-8');
+        exit('Google verification file missing');
+    }
+    header('Content-Type: text/html; charset=utf-8');
+    header('Cache-Control: public, max-age=3600');
+    header('Content-Length: ' . filesize($googleFile));
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'HEAD') {
+        readfile($googleFile);
+    }
+    exit;
+}
+
 /** 404 page shared by every unmatched request. */
 function jhdNotFound(): void {
     http_response_code(404);
