@@ -33,18 +33,43 @@ const isChallenge = (status, body) => status === 403 || status === 429
   ? /vercel|security checkpoint|attack challenge|access denied|request blocked|too many requests/i.test(body)
   : false;
 
-/** Throttled request with backoff, so a WAF burst block is not reported as a bug. */
+let consecutiveChallenges = 0;
+let challengeBodyShown = false;
+
+/**
+ * Throttled request. A deployment behind a WAF starts answering with 403 once
+ * it decides the client is a bot; when that happens three requests in a row the
+ * probe stops instead of reporting 30 identical failures as application bugs.
+ */
 const probe = async (method, path, options = {}) => {
-  for (let attempt = 1; attempt <= 4; attempt++) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
     await sleep(THROTTLE_MS);
     const response = await api.fetch(path, { method, ...options, failOnStatusCode: false });
     const body = await response.text();
-    if (isChallenge(response.status(), body) && attempt < 4) {
+    if (isChallenge(response.status(), body)) {
       wafHits++;
-      console.log(`  (retry ${attempt}: HTTP ${response.status()} looks like a WAF/challenge response)`);
-      await sleep(2000 * attempt);
-      continue;
+      if (!challengeBodyShown) {
+        challengeBodyShown = true;
+        console.log(`  --- HTTP ${response.status()} body (first 300 chars) ---`);
+        console.log('  ' + body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300));
+      }
+      if (attempt < 3) {
+        console.log(`  (retry ${attempt}: HTTP ${response.status()} looks like a WAF/challenge response)`);
+        await sleep(3000 * attempt);
+        continue;
+      }
+      consecutiveChallenges++;
+      if (consecutiveChallenges >= 3) {
+        console.log(`\nABORT: ${consecutiveChallenges} consecutive requests were answered with a WAF/challenge`
+          + ' response. The deployment (or the platform firewall in front of it) is blocking this client IP,'
+          + ' so no further check can be trusted from here.');
+        console.log(JSON.stringify({ base, aborted: 'waf-block', wafHits, info }));
+        await api.dispose();
+        process.exit(3);
+      }
+      return { status: response.status(), headers: response.headers(), body };
     }
+    consecutiveChallenges = 0;
     return { status: response.status(), headers: response.headers(), body };
   }
   return { status: 0, headers: {}, body: '' };
