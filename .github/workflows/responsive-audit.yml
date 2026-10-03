@@ -1,0 +1,143 @@
+name: Responsive & storage audit
+
+# Two independent verifications that need no secret at all:
+#   • responsive — renders every listing page in a real Chromium at 320/360/390/
+#     414/768/1024/1440 px and measures horizontal overflow, card size, media
+#     ratio and whether the sticky header covers the first card.
+#   • storage    — runs the real upload path (includes/storage.php) against a
+#     local Blob API simulator: image, video, audio and PDF are stored, read
+#     back, registered in stored_files and deleted again. The image case runs
+#     twice: once with GD and once with GD disabled, because the PHP runtime on
+#     Vercel ships without GD.
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+    inputs:
+      snapshot:
+        description: 'Also save the rendered HTML of every page as a snapshot'
+        type: boolean
+        default: false
+
+jobs:
+  responsive:
+    name: Card layout at real viewport widths
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: gd, curl, zip, mbstring, dom, fileinfo, pdo_sqlite, sqlite3
+          coverage: none
+
+      - name: Install the headless browser
+        run: |
+          npm install --no-audit --no-fund @playwright/test
+          npx playwright install --with-deps chromium
+
+      - name: Build the throwaway SQLite database
+        env:
+          APP_ENV: development
+          DB_DRIVER: sqlite
+          SQLITE_PATH: /tmp/jametulhoda-responsive.sqlite
+          SESSION_DRIVER: files
+          UPLOAD_STORAGE: local
+        run: |
+          rm -f /tmp/jametulhoda-responsive.sqlite
+          php bin/dev-db.php
+          # Every card needs a real image so the measured heights are the real
+          # ones; the seed leaves most featured images empty on purpose.
+          php tests/fixtures/attach-demo-media.php /tmp/jametulhoda-responsive.sqlite
+
+      - name: Serve the site
+        env:
+          APP_ENV: development
+          DB_DRIVER: sqlite
+          SQLITE_PATH: /tmp/jametulhoda-responsive.sqlite
+          SESSION_DRIVER: files
+          UPLOAD_STORAGE: local
+          SITE_URL: http://127.0.0.1:8080
+        run: |
+          php -S 127.0.0.1:8080 router.php > /tmp/php-server.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null http://127.0.0.1:8080/; then echo "server up"; break; fi
+            sleep 1
+          done
+
+      - name: Measure every page at every width
+        env:
+          TEST_BASE_URL: http://127.0.0.1:8080
+          SNAPSHOT_DIR: ${{ inputs.snapshot && 'tests/snapshots' || '' }}
+        run: node tests/responsive-audit.mjs
+
+      - name: Save the HTML snapshots
+        if: ${{ inputs.snapshot }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add tests/snapshots
+          git diff --staged --quiet && echo "no snapshot change" && exit 0
+          git commit -m "test: refresh rendered HTML snapshots for local layout work"
+          git push origin HEAD:${GITHUB_REF_NAME}
+
+  storage:
+    name: Real upload path against a Blob API simulator
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: gd, curl, zip, mbstring, dom, fileinfo, pdo_sqlite, sqlite3
+          coverage: none
+
+      - name: Start the Blob API simulator
+        env:
+          MOCK_BLOB_PORT: '9111'
+        run: node tests/mock-blob-server.mjs &
+
+      - name: Upload image, video, audio and PDF (with GD)
+        env:
+          APP_ENV: development
+          DB_DRIVER: sqlite
+          SQLITE_PATH: /tmp/jametulhoda-storage.sqlite
+          SESSION_DRIVER: files
+          UPLOAD_STORAGE: vercel-blob
+          BLOB_READ_WRITE_TOKEN: vercel_blob_rw_mockstore_secret
+          BLOB_API_BASE: http://127.0.0.1:9111
+          UPLOAD_BASE_URL: http://127.0.0.1:9111/public
+          VERCEL: '1'
+        run: php tests/storage-blob-e2e.php
+
+      - name: Upload the same files with GD disabled (the Vercel runtime)
+        env:
+          APP_ENV: development
+          DB_DRIVER: sqlite
+          SQLITE_PATH: /tmp/jametulhoda-storage-nogd.sqlite
+          SESSION_DRIVER: files
+          UPLOAD_STORAGE: vercel-blob
+          BLOB_READ_WRITE_TOKEN: vercel_blob_rw_mockstore_secret
+          BLOB_API_BASE: http://127.0.0.1:9111
+          UPLOAD_BASE_URL: http://127.0.0.1:9111/public
+          VERCEL: '1'
+        run: |
+          php -d disable_functions=imagecreatefromstring,imagecreatefromjpeg,imagecreatefrompng,imagecreatefromgif,imagecreatefromwebp,imagescale,imagewebp,imagepng,imagejpeg \
+              tests/storage-blob-e2e.php
+
+      - name: Driver selection rules
+        run: php tests/storage-drivers.php

@@ -399,6 +399,8 @@ html[data-theme="dark"] {
 </style>
 <script src="<?= asset('js/theme.js') ?>"></script>
 <script src="<?= asset('js/interface.js') ?>" defer></script>
+<!-- تصویر را پیش از ارسال در مرورگر کوچک می‌کند (سرور روی Vercel افزونهٔ GD ندارد). -->
+<script src="<?= asset('js/upload-optimize.js') ?>" defer></script>
 </head>
 <body class="jhd-admin-site">
 

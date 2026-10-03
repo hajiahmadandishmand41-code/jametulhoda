@@ -32,7 +32,7 @@ function verifyStorage(bool $ok, string $label): void {
 
 /** Restore the process environment after each case. */
 $original = [];
-foreach (['VERCEL', 'UPLOAD_STORAGE', 'BLOB_READ_WRITE_TOKEN', 'S3_ENDPOINT', 'S3_REGION', 'S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'] as $key) {
+foreach (['VERCEL', 'UPLOAD_STORAGE', 'BLOB_READ_WRITE_TOKEN', 'VERCEL_OIDC_TOKEN', 'BLOB_STORE_ID', 'S3_ENDPOINT', 'S3_REGION', 'S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'] as $key) {
     $original[$key] = getenv($key);
 }
 $restore = static function () use ($original): void {
@@ -57,6 +57,28 @@ verifyStorage(storageDriver() === 'vercel-blob', 'Blob token on Vercel selects t
 
 $restore(); putenv('UPLOAD_STORAGE=blob'); putenv('VERCEL');
 verifyStorage(storageDriver() === 'vercel-blob', 'the "blob" alias resolves to vercel-blob');
+
+// Current Vercel projects authenticate the Blob store with a rotating OIDC
+// token; it only works together with the store id, so both are required.
+$restore(); putenv('UPLOAD_STORAGE=local'); putenv('VERCEL=1');
+putenv('VERCEL_OIDC_TOKEN=oidc-token'); putenv('BLOB_STORE_ID=store_abc123');
+verifyStorage(storageDriver() === 'vercel-blob', 'OIDC token + store id selects the blob backend');
+$credentials = blobCredentials();
+verifyStorage($credentials['store_id'] === 'abc123', 'the store_ prefix is normalised away', $credentials['store_id']);
+$status = storageConfigurationStatus();
+verifyStorage($status['ok'] !== false || !str_contains(implode(' ', $status['problems']), 'BLOB_STORE_ID'), 'a complete OIDC setup names no missing variable');
+
+$restore(); putenv('UPLOAD_STORAGE=local'); putenv('VERCEL=1');
+putenv('VERCEL_OIDC_TOKEN=oidc-token'); putenv('BLOB_STORE_ID');
+verifyStorage(storageDriver() === 'local', 'an OIDC token without a store id cannot be used');
+$status = storageConfigurationStatus();
+verifyStorage(str_contains(implode(' ', $status['problems']), 'BLOB_STORE_ID'), 'the missing BLOB_STORE_ID is named for the operator');
+
+// The store id is embedded in a real read-write token (vercel_blob_rw_<id>_<secret>).
+$restore(); putenv('UPLOAD_STORAGE=local'); putenv('VERCEL=1');
+putenv('BLOB_READ_WRITE_TOKEN=vercel_blob_rw_store7f2_secretvalue');
+verifyStorage(storageDriver() === 'vercel-blob', 'a read-write token selects the blob backend');
+verifyStorage(blobCredentials()['store_id'] === 'store7f2', 'the store id is parsed out of the token', blobCredentials()['store_id']);
 
 // ── 2. Configuration problems are named, never guessed ──────────────────────
 $restore(); putenv('UPLOAD_STORAGE=s3'); putenv('VERCEL=1'); putenv('S3_BUCKET=bucket');

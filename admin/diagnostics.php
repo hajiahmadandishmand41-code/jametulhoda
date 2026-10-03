@@ -107,6 +107,22 @@ try {
                 </tbody>
             </table>
         </div>
+        <?php $blob = (array)($storage['blob'] ?? []); if ($blob): ?>
+        <ul class="mb-0 mt-2">
+            <?php if (($blob['auth'] ?? 'none') !== 'none'): ?>
+            <li><strong>نوع اعتبار Blob:</strong> <?= sanitize((string)$blob['auth']) ?>
+                — <?= !empty($blob['usable']) ? '<span class="text-success">قابل استفاده</span>' : '<span class="text-danger">غیرقابل استفاده</span>' ?></li>
+            <?php if (($blob['store_id'] ?? '') !== ''): ?>
+            <li><strong>شناسهٔ فروشگاه (شناسه، نه secret):</strong> <?= sanitize((string)$blob['store_id']) ?></li>
+            <?php endif; ?>
+            <?php endif; ?>
+            <?php if (($blob['suggested_base_url'] ?? '') !== ''): ?>
+            <li><strong>مقدار لازم برای UPLOAD_BASE_URL:</strong>
+                <code dir="ltr"><?= sanitize((string)$blob['suggested_base_url']) ?></code>
+                <span class="text-muted">— این مقدار را در Environment Variables پروژهٔ Vercel ثبت کنید.</span></li>
+            <?php endif; ?>
+        </ul>
+        <?php endif; ?>
         <p class="text-muted mb-0 mt-2">این گزارش هیچ مقدار محرمانه‌ای را نمایش نمی‌دهد؛ فقط نام متغیرهای پیکربندی‌نشده نوشته می‌شود.</p>
     </div>
 </div>
