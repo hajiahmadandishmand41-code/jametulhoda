@@ -84,7 +84,7 @@ try {
     <div class="admin-card-header">فضای ذخیره‌سازی رسانه</div>
     <div class="admin-card-body">
         <p class="mb-2">
-            درایور فعال: <strong><?= sanitize($storage['driver']) ?></strong>
+            Storage driver = <strong><?= sanitize($storage['driver']) ?></strong>
             <?php if ($storage['ok']): ?>
                 <span class="text-success">— آمادهٔ ذخیره‌سازی</span>
             <?php else: ?>
@@ -109,13 +109,8 @@ try {
         </div>
         <?php $blob = (array)($storage['blob'] ?? []); if ($blob): ?>
         <ul class="mb-0 mt-2">
-            <?php if (($blob['auth'] ?? 'none') !== 'none'): ?>
-            <li><strong>نوع اعتبار Blob:</strong> <?= sanitize((string)$blob['auth']) ?>
-                — <?= !empty($blob['usable']) ? '<span class="text-success">قابل استفاده</span>' : '<span class="text-danger">غیرقابل استفاده</span>' ?></li>
-            <?php if (($blob['store_id'] ?? '') !== ''): ?>
-            <li><strong>شناسهٔ فروشگاه (شناسه، نه secret):</strong> <?= sanitize((string)$blob['store_id']) ?></li>
-            <?php endif; ?>
-            <?php endif; ?>
+            <li><strong>BLOB_READ_WRITE_TOKEN:</strong> <?= ($blob['auth'] ?? 'none') === 'read-write' ? '<span class="text-success">configured</span>' : '<span class="text-danger">not configured</span>' ?></li>
+            <li><strong>VERCEL_OIDC_TOKEN:</strong> <?= ($blob['auth'] ?? 'none') === 'oidc' ? '<span class="text-success">configured</span>' : '<span class="text-muted">not configured</span>' ?></li>
             <?php if (($blob['suggested_base_url'] ?? '') !== ''): ?>
             <li><strong>مقدار لازم برای UPLOAD_BASE_URL:</strong>
                 <code dir="ltr"><?= sanitize((string)$blob['suggested_base_url']) ?></code>

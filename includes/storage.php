@@ -131,7 +131,11 @@ function storageDriver(): string {
     if (in_array($configured, ['s3', 'vercel-blob', 'blob'], true)) {
         return $configured === 'blob' ? 'vercel-blob' : $configured;
     }
-    if (env_value('VERCEL') !== '' && blobIsUsable()) return 'vercel-blob';
+    // Vercel must never fall back to local storage: its writable filesystem is
+    // ephemeral (/tmp) and would leave dead database URLs. Keep the driver
+    // explicit even before the Blob store is connected so diagnostics can give
+    // the precise dashboard action instead of reporting "local".
+    if (env_value('VERCEL') !== '') return 'vercel-blob';
     return 'local';
 }
 
@@ -537,16 +541,18 @@ function storeValidatedFile(string $path, string $kind, string $folder): string 
                     : 'BLOB_READ_WRITE_TOKEN پذیرفته نشد (در تنظیمات پروژهٔ Vercel بررسی شود).';
                 throw new RuntimeException('Vercel Blob فایل را نپذیرفت. ' . $suffix);
             }
-            if (rtrim($stored, '/') !== rtrim($url, '/')) {
-                // The public URL must stay derivable from the key, otherwise the
-                // deletion/registry paths (storageKey) cannot resolve the object.
-                blobDeleteObject($stored);
-                $origin = (string)preg_replace('~^https?://([^/]+).*$~', '$1', $stored);
-                throw new RuntimeException(
-                    'UPLOAD_BASE_URL باید دقیقاً برابر مبدأ Blob Store باشد. مقدار لازم: ' . $origin
-                    . ' (مقدار فعلی: ' . UPLOAD_BASE_URL . ')'
-                );
+            // Blob returns the canonical public URL. On Vercel this URL is the
+            // source of truth; UPLOAD_BASE_URL may still contain the legacy
+            // /uploads default and must not rewrite or reject the Blob URL.
+            if (str_starts_with(UPLOAD_BASE_URL, 'http://') || str_starts_with(UPLOAD_BASE_URL, 'https://')) {
+                $configuredOrigin = (string)preg_replace('~^https?://([^/]+).*$~', '$1', UPLOAD_BASE_URL);
+                $storedOrigin = (string)preg_replace('~^https?://([^/]+).*$~', '$1', $stored);
+                if ($configuredOrigin !== $storedOrigin) {
+                    blobDeleteObject($stored);
+                    throw new RuntimeException('UPLOAD_BASE_URL با مبدأ Blob Store یکسان نیست. مقدار لازم: ' . $storedOrigin);
+                }
             }
+            $url = $stored;
             if (!storageUrlIsPublic($url)) {
                 blobDeleteObject($url);
                 throw new RuntimeException('نشانی عمومی فایل ذخیره‌شده در دسترس نیست.');
@@ -587,7 +593,10 @@ function deleteStoredFile(string $reference): bool {
     if ($driver === 's3') {
         storageClient()->deleteObject(['Bucket'=>env_value('S3_BUCKET'),'Key'=>$key]);
     } elseif ($driver === 'vercel-blob') {
-        if (!blobDeleteObject(storageUrl($key))) return false;
+        // Database rows contain the canonical Blob URL. Reuse it directly;
+        // reconstructing from the legacy /uploads base would target nowhere.
+        $blobUrl = storageUrlSchemeAllowed($reference) ? $reference : storageUrl($key);
+        if (!blobDeleteObject($blobUrl)) return false;
     } elseif ($driver === 'local') {
         $path = realpath(UPLOAD_DIR . $key);
         $base = realpath(UPLOAD_DIR);
