@@ -191,8 +191,7 @@ if ($db !== null) {
         $stmt = $db->query("
             SELECT slug
             FROM categories
-            WHERE is_active = 1
-              AND COALESCE(slug, '') <> ''
+            WHERE COALESCE(slug, '') <> ''
             ORDER BY id
             LIMIT 50000
         ");
