@@ -54,8 +54,9 @@ const server = http.createServer((request, response) => {
     // public. Only the control-plane routes (list, upload, delete, log) are
     // authenticated, otherwise the application's "is the object reachable?"
     // check could never succeed.
-    const isPublicRead = (request.method === 'GET' || request.method === 'HEAD')
-      && pathname !== '/' && pathname !== '/__log' && pathname !== '/__objects';
+    // '/__log' and '/__objects' are introspection routes that exist only in this
+    // simulator, so they are readable without a token too.
+    const isPublicRead = (request.method === 'GET' || request.method === 'HEAD') && pathname !== '/';
     const authorization = String(headers.authorization || '');
     if (!isPublicRead && (!authorization.startsWith('Bearer ') || unauthorized.test(authorization))) {
       send(403, { error: 'unauthorized' });
