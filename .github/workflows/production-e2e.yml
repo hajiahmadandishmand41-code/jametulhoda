@@ -46,6 +46,9 @@ jobs:
       - name: Install test dependencies
         run: npm install --no-audit --no-fund @playwright/test
 
+      - name: Install the headless browser
+        run: npx playwright install --with-deps chromium
+
       - name: Probe the live deployment
         id: probe
         continue-on-error: true
@@ -92,6 +95,9 @@ jobs:
       # Only the Playwright request API is used (no browser download needed).
       - name: Install test dependencies
         run: npm install --no-audit --no-fund @playwright/test
+
+      - name: Install the headless browser
+        run: npx playwright install --with-deps chromium
 
       - name: Run end-to-end audit
         env:

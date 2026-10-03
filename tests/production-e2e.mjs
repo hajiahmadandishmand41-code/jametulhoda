@@ -22,6 +22,7 @@
  */
 import { request } from '@playwright/test';
 import fs from 'node:fs';
+import { passSecurityCheckpoint } from './checkpoint.mjs';
 
 const base = (process.env.TEST_BASE_URL || 'https://jametulhoda.vercel.app').replace(/\/$/, '');
 const identifier = process.env.JHD_ADMIN_IDENTIFIER;
@@ -31,7 +32,13 @@ if (!identifier || passwords.length === 0) {
   process.exit(2);
 }
 
-const api = await request.newContext({ baseURL: base });
+// Deployments behind Vercel Attack Challenge Mode refuse plain HTTP clients, so
+// solve the challenge once in a real browser and reuse its cookie everywhere.
+const storageState = process.env.PROBE_SKIP_BROWSER
+  ? undefined
+  : await passSecurityCheckpoint(base, { debug: true });
+
+const api = await request.newContext({ storageState, baseURL: base });
 const results = [];
 const findings = [];
 const check = (label, ok, detail = '') => {
