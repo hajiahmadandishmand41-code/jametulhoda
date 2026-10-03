@@ -13,9 +13,18 @@
  * Usage: TEST_BASE_URL=https://example.vercel.app node tests/production-probe.mjs
  */
 import { request } from '@playwright/test';
+import { passSecurityCheckpoint } from './checkpoint.mjs';
 
 const base = (process.env.TEST_BASE_URL || 'https://jametulhoda.vercel.app').replace(/\/$/, '');
-const api = await request.newContext({ baseURL: base });
+
+// Deployments behind Vercel's Attack Challenge Mode answer plain HTTP clients
+// with a 403 challenge page. Solve it once in a real browser and reuse the
+// cookie for every request below; without this the probe stalls partway.
+const storageState = process.env.PROBE_SKIP_BROWSER
+  ? undefined
+  : await passSecurityCheckpoint(base, { debug: true });
+
+const api = await request.newContext({ baseURL: base, storageState });
 const results = [];
 const info = [];
 const check = (label, ok, detail = '') => {
@@ -48,6 +57,11 @@ const probe = async (method, path, options = {}) => {
     const body = await response.text();
     if (isChallenge(response.status(), body)) {
       wafHits++;
+      if (attempt === 1 && !process.env.PROBE_SKIP_BROWSER) {
+        // The cookie may have expired mid-run: solve the challenge again.
+        const fresh = await passSecurityCheckpoint(base, { debug: true });
+        if (fresh) console.log('  (checkpoint cookie refreshed)');
+      }
       if (!challengeBodyShown) {
         challengeBodyShown = true;
         console.log(`  --- HTTP ${response.status()} body (first 300 chars) ---`);
