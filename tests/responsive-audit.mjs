@@ -120,7 +120,19 @@ const measure = () => {
     }
   }
 
-  const cards = Array.from(document.querySelectorAll('.jhd-card'));
+  // Cards inside the off-canvas drawer or a lightbox have no layout box in the
+  // normal flow; measuring them would report ghosts.
+  const hiddenAncestor = (el) => {
+    for (let p = el; p && p !== document.body; p = p.parentElement) {
+      const style = getComputedStyle(p);
+      if (style.position === 'fixed' || style.visibility === 'hidden' || style.display === 'none') return true;
+    }
+    return false;
+  };
+  const cards = Array.from(document.querySelectorAll('.jhd-card')).filter((card) => {
+    const rect = card.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0 && !hiddenAncestor(card);
+  });
   const metrics = cards.slice(0, 4).map((card) => {
     const rect = card.getBoundingClientRect();
     const media = card.querySelector('.jhd-card-media');
@@ -149,12 +161,17 @@ const measure = () => {
   }
   const perRow = Object.values(rows);
 
-  // Is the first card actually reachable (not covered by the sticky header)?
+  // Is the first card on screen actually reachable, or does the sticky header
+  // sit on top of it? Only cards inside the viewport can be hit-tested.
   let firstCardReachable = null;
-  if (cards[0]) {
-    const rect = cards[0].getBoundingClientRect();
+  const onScreen = cards.find((card) => {
+    const rect = card.getBoundingClientRect();
+    return rect.top >= 0 && rect.top < window.innerHeight - 24;
+  });
+  if (onScreen) {
+    const rect = onScreen.getBoundingClientRect();
     const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + 6);
-    firstCardReachable = !!hit && (cards[0] === hit || cards[0].contains(hit));
+    firstCardReachable = !!hit && (onScreen === hit || onScreen.contains(hit));
   }
 
   // Broken images: a card image that failed to load shows as an empty frame.
