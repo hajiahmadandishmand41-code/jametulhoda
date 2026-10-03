@@ -42,15 +42,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $cover = ''; $pdf = ''; $word = '';
             if (!empty($_FILES['cover_image']['name'])) {
                 $cover = uploadContentImage($_FILES['cover_image'], 'book', $bookId);
-                if (!$cover) throw new RuntimeException('تصویر جلد معتبر نیست یا آپلود نشد.');
+                if (!$cover) throw new RuntimeException('تصویر جلد معتبر نیست یا آپلود نشد.' . storageFailureHint());
             }
             if (!empty($_FILES['pdf_file']['name'])) {
                 $pdf = uploadContentDocument($_FILES['pdf_file'], 'book', $bookId, 'pdf');
-                if (!$pdf) throw new RuntimeException('فایل PDF معتبر نیست یا آپلود نشد.');
+                if (!$pdf) throw new RuntimeException('فایل PDF معتبر نیست یا آپلود نشد.' . storageFailureHint());
             }
             if (!empty($_FILES['word_file']['name'])) {
                 $word = uploadContentDocument($_FILES['word_file'], 'book', $bookId, 'word');
-                if (!$word) throw new RuntimeException('فایل Word معتبر نیست یا آپلود نشد.');
+                if (!$word) throw new RuntimeException('فایل Word معتبر نیست یا آپلود نشد.' . storageFailureHint());
             }
             $db->prepare('UPDATE books SET cover_image=?,pdf_file=?,word_file=? WHERE id=?')->execute([$cover ?: null,$pdf ?: null,$word ?: null,$bookId]);
             setBookTopics($bookId, $selectedTopics);

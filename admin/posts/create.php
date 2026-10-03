@@ -99,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         throw new RuntimeException(jhd_upload_error_message((int)$_FILES['featured_image']['error']));
                     }
                     $featImg = uploadContentImage($_FILES['featured_image'], $post_type, $postId);
-                    if (!$featImg) throw new RuntimeException('تصویر شاخص معتبر نیست یا آپلود نشد (فرمت JPG/PNG/GIF/WebP و حداکثر ۲۰ مگابایت).');
+                    if (!$featImg) throw new RuntimeException('تصویر شاخص معتبر نیست یا آپلود نشد (فرمت JPG/PNG/GIF/WebP و حداکثر ۲۰ مگابایت).' . storageFailureHint());
                 }
                 if (!$featImg && !empty($_POST['auto_thumbnail'])) {
                     // Browser thumbnail data is kept for backwards compatibility;
@@ -112,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         throw new RuntimeException(jhd_upload_error_message((int)$_FILES['featured_video']['error']));
                     }
                     $featVid = uploadContentVideo($_FILES['featured_video'], $post_type, $postId);
-                    if (!$featVid) throw new RuntimeException('ویدیو شاخص معتبر نیست یا آپلود نشد (MP4، WebM، MOV، MKV — حداکثر ۲۰۰ مگابایت).');
+                    if (!$featVid) throw new RuntimeException('ویدیو شاخص معتبر نیست یا آپلود نشد (MP4، WebM، MOV، MKV — حداکثر ۲۰۰ مگابایت).' . storageFailureHint());
                 }
                 // ── ۳) پیوست رسانه با همان شناسه و ۴) تعیین رسانهٔ شاخص ───
                 // تصویر شاخص هم یک ردیف واقعی گالری می‌شود تا در مدیریت رسانه
@@ -144,7 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $file = ['name'=>$name, 'type'=>$_FILES['images']['type'][$k] ?? '', 'tmp_name'=>$_FILES['images']['tmp_name'][$k] ?? '', 'error'=>$_FILES['images']['error'][$k], 'size'=>$_FILES['images']['size'][$k] ?? 0];
                         $imgPath = uploadContentImage($file, $post_type, $postId);
                         if (!$imgPath) {
-                            $imageErrors[] = 'یکی از تصاویر پیوست معتبر نیست (فرمت JPG/PNG/GIF/WebP و حداکثر ۲۰ مگابایت).';
+                            $imageErrors[] = 'یکی از تصاویر پیوست معتبر نیست (فرمت JPG/PNG/GIF/WebP و حداکثر ۲۰ مگابایت).' . storageFailureHint();
                             continue;
                         }
                         addPostImageUnique($postId, $imgPath, (string)($_POST['image_alts'][$k] ?? ''), !empty($_POST['gallery_featured']));

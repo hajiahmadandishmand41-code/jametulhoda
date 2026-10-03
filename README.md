@@ -1,8 +1,8 @@
 # جامعة‌الهدی — پایگاه علمی، آموزشی و پژوهشی
 
-[![Vercel Production](https://img.shields.io/website?url=https%3A%2F%2Fjametulhoda1.vercel.app%2F&label=Vercel%20Production&logo=vercel)](https://jametulhoda1.vercel.app/)  [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fhajiahmadandishmand41-code%2Fjametulhoda1)
+[![Vercel Production](https://img.shields.io/website?url=https%3A%2F%2Fjametulhoda.vercel.app%2F&label=Vercel%20Production&logo=vercel)](https://jametulhoda.vercel.app/)  [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fhajiahmadandishmand41-code%2Fjametulhoda)
 
-**Production:** https://jametulhoda1.vercel.app/
+**Production:** https://jametulhoda.vercel.app/
 
 > پیش از بهره‌برداری واقعی، الزامات دیتابیس، session و فضای ذخیره‌سازی را در [فهرست آماده‌سازی تولید](PRODUCTION_CHECKLIST_FA.md) تکمیل کنید. در بررسی ۲۸ سپتامبر ۲۰۲۶، سایت عمومی پیام پیکربندی‌نشدن دیتابیس را نمایش می‌داد؛ کد این مخزن نمی‌تواند اسرار و تنظیمات محیط Vercel را به‌جای مالک پروژه تنظیم کند.
 
@@ -79,6 +79,30 @@ unset ADMIN_PASSWORD
   (کیبورد، سوایپ، بندانگشتی، دانلود) می‌سازد؛ اسکریپت بدون وابستگی در `assets/js/gallery.js`.
 - قبل از انتشار رسانه، محدودیت‌ها و سیاست فضای ذخیره‌سازی را در [فهرست آماده‌سازی تولید](PRODUCTION_CHECKLIST_FA.md) مرور کنید.
 
+## ذخیره‌سازی رسانه روی Vercel
+
+فایل‌سیستم Vercel فقط‌خواندنی است و تنها `/tmp` writable است که آن هم با هر
+اجرای تابع از بین می‌رود. بنابراین **هیچ فایلی روی خود Vercel ذخیره نمی‌شود**؛
+`includes/storage.php` در این حالت آپلود را رد می‌کند تا نشانی مرده در دیتابیس
+ثبت نشود. برای فعال‌شدن آپلود تصویر/ویدیو/صوت/PDF یکی از این دو لازم است:
+
+| حالت | متغیرهای لازم |
+| --- | --- |
+| `UPLOAD_STORAGE=vercel-blob` (پیشنهادی) | `BLOB_READ_WRITE_TOKEN` (با ساخت Blob Store در داشبورد Vercel خودکار تزریق می‌شود) + `UPLOAD_BASE_URL=https://<store>.public.blob.vercel-storage.com` |
+| `UPLOAD_STORAGE=s3` | `S3_ENDPOINT`، `S3_REGION`، `S3_BUCKET`، `S3_ACCESS_KEY_ID`، `S3_SECRET_ACCESS_KEY` + `UPLOAD_BASE_URL` برابر نشانی https عمومی bucket |
+
+وضعیت واقعی این پیکربندی در `/admin/diagnostics` (کارت «فضای ذخیره‌سازی رسانه»)
+نمایش داده می‌شود؛ در صورت ناقص‌بودن، نام متغیرهای پیکربندی‌نشده نوشته می‌شود و
+پیام خطای آپلود هم همان دلیل را به مدیر نشان می‌دهد. هیچ مقدار محرمانه‌ای نمایش
+داده نمی‌شود.
+
+**سقف حجم:** پلتفرم Vercel بدنهٔ هر درخواست به تابع را به **۴.۵ مگابایت** محدود
+می‌کند (غیرقابل تغییر) و `router.php` هم بالای ۴ مگابایت را با ۴۱۳ پاسخ می‌دهد.
+پس آپلود مستقیم از طریق فرم، عملاً به فایل‌های کوچک‌تر از ۴ مگابایت محدود است؛
+مقادیر ۲۰/۲۰۰ مگابایت در `config/config.php` فقط روی میزبان‌های Apache/MySQL
+قابل رسیدن‌اند. برای فایل‌های بزرگ باید آپلود مستقیم مرورگر به Blob/S3
+(presigned URL) پیاده‌سازی شود.
+
 ## دیتابیس و داده‌های قبلی
 
 `database/database.postgres.sql` schema مرجع PostgreSQL و `database/database.mysql.sql` schema مرجع MySQL/MariaDB است (هر دو idempotent). `php bin/migrate.php` بر اساس درایور فعال، فایل درست را از `database/` انتخاب می‌کند؛ غیرمخرب و قابل اجرای مجدد است. ایجاد/تغییر جدول در درخواست وب انجام نمی‌شود. `bin/install-cli.php`، `bin/migrate-sections.php` و `bin/db-test.php` فقط از CLI اجرا می‌شوند.
@@ -106,7 +130,7 @@ npm run test:browser
 node tests/links.mjs
 ```
 
-نتایج آزمون‌ها در `test-results/` تولید می‌شوند و وارد Git نمی‌شوند. `.github/workflows/ci.yml` lint، امنیت، مسیرها، مرورگر و HTTP integration را روی fixture ایزوله اجرا می‌کند. `.github/workflows/visual-audit.yml` تصاویر مرورگری را تولید می‌کند و `.github/workflows/deployment-smoke.yml` بررسی محیط زنده را با اجرای دستی فراهم می‌کند. وجود workflow به‌تنهایی به معنی موفق‌بودن اجرا نیست؛ وضعیت واقعی باید در Checks مربوط به commit/PR تأیید شود.
+نتایج آزمون‌ها در `test-results/` تولید می‌شوند و وارد Git نمی‌شوند. تنها workflow موجود در مخزن `.github/workflows/production-e2e.yml` است که با `workflow_dispatch` و به‌صورت دستی، آزمون سرتاسری محیط زنده را اجرا می‌کند؛ بقیهٔ آزمون‌ها (`npm run test:http`، `tests/route-smoke.mjs`، `php tests/security.php`، `php tests/storage-drivers.php`) باید محلی یا در CI دلخواه اجرا شوند. وجود workflow به‌تنهایی به معنی موفق‌بودن اجرا نیست؛ وضعیت واقعی باید در Checks مربوط به commit/PR تأیید شود.
 
 ## ساختار پوشه‌ها
 
@@ -135,7 +159,7 @@ storage/    logs/  cache/
 - [راهنمای نصب (InfinityFree + MySQL)](INSTALL_GUIDE_FA.md)
 - [فهرست آماده‌سازی برای محیط تولید](PRODUCTION_CHECKLIST_FA.md)
 - [نمونه متغیرهای محیطی بدون اسرار](.env.example)
-- [آزمون مرورگری و تصویری](.github/workflows/visual-audit.yml)
-- [آزمون smoke استقرار زنده](.github/workflows/deployment-smoke.yml)
+- [آزمون سرتاسری محیط زنده](.github/workflows/production-e2e.yml)
+- [آزمون رانندهٔ فضای ذخیره‌سازی](tests/storage-drivers.php)
 
 فونت و کتابخانه‌های frontend با مجوز اصلی در `assets/fonts/` و `assets/vendor/` نگهداری شده‌اند. اسرار را فقط از secret manager میزبان تنظیم کنید و اگر credential قدیمی پیش‌تر در Git یا log منتشر شده، آن را rotate کنید.

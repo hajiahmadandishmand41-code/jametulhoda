@@ -115,6 +115,171 @@ function storageUrl(string $key): string {
     if (!storageKey($key) || $key !== storageKey($key)) throw new InvalidArgumentException('Invalid storage key');
     return UPLOAD_BASE_URL . '/' . implode('/', array_map('rawurlencode', explode('/', $key)));
 }
+
+/**
+ * The persistent storage backend that is actually usable in this deployment.
+ *
+ * `local` is only durable on a classic host (InfinityFree, a VPS with Apache).
+ * On Vercel the filesystem is read-only apart from an ephemeral `/tmp`, so a
+ * local write would vanish with the function instance; when a Vercel Blob
+ * token is present the blob backend is selected automatically, otherwise the
+ * caller gets an explicit "no persistent storage" failure instead of a file
+ * that silently disappears.
+ */
+function storageDriver(): string {
+    $configured = strtolower(trim(env_value('UPLOAD_STORAGE', 'local')));
+    if (in_array($configured, ['s3', 'vercel-blob', 'blob'], true)) {
+        return $configured === 'blob' ? 'vercel-blob' : $configured;
+    }
+    if (env_value('VERCEL') !== '' && env_value('BLOB_READ_WRITE_TOKEN') !== '') return 'vercel-blob';
+    return 'local';
+}
+
+/** Blob store REST endpoint (documented, stable; overridable for testing). */
+function blobEndpoint(): string {
+    return rtrim(env_value('BLOB_API_BASE', 'https://blob.vercel-storage.com'), '/');
+}
+
+/**
+ * One signed Blob API call. Returns [httpStatus, body]. Failures never throw:
+ * the caller decides what a non-2xx answer means for this upload.
+ */
+function blobRequest(string $method, string $url, array $headers, ?string $body = null): array {
+    $token = env_value('BLOB_READ_WRITE_TOKEN');
+    if ($token === '') return [0, ''];
+    $handle = curl_init($url);
+    $lines = ['authorization: Bearer ' . $token, 'x-api-version: 7'];
+    foreach ($headers as $name => $value) $lines[] = $name . ': ' . $value;
+    curl_setopt_array($handle, [
+        CURLOPT_CUSTOMREQUEST => $method,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => $lines,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => 120,
+    ]);
+    if ($body !== null) {
+        curl_setopt($handle, CURLOPT_POSTFIELDS, $body);
+    }
+    $response = curl_exec($handle);
+    $status = (int)curl_getinfo($handle, CURLINFO_HTTP_CODE);
+    $error = curl_error($handle);
+    curl_close($handle);
+    if ($response === false) return [0, $error];
+    return [$status, (string)$response];
+}
+
+/**
+ * Upload one object to the Blob store and return its public URL.
+ * `x-add-random-suffix: 0` keeps the URL equal to `UPLOAD_BASE_URL . '/' . key`,
+ * which is what storageUrl()/storageKey() assume for the whole application.
+ */
+function blobPutObject(string $key, string $path, string $mime, string $kind): string {
+    $payload = @file_get_contents($path);
+    if ($payload === false) return '';
+    [$status, $body] = blobRequest('PUT', blobEndpoint() . '/' . implode('/', array_map('rawurlencode', explode('/', $key))), [
+        'access' => 'public',
+        'content-type' => 'application/octet-stream',
+        'x-content-type' => $mime,
+        'x-add-random-suffix' => '0',
+        'x-cache-control-max-age' => '31536000',
+    ], $payload);
+    if ($status !== 200 && $status !== 201) {
+        error_log('Blob upload failed with HTTP ' . $status);
+        return '';
+    }
+    $decoded = json_decode($body, true);
+    $url = is_array($decoded) ? (string)($decoded['url'] ?? '') : '';
+    if (!str_starts_with($url, 'https://')) return '';
+    if (in_array($kind, ['pdf', 'word'], true)) {
+        // Documents are offered as downloads; the token URL adds ?download=1.
+        return $url;
+    }
+    return $url;
+}
+
+function blobDeleteObject(string $url): bool {
+    if (!str_starts_with($url, 'https://')) return false;
+    [$status] = blobRequest('DELETE', blobEndpoint() . '/delete/' . rawurlencode($url), []);
+    return $status === 200 || $status === 204;
+}
+
+/** Is the object publicly reachable? A store that cannot be read back is not usable. */
+function storageUrlIsPublic(string $url): bool {
+    $handle = curl_init($url);
+    curl_setopt_array($handle, [CURLOPT_NOBODY => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15, CURLOPT_FOLLOWLOCATION => false]);
+    curl_exec($handle);
+    $status = (int)curl_getinfo($handle, CURLINFO_HTTP_CODE);
+    curl_close($handle);
+    return $status === 200;
+}
+
+/**
+ * Machine- and human-readable state of the persistent storage configuration.
+ *
+ * Never contains a secret value — only the *names* of variables that are
+ * missing, so it is safe to render on /admin/diagnostics.
+ *
+ * @return array{driver:string,ok:bool,problems:list<string>,limits:array<string,string>}
+ */
+function storageConfigurationStatus(): array {
+    $driver = storageDriver();
+    $problems = [];
+
+    if ($driver === 's3') {
+        foreach (['S3_ENDPOINT', 'S3_REGION', 'S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'] as $variable) {
+            if (env_value($variable) === '') $problems[] = "$variable تنظیم نشده است.";
+        }
+        if (env_value('S3_ENDPOINT') !== '' && !str_starts_with(env_value('S3_ENDPOINT'), 'https://')) {
+            $problems[] = 'S3_ENDPOINT باید با https:// شروع شود.';
+        }
+    } elseif ($driver === 'vercel-blob') {
+        if (env_value('BLOB_READ_WRITE_TOKEN') === '') {
+            $problems[] = 'BLOB_READ_WRITE_TOKEN تنظیم نشده است (در داشبورد Vercel یک Blob Store بسازید تا خودکار تزریق شود).';
+        }
+    } elseif (env_value('VERCEL') !== '') {
+        $problems[] = 'روی Vercel فایل‌سیستم فقط‌خواندنی و /tmp موقتی است؛ UPLOAD_STORAGE=s3 یا یک Vercel Blob Store لازم است.';
+    }
+
+    if ($driver !== 'local' && !str_starts_with(UPLOAD_BASE_URL, 'https://')) {
+        $problems[] = 'UPLOAD_BASE_URL باید نشانی https عمومی فضای ذخیره‌سازی باشد (مقدار فعلی: ' . UPLOAD_BASE_URL . ').';
+    }
+
+    $onVercel = env_value('VERCEL') !== '';
+    $bodyCap = $onVercel ? '4.5MB (سقف غیرقابل تغییر پلتفرم Vercel)' : ini_get('post_max_size');
+    return [
+        'driver' => $driver,
+        'ok' => $problems === [],
+        'problems' => $problems,
+        'limits' => [
+            'public_base_url' => UPLOAD_BASE_URL,
+            'upload_max_filesize' => (string)ini_get('upload_max_filesize'),
+            'post_max_size' => (string)ini_get('post_max_size'),
+            'max_file_uploads' => (string)ini_get('max_file_uploads'),
+            'request_body_cap' => $bodyCap,
+            'app_image_limit' => (string)MAX_FILE_SIZE,
+            'app_video_limit' => (string)MAX_VIDEO_SIZE,
+            'temp_dir_writable' => is_writable(sys_get_temp_dir()) ? 'yes' : 'no',
+        ],
+    ];
+}
+
+/** Editor-facing explanation of why an upload could not be stored ('' = storage is fine). */
+function storageFailureHint(): string {
+    $status = storageConfigurationStatus();
+    $log =& storageFailureLog();
+    $reasons = [];
+    if (!$status['ok']) $reasons = array_slice($status['problems'], 0, 2);
+    if ($log) $reasons[] = (string)end($log);
+    $reasons = array_slice(array_values(array_filter(array_unique($reasons))), 0, 2);
+    if (!$reasons) return '';
+    return ' دلیل ذخیره‌نشدن فایل: ' . implode(' | ', $reasons);
+}
+
+/** Request-scoped record of storage failures, so editors see the real cause. */
+function &storageFailureLog(): array {
+    static $log = [];
+    return $log;
+}
 function storageClient(): \Aws\S3\S3Client {
     static $client;
     if (!is_file(__DIR__ . '/../vendor/autoload.php')) throw new RuntimeException('Run composer install.');
@@ -168,6 +333,14 @@ function storeValidatedFile(string $path, string $kind, string $folder): string 
     // folders are accepted only after strict segment/root validation; client
     // file names never participate in this path.
     if (!storageFolderIsAllowed($folder)) return '';
+    $driver = storageDriver();
+    if ($driver === 'local' && env_value('VERCEL') !== '') {
+        // Never pretend an ephemeral /tmp write is a stored file: it disappears
+        // with the function instance and would leave a dead URL in the database.
+        $log =& storageFailureLog();
+        $log[] = 'روی Vercel فضای ذخیره‌سازی پایدار پیکربندی نشده است (UPLOAD_STORAGE=s3 یا Blob Store).';
+        return '';
+    }
     $info = validateUpload($path, $kind);
     if (!$info) return '';
     $temporary = null;
@@ -208,23 +381,34 @@ function storeValidatedFile(string $path, string $kind, string $folder): string 
             // Give in-flight requests a full day before a background worker may act.
             uploadJournalDB()->prepare("INSERT INTO pending_uploads (reference,not_before) VALUES (?,NOW()+INTERVAL '24 hours') ON CONFLICT DO NOTHING")->execute([$url]);
         }
-        if (UPLOAD_STORAGE === 's3') {
+        if ($driver === 's3') {
             storageClient()->putObject([
                 'Bucket'=>env_value('S3_BUCKET'),'Key'=>$key,'SourceFile'=>$path,
                 'ContentType'=>$info['mime'], 'CacheControl'=>'public,max-age=31536000,immutable',
                 'ContentDisposition'=>in_array($kind, ['pdf','word'], true) ? 'attachment' : 'inline',
             ]);
             storageClient()->headObject(['Bucket'=>env_value('S3_BUCKET'),'Key'=>$key]);
-            $head=curl_init($url);
-            curl_setopt_array($head,[CURLOPT_NOBODY=>true,CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>15,CURLOPT_FOLLOWLOCATION=>false]);
-            curl_exec($head); $status=curl_getinfo($head,CURLINFO_HTTP_CODE); curl_close($head);
-            if($status!==200) {
+            if (!storageUrlIsPublic($url)) {
                 storageClient()->deleteObject(['Bucket'=>env_value('S3_BUCKET'),'Key'=>$key]);
                 throw new RuntimeException('Public storage URL is not accessible.');
             }
-        } elseif (UPLOAD_STORAGE === 'local' && !env_value('VERCEL')) {
+        } elseif ($driver === 'vercel-blob') {
+            $stored = blobPutObject($key, $path, $info['mime'], $kind);
+            if ($stored === '') throw new RuntimeException('Vercel Blob فایل را نپذیرفت (BLOB_READ_WRITE_TOKEN را بررسی کنید).');
+            if (rtrim($stored, '/') !== rtrim($url, '/')) {
+                // The public URL must stay derivable from the key, otherwise the
+                // deletion/registry paths (storageKey) cannot resolve the object.
+                blobDeleteObject($stored);
+                $origin = preg_replace('~^(https://[^/]+).*$~', '$1', $stored);
+                throw new RuntimeException('UPLOAD_BASE_URL باید برابر مبدأ Blob Store باشد: ' . $origin);
+            }
+            if (!storageUrlIsPublic($url)) {
+                blobDeleteObject($url);
+                throw new RuntimeException('نشانی عمومی فایل ذخیره‌شده در دسترس نیست.');
+            }
+        } elseif ($driver === 'local') {
             // Local disk is durable on classic/shared hosts (e.g. InfinityFree);
-            // only Vercel's ephemeral filesystem is refused here.
+            // Vercel's ephemeral filesystem never reaches this branch.
             $dir = UPLOAD_DIR . $folder;
             if (!is_dir($dir) && !mkdir($dir,0755,true)) return '';
             if (!copy($path, UPLOAD_DIR . $key)) return '';
@@ -233,7 +417,8 @@ function storeValidatedFile(string $path, string $kind, string $folder): string 
         try {
             getDB()->prepare('INSERT INTO stored_files (file_key,url,mime,size) VALUES (?,?,?,?)')->execute([$key,$url,$info['mime'],$info['size']]);
         } catch (Throwable $e) {
-            if (UPLOAD_STORAGE === 's3') storageClient()->deleteObject(['Bucket'=>env_value('S3_BUCKET'),'Key'=>$key]);
+            if ($driver === 's3') storageClient()->deleteObject(['Bucket'=>env_value('S3_BUCKET'),'Key'=>$key]);
+            elseif ($driver === 'vercel-blob') blobDeleteObject($url);
             else @unlink(UPLOAD_DIR . $key);
             throw $e;
         }
@@ -241,6 +426,8 @@ function storeValidatedFile(string $path, string $kind, string $folder): string 
         return $url;
     } catch (Throwable $e) {
         error_log('Upload failed: ' . get_class($e) . ' — ' . $e->getMessage());
+        $log =& storageFailureLog();
+        $log[] = $e->getMessage();
         return '';
     } finally { if ($temporary && is_file($temporary)) unlink($temporary); }
 }
@@ -251,9 +438,12 @@ function uploadFile(array $file, string $kind, string $folder): string {
 function deleteStoredFile(string $reference): bool {
     $key = storageKey($reference);
     if (!$key) return false;
-    if (UPLOAD_STORAGE === 's3') {
+    $driver = storageDriver();
+    if ($driver === 's3') {
         storageClient()->deleteObject(['Bucket'=>env_value('S3_BUCKET'),'Key'=>$key]);
-    } elseif (UPLOAD_STORAGE === 'local' && !env_value('VERCEL')) {
+    } elseif ($driver === 'vercel-blob') {
+        if (!blobDeleteObject(storageUrl($key))) return false;
+    } elseif ($driver === 'local') {
         $path = realpath(UPLOAD_DIR . $key);
         $base = realpath(UPLOAD_DIR);
         if ($path && (!$base || !str_starts_with($path, $base . '/') || !is_file($path))) return false;

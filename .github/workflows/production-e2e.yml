@@ -1,0 +1,56 @@
+name: Production E2E audit
+
+# Manual audit of a live deployment: admin login, database tables, content
+# creation with image/video/audio/PDF uploads, publication and public media
+# verification. Credentials come from repository secrets and are never printed.
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Base URL to audit'
+        required: true
+        default: 'https://jametulhoda.vercel.app'
+      oversize:
+        description: 'Also probe the platform request-size ceiling (6 MB upload)'
+        type: boolean
+        default: false
+      keep:
+        description: 'Keep the created audit content instead of deleting it'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Only the Playwright request API is used (no browser download needed).
+      - name: Install test dependencies
+        run: npm install --no-audit --no-fund --omit=optional @playwright/test
+
+      - name: Run end-to-end audit
+        env:
+          TEST_BASE_URL: ${{ inputs.target }}
+          JHD_ADMIN_IDENTIFIER: ${{ secrets.JHD_ADMIN_IDENTIFIER }}
+          JHD_ADMIN_PASSWORD: ${{ secrets.JHD_ADMIN_PASSWORD }}
+          JHD_ADMIN_PASSWORD_ALT: ${{ secrets.JHD_ADMIN_PASSWORD_ALT }}
+          JHD_E2E_OVERSIZE: ${{ inputs.oversize && '1' || '' }}
+          JHD_E2E_KEEP: ${{ inputs.keep && '1' || '' }}
+        run: node tests/production-e2e.mjs
+
+      - name: Upload failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-e2e-evidence
+          path: test-results/
+          if-no-files-found: ignore

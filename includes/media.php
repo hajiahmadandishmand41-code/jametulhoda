@@ -138,7 +138,7 @@ function handleMediaUploads(string $refType, int $refId, array $files, string $k
                 ? uploadContentVideo($file, $entity, $refId, $context)
                 : uploadContentDocument($file, $entity, $refId, in_array(strtolower(pathinfo($name, PATHINFO_EXTENSION)), ['doc', 'docx'], true) ? 'word' : 'pdf', $context));
         if ($path === '') {
-            $result['errors'][] = "فایل «{$name}» معتبر نیست یا ذخیره نشد.";
+            $result['errors'][] = "فایل «{$name}» معتبر نیست یا ذخیره نشد." . storageFailureHint();
             continue;
         }
 
