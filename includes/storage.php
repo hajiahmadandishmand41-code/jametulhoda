@@ -90,12 +90,24 @@ function contentStorageFolder(string $entity, int $id, array $context = []): str
     if ($entity === 'lesson_collection') {
         return 'lessons/collection-' . $id;
     }
-    if ($entity === 'lesson') return 'lessons/' . $id;
+    if ($entity === 'lesson') {
+        $collId = (int)($context['collection_id'] ?? 0);
+        if ($collId > 0) {
+            return 'lessons/collection-' . $collId . '/lesson-' . $id;
+        }
+        return 'lessons/lesson-' . $id;
+    }
+    if ($entity === 'book') {
+        $catId = (int)($context['category_id'] ?? $context['topic_id'] ?? 0);
+        if ($catId > 0) {
+            return 'books/category-' . $catId . '/book-' . $id;
+        }
+        return 'books/book-' . $id;
+    }
     $prefix = match ($entity) {
         'report' => 'report-',
         'article' => 'article-',
         'research' => 'research-',
-        'book' => 'book-',
         'topic' => 'topic-',
         'banner' => 'banner-',
         'avatar' => 'user-',
@@ -131,7 +143,11 @@ function storageDriver(): string {
     if (in_array($configured, ['s3', 'vercel-blob', 'blob'], true)) {
         return $configured === 'blob' ? 'vercel-blob' : $configured;
     }
-    if (env_value('VERCEL') !== '' && blobIsUsable()) return 'vercel-blob';
+    if (env_value('VERCEL') !== '') {
+        // Never report local storage on Vercel: the filesystem is ephemeral and
+        // a local-looking status hides a missing platform credential.
+        return blobIsUsable() ? 'vercel-blob' : 'vercel-unconfigured';
+    }
     return 'local';
 }
 
@@ -338,6 +354,8 @@ function storageConfigurationStatus(): array {
         } elseif ($credentials['kind'] === 'oidc' && $credentials['store_id'] === '') {
             $problems[] = 'BLOB_STORE_ID تنظیم نشده است؛ استفاده از VERCEL_OIDC_TOKEN بدون شناسهٔ فروشگاه پذیرفته نمی‌شود.';
         }
+    } elseif ($driver === 'vercel-unconfigured') {
+        $problems[] = 'هیچ اعتبارنامهٔ قابل استفاده‌ای برای Blob در Runtime فعلی پیدا نشد. Vercel Blob باید BLOB_READ_WRITE_TOKEN را تزریق کند؛ در الگوی OIDC نیز VERCEL_OIDC_TOKEN به‌همراه BLOB_STORE_ID لازم است. اتصال Storage را برای همین پروژه و Production بررسی کنید.';
     } elseif (env_value('VERCEL') !== '') {
         $credentials = blobCredentials();
         if ($credentials['kind'] === 'oidc' && $credentials['store_id'] === '') {
@@ -465,11 +483,11 @@ function storeValidatedFile(string $path, string $kind, string $folder): string 
     // file names never participate in this path.
     if (!storageFolderIsAllowed($folder)) return '';
     $driver = storageDriver();
-    if ($driver === 'local' && env_value('VERCEL') !== '') {
+    if (in_array($driver, ['local', 'vercel-unconfigured'], true) && env_value('VERCEL') !== '') {
         // Never pretend an ephemeral /tmp write is a stored file: it disappears
         // with the function instance and would leave a dead URL in the database.
         $log =& storageFailureLog();
-        $log[] = 'روی Vercel فضای ذخیره‌سازی پایدار پیکربندی نشده است (UPLOAD_STORAGE=s3 یا Blob Store).';
+        $log[] = 'روی Vercel فضای ذخیره‌سازی پایدار پیکربندی نشده است. اتصال Vercel Blob یا S3 را تنظیم کنید.';
         return '';
     }
     $info = validateUpload($path, $kind);
@@ -587,7 +605,8 @@ function deleteStoredFile(string $reference): bool {
     if ($driver === 's3') {
         storageClient()->deleteObject(['Bucket'=>env_value('S3_BUCKET'),'Key'=>$key]);
     } elseif ($driver === 'vercel-blob') {
-        if (!blobDeleteObject(storageUrl($key))) return false;
+        $blobUrl = storageUrlSchemeAllowed($reference) ? $reference : storageUrl($key);
+        if (!blobDeleteObject($blobUrl)) return false;
     } elseif ($driver === 'local') {
         $path = realpath(UPLOAD_DIR . $key);
         $base = realpath(UPLOAD_DIR);

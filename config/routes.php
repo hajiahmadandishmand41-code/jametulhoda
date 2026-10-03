@@ -152,6 +152,8 @@ return [
         '/files'     => '/books',
         '/dashboard' => '/admin',
         '/event'     => '/events',
+        '/notices'   => '/announcements',
+        '/notice'    => '/announcements',
         // نشانی کوتاه نصاب. aliasها فقط با همان نوشتار (به‌علاوهٔ اسلش پایانی)
         // پاسخ می‌دهند، پس `/install.php` همچنان ۴۰۴ می‌ماند.
         '/install'   => '/php/install',
