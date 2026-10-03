@@ -6,8 +6,10 @@ name: Production checks
 #     static assets, the installer state and the platform request-size ceiling.
 #   • audit — full end-to-end operator flow (admin login, database tables,
 #     content creation with image/video/audio/PDF uploads, publication and
-#     public media verification). Manual only, credentials come from repository
-#     secrets and are never printed.
+#     public media verification). Runs on every push too, but only when the
+#     JHD_ADMIN_* repository secrets exist; otherwise it reports that it could
+#     not verify anything instead of pretending to have. Credentials are read
+#     from secrets only and are never printed.
 on:
   push:
     branches: ['**']
@@ -54,6 +56,7 @@ jobs:
         continue-on-error: true
         env:
           TEST_BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.target || 'https://jametulhoda.vercel.app' }}
+          PROBE_THROTTLE_MS: '400'
         run: node tests/production-probe.mjs 2>&1 | tee probe-report.txt
 
       # The report is published as a commit comment so it can be read through the
@@ -61,20 +64,19 @@ jobs:
       - name: Publish the probe report
         if: always()
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           {
-            echo "### Production probe — ${{ github.event_name == 'workflow_dispatch' && inputs.target || 'https://jametulhoda.vercel.app' }}"
+            echo '### Production probe — ${{ github.event_name == '"'"'workflow_dispatch'"'"' && inputs.target || '"'"'https://jametulhoda.vercel.app'"'"' }}'
             echo
-            echo "- commit: \`${{ github.sha }}\`"
+            echo "- commit: \`${GITHUB_SHA}\`"
             echo "- probe conclusion: ${{ steps.probe.outcome }}"
             echo
             echo '```text'
-            cat probe-report.txt
+            tail -n 120 probe-report.txt
             echo '```'
           } > probe-comment.md
-          gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \
-            -f body="$(cat probe-comment.md)" --jq '.html_url'
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$(cat probe-comment.md)" >/dev/null
 
       - name: Fail when the probe failed
         if: steps.probe.outcome != 'success'
@@ -82,7 +84,6 @@ jobs:
 
   audit:
     name: End-to-end audit (needs secrets)
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -92,22 +93,44 @@ jobs:
         with:
           node-version: 22
 
-      # Only the Playwright request API is used (no browser download needed).
+      # The audit needs real credentials. Without them it says so loudly and
+      # stops, rather than reporting a pass it never earned.
+      - name: Check audit credentials
+        id: creds
+        env:
+          IDENTIFIER: ${{ secrets.JHD_ADMIN_IDENTIFIER }}
+          PASSWORD: ${{ secrets.JHD_ADMIN_PASSWORD }}
+        run: |
+          if [ -n "$IDENTIFIER" ] && [ -n "$PASSWORD" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install test dependencies
+        if: steps.creds.outputs.ready == 'true'
         run: npm install --no-audit --no-fund @playwright/test
 
       - name: Install the headless browser
+        if: steps.creds.outputs.ready == 'true'
         run: npx playwright install --with-deps chromium
 
       - name: Run end-to-end audit
+        if: steps.creds.outputs.ready == 'true'
         env:
-          TEST_BASE_URL: ${{ inputs.target }}
+          TEST_BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.target || 'https://jametulhoda.vercel.app' }}
           JHD_ADMIN_IDENTIFIER: ${{ secrets.JHD_ADMIN_IDENTIFIER }}
           JHD_ADMIN_PASSWORD: ${{ secrets.JHD_ADMIN_PASSWORD }}
           JHD_ADMIN_PASSWORD_ALT: ${{ secrets.JHD_ADMIN_PASSWORD_ALT }}
           JHD_E2E_OVERSIZE: ${{ inputs.oversize && '1' || '' }}
           JHD_E2E_KEEP: ${{ inputs.keep && '1' || '' }}
         run: node tests/production-e2e.mjs
+
+      - name: Report that nothing was verified
+        if: steps.creds.outputs.ready != 'true'
+        run: |
+          echo '::warning title=End-to-end audit not run::The audit needs the JHD_ADMIN_IDENTIFIER and JHD_ADMIN_PASSWORD repository secrets. Nothing about admin login, uploads or the database was verified on this run.'
+          echo 'Add the secrets under Settings > Secrets and variables > Actions, then re-run this workflow.'
 
       - name: Upload failure evidence
         if: always()
