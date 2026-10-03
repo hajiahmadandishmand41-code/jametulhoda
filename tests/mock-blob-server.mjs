@@ -10,12 +10,21 @@
  *   GET    /?limit=1            → فهرست (برای کشف مبدأ عمومی)
  *   GET    /{pathname}          → سروِ عمومی شیء
  *   GET    /__log               → درخواست‌های ثبت‌شده (برای assertion)
+ *
+ * مبدأ خواندن عمومی (MOCK_BLOB_ORIGIN) با مبدأ API فرق دارد — درست مثل
+ * فروشگاه واقعی که نشانی عمومیِ شیء با نشانیِ API یکی نیست. به همین دلیل
+ * مقدار url در پاسخِ PUT باید دقیقاً برابر UPLOAD_BASE_URL/key باشد.
  */
 import http from 'node:http';
 
 const PORT = parseInt(process.env.MOCK_BLOB_PORT || '9111', 10);
-const PUBLIC_ORIGIN = process.env.MOCK_BLOB_ORIGIN || `http://127.0.0.1:${PORT}`;
+const PUBLIC_ORIGIN = process.env.MOCK_BLOB_ORIGIN || `http://127.0.0.1:${PORT}/public`;
 const PREFIX = new URL(PUBLIC_ORIGIN).pathname.replace(/\/+$/, ''); // e.g. '/public'
+// Objects are addressed by their key ('/images/x.webp'); the public origin adds
+// the '/public' prefix, exactly like a real store whose read host differs from
+// the API host. Both spellings are accepted on read.
+const objectKey = (pathname) =>
+  pathname === PREFIX ? '/' : pathname.startsWith(PREFIX + '/') ? pathname.slice(PREFIX.length) : pathname;
 
 /** @type {Map<string, {body: Buffer, contentType: string}>} */
 const objects = new Map();
@@ -41,8 +50,14 @@ const server = http.createServer((request, response) => {
       response.end(data);
     };
 
+    // Public objects are readable without a token — that is what makes them
+    // public. Only the control-plane routes (list, upload, delete, log) are
+    // authenticated, otherwise the application's "is the object reachable?"
+    // check could never succeed.
+    const isPublicRead = (request.method === 'GET' || request.method === 'HEAD')
+      && pathname !== '/' && pathname !== '/__log' && pathname !== '/__objects';
     const authorization = String(headers.authorization || '');
-    if (!authorization.startsWith('Bearer ') || unauthorized.test(authorization)) {
+    if (!isPublicRead && (!authorization.startsWith('Bearer ') || unauthorized.test(authorization))) {
       send(403, { error: 'unauthorized' });
       return;
     }
@@ -69,7 +84,7 @@ const server = http.createServer((request, response) => {
       if (!Array.isArray(parsed.urls)) { send(400, { error: 'urls is required' }); return; }
       const removed = [];
       for (const target of parsed.urls) {
-        const key = new URL(String(target)).pathname;
+        const key = objectKey(new URL(String(target)).pathname);
         if (objects.delete(key)) removed.push(key);
       }
       send(200, { deleted: removed.length });
@@ -78,7 +93,7 @@ const server = http.createServer((request, response) => {
 
     // Upload
     if (request.method === 'PUT') {
-      const key = pathname.startsWith(PREFIX + '/') ? pathname.slice(PREFIX.length) : pathname;
+      const key = objectKey(pathname);
       const contentType = String(headers['x-content-type'] || headers['content-type'] || 'application/octet-stream');
       const suffix = headers['x-add-random-suffix'] === '0' ? '' : '-randomsuffix';
       const finalKey = key.replace(/\.([a-z0-9]+)$/, (m, ext) => `${suffix}.${ext}`);
@@ -95,7 +110,7 @@ const server = http.createServer((request, response) => {
 
     // Public read
     if (request.method === 'GET' || request.method === 'HEAD') {
-      const object = objects.get(pathname);
+      const object = objects.get(objectKey(pathname));
       if (!object) { send(404, { error: 'not_found' }); return; }
       response.writeHead(200, {
         'content-type': object.contentType,
