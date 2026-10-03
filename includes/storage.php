@@ -177,6 +177,25 @@ function blobEndpoint(): string {
     return rtrim(env_value('BLOB_API_BASE', 'https://blob.vercel-storage.com'), '/');
 }
 
+/**
+ * Must stored media be served over https?
+ *
+ * Yes in production and on Vercel — a media URL that downgrades to http is
+ * blocked by the browser and breaks every card image. A development or test
+ * environment may legitimately talk to a local simulator over plain http, so
+ * the rule is derived from the environment and never hard-coded.
+ */
+function storageRequiresHttps(): bool {
+    return APP_ENV === 'production' || env_value('VERCEL') !== '';
+}
+
+/** Accept a store URL: https always, http only where the environment allows it. */
+function storageUrlSchemeAllowed(string $url): bool {
+    if ($url === '') return false;
+    if (str_starts_with($url, 'https://')) return true;
+    return !storageRequiresHttps() && str_starts_with($url, 'http://');
+}
+
 /** Blob API version. Matches the current @vercel/blob SDK default. */
 function blobApiVersion(): string {
     $version = trim(env_value('BLOB_API_VERSION'));
@@ -241,8 +260,8 @@ function blobPutObject(string $key, string $path, string $mime, string $kind): s
     }
     $decoded = json_decode($body, true);
     $url = is_array($decoded) ? (string)($decoded['url'] ?? '') : '';
-    if ($url === '' && $body !== '' && str_starts_with($body, 'https://')) $url = $body;
-    if (!str_starts_with($url, 'https://')) return '';
+    if ($url === '' && $body !== '' && preg_match('~^https?://~', $body) === 1) $url = $body;
+    if (!storageUrlSchemeAllowed($url)) return '';
     if (in_array($kind, ['pdf', 'word'], true)) {
         // Documents are offered as downloads; the token URL adds ?download=1.
         return $url;
@@ -258,7 +277,7 @@ function blobPutObject(string $key, string $path, string $mime, string $kind): s
  * objects behind whenever an editor replaces or removes media.
  */
 function blobDeleteObject(string $url): bool {
-    if (!str_starts_with($url, 'https://')) return false;
+    if (!storageUrlSchemeAllowed($url)) return false;
     [$status] = blobRequest('POST', blobEndpoint() . '/delete', [
         'content-type' => 'application/json',
         'x-content-type' => 'application/json',
@@ -279,8 +298,8 @@ function blobPublicOrigin(): string {
     if ($status !== 200) return '';
     $decoded = json_decode($body, true);
     $first = is_array($decoded) ? (string)($decoded['blobs'][0]['url'] ?? '') : '';
-    if (!str_starts_with($first, 'https://')) return '';
-    return (string)preg_replace('~^(https://[^/]+).*$~', '$1', $first);
+    if (!storageUrlSchemeAllowed($first)) return '';
+    return (string)preg_replace('~^https?://([^/]+).*$~', '$1', $first);
 }
 
 /** Is the object publicly reachable? A store that cannot be read back is not usable. */
@@ -332,8 +351,7 @@ function storageConfigurationStatus(): array {
 
     // HTTPS is mandatory in production (and on Vercel). A development or test
     // environment may legitimately point at a local simulator over http.
-    $requiresHttps = APP_ENV === 'production' || env_value('VERCEL') !== '';
-    if ($driver !== 'local' && $requiresHttps && !str_starts_with(UPLOAD_BASE_URL, 'https://')) {
+    if ($driver !== 'local' && storageRequiresHttps() && !str_starts_with(UPLOAD_BASE_URL, 'https://')) {
         $problems[] = 'UPLOAD_BASE_URL باید نشانی https عمومی فضای ذخیره‌سازی باشد (مقدار فعلی: ' . UPLOAD_BASE_URL . ').';
     }
 
@@ -523,7 +541,7 @@ function storeValidatedFile(string $path, string $kind, string $folder): string 
                 // The public URL must stay derivable from the key, otherwise the
                 // deletion/registry paths (storageKey) cannot resolve the object.
                 blobDeleteObject($stored);
-                $origin = (string)preg_replace('~^(https://[^/]+).*$~', '$1', $stored);
+                $origin = (string)preg_replace('~^https?://([^/]+).*$~', '$1', $stored);
                 throw new RuntimeException(
                     'UPLOAD_BASE_URL باید دقیقاً برابر مبدأ Blob Store باشد. مقدار لازم: ' . $origin
                     . ' (مقدار فعلی: ' . UPLOAD_BASE_URL . ')'

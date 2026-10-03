@@ -86,7 +86,11 @@ jobs:
           # allow is the editorial hero; everything else is far shorter.
           JHD_MAX_CARD_HEIGHT: '420'
           SNAPSHOT_DIR: ${{ (inputs.snapshot || contains(github.event.head_commit.message, '[snapshot]')) && 'tests/snapshots' || '' }}
-        run: node tests/responsive-audit.mjs 2>&1 | tee layout-report.txt
+        run: |
+          set -o pipefail
+          node tests/responsive-audit.mjs 2>&1 | tee layout-report.txt
+          # continue-on-error would otherwise report a failed audit as success.
+          echo "exit=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
 
       - name: Save the HTML snapshots
         if: ${{ inputs.snapshot || contains(github.event.head_commit.message, '[snapshot]') }}
@@ -107,7 +111,7 @@ jobs:
           {
             echo "### Card layout audit — \`${GITHUB_SHA}\`"
             echo
-            echo "- conclusion: ${{ steps.measure.outcome }}"
+            echo "- conclusion: ${{ steps.measure.outputs.exit == '0' && 'success' || 'failure' }}"
             echo
             echo '```text'
             tail -n 220 layout-report.txt 2>/dev/null || echo "(no report produced)"
@@ -116,7 +120,7 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$(cat layout-comment.md)" >/dev/null
 
       - name: Fail when the layout is broken
-        if: steps.measure.outcome == 'failure'
+        if: steps.measure.outputs.exit != '0'
         run: exit 1
 
   storage:
@@ -153,7 +157,10 @@ jobs:
           BLOB_READ_WRITE_TOKEN: vercel_blob_rw_mockstore_secret
           BLOB_API_BASE: http://127.0.0.1:9111
           UPLOAD_BASE_URL: http://127.0.0.1:9111/public
-        run: php tests/storage-blob-e2e.php 2>&1 | tee storage-report.txt
+        run: |
+          set -o pipefail
+          php tests/storage-blob-e2e.php 2>&1 | tee storage-report.txt
+          echo "exit=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
 
       - name: Upload the same files with GD disabled (the Vercel runtime)
         id: without_gd
@@ -168,15 +175,37 @@ jobs:
           BLOB_API_BASE: http://127.0.0.1:9111
           UPLOAD_BASE_URL: http://127.0.0.1:9111/public
         run: |
+          set -o pipefail
           php -d disable_functions=imagecreatefromstring,imagecreatefromjpeg,imagecreatefrompng,imagecreatefromgif,imagecreatefromwebp,imagescale,imagewebp,imagepng,imagejpeg \
               tests/storage-blob-e2e.php 2>&1 | tee storage-report-nogd.txt
+          echo "exit=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: A wrong UPLOAD_BASE_URL must fail loudly, never silently
+        id: mismatch
+        continue-on-error: true
+        env:
+          APP_ENV: development
+          DB_DRIVER: sqlite
+          SQLITE_PATH: /tmp/jametulhoda-mismatch.sqlite
+          SESSION_DRIVER: files
+          UPLOAD_STORAGE: vercel-blob
+          BLOB_READ_WRITE_TOKEN: vercel_blob_rw_mockstore_secret
+          BLOB_API_BASE: http://127.0.0.1:9111
+          UPLOAD_BASE_URL: http://127.0.0.1:9111/public
+        run: |
+          set -o pipefail
+          php tests/storage-base-url-mismatch.php 2>&1 | tee mismatch-report.txt
+          echo "exit=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
 
       - name: Driver selection rules
         id: drivers
         continue-on-error: true
         env:
           APP_ENV: development
-        run: php tests/storage-drivers.php 2>&1 | tee drivers-report.txt
+        run: |
+          set -o pipefail
+          php tests/storage-drivers.php 2>&1 | tee drivers-report.txt
+          echo "exit=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
 
       - name: Publish the storage report
         if: always()
@@ -186,15 +215,18 @@ jobs:
           {
             echo "### Storage upload audit — \`${GITHUB_SHA}\`"
             echo
-            echo "- with GD: ${{ steps.with_gd.outcome }}"
-            echo "- without GD (Vercel runtime): ${{ steps.without_gd.outcome }}"
-            echo "- driver rules: ${{ steps.drivers.outcome }}"
+            echo "- with GD: ${{ steps.with_gd.outputs.exit == '0' && 'success' || 'failure' }}"
+            echo "- without GD (Vercel runtime): ${{ steps.without_gd.outputs.exit == '0' && 'success' || 'failure' }}"
+            echo "- wrong base URL: ${{ steps.mismatch.outputs.exit == '0' && 'success' || 'failure' }}"
+            echo "- driver rules: ${{ steps.drivers.outputs.exit == '0' && 'success' || 'failure' }}"
             echo
             echo '```text'
             echo '── with GD ──'
             tail -n 60 storage-report.txt 2>/dev/null || echo "(no report)"
             echo '── without GD ──'
             tail -n 60 storage-report-nogd.txt 2>/dev/null || echo "(no report)"
+            echo '── wrong base URL ──'
+            tail -n 20 mismatch-report.txt 2>/dev/null || echo "(no report)"
             echo '── driver rules ──'
             tail -n 30 drivers-report.txt 2>/dev/null || echo "(no report)"
             echo '```'
@@ -202,5 +234,5 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$(cat storage-comment.md)" >/dev/null
 
       - name: Fail when an upload path is broken
-        if: steps.with_gd.outcome == 'failure' || steps.without_gd.outcome == 'failure' || steps.drivers.outcome == 'failure'
+        if: steps.with_gd.outputs.exit != '0' || steps.without_gd.outputs.exit != '0' || steps.mismatch.outputs.exit != '0' || steps.drivers.outputs.exit != '0'
         run: exit 1
