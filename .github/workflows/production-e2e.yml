@@ -64,10 +64,10 @@ jobs:
       - name: Publish the probe report
         if: always()
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           {
-            echo '### Production probe — ${{ github.event_name == '"'"'workflow_dispatch'"'"' && inputs.target || '"'"'https://jametulhoda.vercel.app'"'"' }}'
+            echo "### Production probe — ${{ github.event_name == 'workflow_dispatch' && inputs.target || 'https://jametulhoda.vercel.app' }}"
             echo
             echo "- commit: \`${GITHUB_SHA}\`"
             echo "- probe conclusion: ${{ steps.probe.outcome }}"
