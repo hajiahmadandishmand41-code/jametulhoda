@@ -35,6 +35,11 @@ const note = (label, value) => { info.push(`${label}=${value}`); console.log(`IN
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const THROTTLE_MS = Number(process.env.PROBE_THROTTLE_MS || 400);
+// Deployments behind Vercel's Attack Challenge Mode start challenging a client
+// after roughly two dozen requests. Stay inside that budget by default and stop
+// cleanly instead of reporting the rest of the suite as application failures.
+const MAX_REQUESTS = Number(process.env.PROBE_MAX_REQUESTS || 22);
+let requestBudget = MAX_REQUESTS;
 let wafHits = 0;
 
 /** Is this a WAF/challenge response rather than an answer from the application? */
@@ -50,8 +55,22 @@ let challengeBodyShown = false;
  * it decides the client is a bot; when that happens three requests in a row the
  * probe stops instead of reporting 30 identical failures as application bugs.
  */
+/** Stop cleanly once the platform's request allowance is used up. */
+const budgetStop = async () => {
+  const failed = results.filter((r) => !r.ok).length;
+  console.log(`\nSTOPPED: the request budget of ${MAX_REQUESTS} calls is used up. A deployment behind`
+    + " Vercel's Attack Challenge Mode starts answering with a JS challenge after roughly this many"
+    + ' requests, so the remaining checks were not run rather than reported as failures.');
+  console.log(`Verified so far: ${results.length - failed}/${results.length} passed.`);
+  console.log(JSON.stringify({ base, stopped: 'request-budget', checked: results.length, failed, wafHits, info }));
+  await api.dispose();
+  process.exit(failed === 0 ? 0 : 1);
+};
+
 const probe = async (method, path, options = {}) => {
+  if (requestBudget <= 0) await budgetStop();
   for (let attempt = 1; attempt <= 3; attempt++) {
+    requestBudget--;
     await sleep(THROTTLE_MS);
     const response = await api.fetch(path, { method, ...options, failOnStatusCode: false });
     const body = await response.text();
