@@ -1,0 +1,238 @@
+name: Responsive & storage audit
+
+# Two independent verifications that need no secret at all:
+#   • responsive — renders every listing page in a real Chromium at 320/360/390/
+#     414/768/1024/1440 px and measures horizontal overflow, card size, media
+#     ratio and whether the sticky header covers the first card.
+#   • storage    — runs the real upload path (includes/storage.php) against a
+#     local Blob API simulator: image, video, audio and PDF are stored, read
+#     back, registered in stored_files and deleted again. The image case runs
+#     twice: once with GD and once with GD disabled, because the PHP runtime on
+#     Vercel ships without GD.
+#
+# Each job publishes its report as a commit comment, because the Actions log
+# archive is not reachable from every environment (the API is).
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+    inputs:
+      snapshot:
+        description: 'Also save the rendered HTML of every page as a snapshot'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  responsive:
+    name: Card layout at real viewport widths
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: gd, curl, zip, mbstring, dom, fileinfo, pdo_sqlite, sqlite3
+          coverage: none
+
+      - name: Install the headless browser
+        run: |
+          npm install --no-audit --no-fund @playwright/test
+          npx playwright install --with-deps chromium
+
+      - name: Build the throwaway SQLite database
+        env:
+          APP_ENV: development
+          DB_DRIVER: sqlite
+          SQLITE_PATH: /tmp/jametulhoda-responsive.sqlite
+          SESSION_DRIVER: files
+          UPLOAD_STORAGE: local
+        run: |
+          rm -f /tmp/jametulhoda-responsive.sqlite
+          php bin/dev-db.php
+          # Every card needs a real image so the measured heights are the real
+          # ones; the seed leaves most featured images empty on purpose.
+          php tests/fixtures/attach-demo-media.php /tmp/jametulhoda-responsive.sqlite
+
+      - name: Serve the site
+        env:
+          APP_ENV: development
+          DB_DRIVER: sqlite
+          SQLITE_PATH: /tmp/jametulhoda-responsive.sqlite
+          SESSION_DRIVER: files
+          UPLOAD_STORAGE: local
+          SITE_URL: http://127.0.0.1:8080
+        run: |
+          php -S 127.0.0.1:8080 router.php > /tmp/php-server.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null http://127.0.0.1:8080/; then echo "server up"; break; fi
+            sleep 1
+          done
+
+      - name: Measure every page at every width
+        id: measure
+        continue-on-error: true
+        env:
+          TEST_BASE_URL: http://127.0.0.1:8080
+          # A listing card must stay thumb-sized on a phone. The tallest card we
+          # allow is the editorial hero; everything else is far shorter.
+          JHD_MAX_CARD_HEIGHT: '420'
+          SNAPSHOT_DIR: ${{ (inputs.snapshot || contains(github.event.head_commit.message, '[snapshot]')) && 'tests/snapshots' || '' }}
+        run: |
+          set -o pipefail
+          node tests/responsive-audit.mjs 2>&1 | tee layout-report.txt
+          # continue-on-error would otherwise report a failed audit as success.
+          echo "exit=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Save the HTML snapshots
+        if: ${{ inputs.snapshot || contains(github.event.head_commit.message, '[snapshot]') }}
+        continue-on-error: true
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add tests/snapshots
+          git diff --staged --quiet && echo "no snapshot change" && exit 0
+          git commit -m "test: refresh rendered HTML snapshots for local layout work"
+          git push origin HEAD:${GITHUB_REF_NAME}
+
+      - name: Publish the layout report
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "### Card layout audit — \`${GITHUB_SHA}\`"
+            echo
+            echo "- conclusion: ${{ steps.measure.outputs.exit == '0' && 'success' || 'failure' }}"
+            echo
+            echo '```text'
+            tail -n 220 layout-report.txt 2>/dev/null || echo "(no report produced)"
+            echo '```'
+          } > layout-comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$(cat layout-comment.md)" >/dev/null
+
+      - name: Fail when the layout is broken
+        if: steps.measure.outputs.exit != '0'
+        run: exit 1
+
+  storage:
+    name: Real upload path against a Blob API simulator
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: gd, curl, zip, mbstring, dom, fileinfo, pdo_sqlite, sqlite3
+          coverage: none
+
+      - name: Start the Blob API simulator
+        env:
+          MOCK_BLOB_PORT: '9111'
+        run: node tests/mock-blob-server.mjs &
+
+      - name: Upload image, video, audio and PDF (with GD)
+        id: with_gd
+        continue-on-error: true
+        env:
+          APP_ENV: development
+          DB_DRIVER: sqlite
+          SQLITE_PATH: /tmp/jametulhoda-storage.sqlite
+          SESSION_DRIVER: files
+          UPLOAD_STORAGE: vercel-blob
+          BLOB_READ_WRITE_TOKEN: vercel_blob_rw_mockstore_secret
+          BLOB_API_BASE: http://127.0.0.1:9111
+          UPLOAD_BASE_URL: http://127.0.0.1:9111/public
+        run: |
+          set -o pipefail
+          php tests/storage-blob-e2e.php 2>&1 | tee storage-report.txt
+          echo "exit=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the same files with GD disabled (the Vercel runtime)
+        id: without_gd
+        continue-on-error: true
+        env:
+          APP_ENV: development
+          DB_DRIVER: sqlite
+          SQLITE_PATH: /tmp/jametulhoda-storage-nogd.sqlite
+          SESSION_DRIVER: files
+          UPLOAD_STORAGE: vercel-blob
+          BLOB_READ_WRITE_TOKEN: vercel_blob_rw_mockstore_secret
+          BLOB_API_BASE: http://127.0.0.1:9111
+          UPLOAD_BASE_URL: http://127.0.0.1:9111/public
+        run: |
+          set -o pipefail
+          php -d disable_functions=imagecreatefromstring,imagecreatefromjpeg,imagecreatefrompng,imagecreatefromgif,imagecreatefromwebp,imagescale,imagewebp,imagepng,imagejpeg \
+              tests/storage-blob-e2e.php 2>&1 | tee storage-report-nogd.txt
+          echo "exit=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: A wrong UPLOAD_BASE_URL must fail loudly, never silently
+        id: mismatch
+        continue-on-error: true
+        env:
+          APP_ENV: development
+          DB_DRIVER: sqlite
+          SQLITE_PATH: /tmp/jametulhoda-mismatch.sqlite
+          SESSION_DRIVER: files
+          UPLOAD_STORAGE: vercel-blob
+          BLOB_READ_WRITE_TOKEN: vercel_blob_rw_mockstore_secret
+          BLOB_API_BASE: http://127.0.0.1:9111
+          UPLOAD_BASE_URL: http://127.0.0.1:9111/public
+        run: |
+          set -o pipefail
+          php tests/storage-base-url-mismatch.php 2>&1 | tee mismatch-report.txt
+          echo "exit=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Driver selection rules
+        id: drivers
+        continue-on-error: true
+        env:
+          APP_ENV: development
+        run: |
+          set -o pipefail
+          php tests/storage-drivers.php 2>&1 | tee drivers-report.txt
+          echo "exit=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish the storage report
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "### Storage upload audit — \`${GITHUB_SHA}\`"
+            echo
+            echo "- with GD: ${{ steps.with_gd.outputs.exit == '0' && 'success' || 'failure' }}"
+            echo "- without GD (Vercel runtime): ${{ steps.without_gd.outputs.exit == '0' && 'success' || 'failure' }}"
+            echo "- wrong base URL: ${{ steps.mismatch.outputs.exit == '0' && 'success' || 'failure' }}"
+            echo "- driver rules: ${{ steps.drivers.outputs.exit == '0' && 'success' || 'failure' }}"
+            echo
+            echo '```text'
+            echo '── with GD ──'
+            tail -n 60 storage-report.txt 2>/dev/null || echo "(no report)"
+            echo '── without GD ──'
+            tail -n 60 storage-report-nogd.txt 2>/dev/null || echo "(no report)"
+            echo '── wrong base URL ──'
+            tail -n 20 mismatch-report.txt 2>/dev/null || echo "(no report)"
+            echo '── driver rules ──'
+            tail -n 30 drivers-report.txt 2>/dev/null || echo "(no report)"
+            echo '```'
+          } > storage-comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$(cat storage-comment.md)" >/dev/null
+
+      - name: Fail when an upload path is broken
+        if: steps.with_gd.outputs.exit != '0' || steps.without_gd.outputs.exit != '0' || steps.mismatch.outputs.exit != '0' || steps.drivers.outputs.exit != '0'
+        run: exit 1

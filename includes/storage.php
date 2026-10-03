@@ -121,18 +121,55 @@ function storageUrl(string $key): string {
  *
  * `local` is only durable on a classic host (InfinityFree, a VPS with Apache).
  * On Vercel the filesystem is read-only apart from an ephemeral `/tmp`, so a
- * local write would vanish with the function instance; when a Vercel Blob
- * token is present the blob backend is selected automatically, otherwise the
- * caller gets an explicit "no persistent storage" failure instead of a file
- * that silently disappears.
+ * local write would vanish with the function instance; when a usable Vercel
+ * Blob store is connected the blob backend is selected automatically,
+ * otherwise the caller gets an explicit "no persistent storage" failure
+ * instead of a file that silently disappears.
  */
 function storageDriver(): string {
     $configured = strtolower(trim(env_value('UPLOAD_STORAGE', 'local')));
     if (in_array($configured, ['s3', 'vercel-blob', 'blob'], true)) {
         return $configured === 'blob' ? 'vercel-blob' : $configured;
     }
-    if (env_value('VERCEL') !== '' && env_value('BLOB_READ_WRITE_TOKEN') !== '') return 'vercel-blob';
+    if (env_value('VERCEL') !== '' && blobIsUsable()) return 'vercel-blob';
     return 'local';
+}
+
+/**
+ * Credentials Vercel injects when a Blob store is connected to the project.
+ *
+ * Two shapes exist and both must keep working:
+ *   • `BLOB_READ_WRITE_TOKEN` — the long-lived static token. Its own value
+ *     carries the store id (`vercel_blob_rw_<storeId>_<secret>`).
+ *   • `VERCEL_OIDC_TOKEN` + `BLOB_STORE_ID` — the short-lived OIDC token that
+ *     current Vercel projects get by default. Sending the store id header is
+ *     mandatory with this shape, so a token alone is not enough.
+ *
+ * Never log or render the returned token; only the store id (an identifier)
+ * and the credential kind may be displayed to an administrator.
+ */
+function blobCredentials(): array {
+    // `BLOB_STORE_ID` may be written as `store_<id>` or as the bare id; the API
+    // header always expects the bare form (the SDK normalises the same way).
+    $storeId = preg_replace('~^store_~', '', trim(env_value('BLOB_STORE_ID')));
+    $token   = trim(env_value('BLOB_READ_WRITE_TOKEN'));
+    if ($token !== '') {
+        if ($storeId === '' && preg_match('~^vercel_blob_rw_([A-Za-z0-9_-]+)_~', $token, $match) === 1) {
+            $storeId = $match[1];
+        }
+        return ['token' => $token, 'store_id' => (string)$storeId, 'kind' => 'read-write'];
+    }
+    $oidc = trim(env_value('VERCEL_OIDC_TOKEN'));
+    if ($oidc !== '') return ['token' => $oidc, 'store_id' => (string)$storeId, 'kind' => 'oidc'];
+    return ['token' => '', 'store_id' => (string)$storeId, 'kind' => 'none'];
+}
+
+/** Is the connected Blob store callable with the credentials present here? */
+function blobIsUsable(): bool {
+    $credentials = blobCredentials();
+    if ($credentials['token'] === '') return false;
+    // An OIDC request without the store id header is rejected by the API.
+    return $credentials['kind'] === 'read-write' || $credentials['store_id'] !== '';
 }
 
 /** Blob store REST endpoint (documented, stable; overridable for testing). */
@@ -141,14 +178,45 @@ function blobEndpoint(): string {
 }
 
 /**
+ * Must stored media be served over https?
+ *
+ * Yes in production and on Vercel — a media URL that downgrades to http is
+ * blocked by the browser and breaks every card image. A development or test
+ * environment may legitimately talk to a local simulator over plain http, so
+ * the rule is derived from the environment and never hard-coded.
+ */
+function storageRequiresHttps(): bool {
+    return APP_ENV === 'production' || env_value('VERCEL') !== '';
+}
+
+/** Accept a store URL: https always, http only where the environment allows it. */
+function storageUrlSchemeAllowed(string $url): bool {
+    if ($url === '') return false;
+    if (str_starts_with($url, 'https://')) return true;
+    return !storageRequiresHttps() && str_starts_with($url, 'http://');
+}
+
+/** Blob API version. Matches the current @vercel/blob SDK default. */
+function blobApiVersion(): string {
+    $version = trim(env_value('BLOB_API_VERSION'));
+    return $version !== '' ? $version : '12';
+}
+
+/**
  * One signed Blob API call. Returns [httpStatus, body]. Failures never throw:
  * the caller decides what a non-2xx answer means for this upload.
  */
 function blobRequest(string $method, string $url, array $headers, ?string $body = null): array {
-    $token = env_value('BLOB_READ_WRITE_TOKEN');
+    $credentials = blobCredentials();
+    $token = $credentials['token'];
     if ($token === '') return [0, ''];
     $handle = curl_init($url);
-    $lines = ['authorization: Bearer ' . $token, 'x-api-version: 7'];
+    $lines = [
+        'authorization: Bearer ' . $token,
+        'x-api-version: ' . blobApiVersion(),
+    ];
+    // Required with OIDC tokens; harmless (and correct) with a read-write token.
+    if ($credentials['store_id'] !== '') $lines[] = 'x-vercel-blob-store-id: ' . $credentials['store_id'];
     foreach ($headers as $name => $value) $lines[] = $name . ': ' . $value;
     curl_setopt_array($handle, [
         CURLOPT_CUSTOMREQUEST => $method,
@@ -177,8 +245,11 @@ function blobPutObject(string $key, string $path, string $mime, string $kind): s
     $payload = @file_get_contents($path);
     if ($payload === false) return '';
     [$status, $body] = blobRequest('PUT', blobEndpoint() . '/' . implode('/', array_map('rawurlencode', explode('/', $key))), [
+        // `x-vercel-blob-access` is the current header; `access` is the legacy
+        // spelling still accepted by the API. Both carry the same value.
+        'x-vercel-blob-access' => 'public',
         'access' => 'public',
-        'content-type' => 'application/octet-stream',
+        'content-type' => $mime,
         'x-content-type' => $mime,
         'x-add-random-suffix' => '0',
         'x-cache-control-max-age' => '31536000',
@@ -189,7 +260,8 @@ function blobPutObject(string $key, string $path, string $mime, string $kind): s
     }
     $decoded = json_decode($body, true);
     $url = is_array($decoded) ? (string)($decoded['url'] ?? '') : '';
-    if (!str_starts_with($url, 'https://')) return '';
+    if ($url === '' && $body !== '' && preg_match('~^https?://~', $body) === 1) $url = $body;
+    if (!storageUrlSchemeAllowed($url)) return '';
     if (in_array($kind, ['pdf', 'word'], true)) {
         // Documents are offered as downloads; the token URL adds ?download=1.
         return $url;
@@ -197,10 +269,37 @@ function blobPutObject(string $key, string $path, string $mime, string $kind): s
     return $url;
 }
 
+/**
+ * Delete objects from the Blob store.
+ *
+ * The REST contract is `POST /delete` with a JSON body `{ "urls": [...] }` —
+ * not a DELETE against a path. A wrong contract here silently leaves orphaned
+ * objects behind whenever an editor replaces or removes media.
+ */
 function blobDeleteObject(string $url): bool {
-    if (!str_starts_with($url, 'https://')) return false;
-    [$status] = blobRequest('DELETE', blobEndpoint() . '/delete/' . rawurlencode($url), []);
+    if (!storageUrlSchemeAllowed($url)) return false;
+    [$status] = blobRequest('POST', blobEndpoint() . '/delete', [
+        'content-type' => 'application/json',
+        'x-content-type' => 'application/json',
+    ], json_encode(['urls' => [$url]], JSON_UNESCAPED_SLASHES));
     return $status === 200 || $status === 204;
+}
+
+/**
+ * Public origin of the connected Blob store, as reported by the store itself.
+ *
+ * Returns '' when it cannot be determined (no credentials, or a brand-new
+ * empty store with nothing to list yet). Used only to tell the administrator
+ * the exact value `UPLOAD_BASE_URL` must have — never as a stored setting.
+ */
+function blobPublicOrigin(): string {
+    if (!blobIsUsable()) return '';
+    [$status, $body] = blobRequest('GET', blobEndpoint() . '/?limit=1', []);
+    if ($status !== 200) return '';
+    $decoded = json_decode($body, true);
+    $first = is_array($decoded) ? (string)($decoded['blobs'][0]['url'] ?? '') : '';
+    if (!storageUrlSchemeAllowed($first)) return '';
+    return (string)preg_replace('~^https?://([^/]+).*$~', '$1', $first);
 }
 
 /** Is the object publicly reachable? A store that cannot be read back is not usable. */
@@ -233,19 +332,32 @@ function storageConfigurationStatus(): array {
             $problems[] = 'S3_ENDPOINT باید با https:// شروع شود.';
         }
     } elseif ($driver === 'vercel-blob') {
-        if (env_value('BLOB_READ_WRITE_TOKEN') === '') {
-            $problems[] = 'BLOB_READ_WRITE_TOKEN تنظیم نشده است (در داشبورد Vercel یک Blob Store بسازید تا خودکار تزریق شود).';
+        $credentials = blobCredentials();
+        if ($credentials['kind'] === 'none') {
+            $problems[] = 'هیچ اعتبارنامه‌ای برای Blob یافت نشد (BLOB_READ_WRITE_TOKEN یا VERCEL_OIDC_TOKEN). در داشبورد Vercel یک Blob Store به پروژه متصل کنید تا خودکار تزریق شوند.';
+        } elseif ($credentials['kind'] === 'oidc' && $credentials['store_id'] === '') {
+            $problems[] = 'BLOB_STORE_ID تنظیم نشده است؛ استفاده از VERCEL_OIDC_TOKEN بدون شناسهٔ فروشگاه پذیرفته نمی‌شود.';
         }
     } elseif (env_value('VERCEL') !== '') {
-        $problems[] = 'روی Vercel فایل‌سیستم فقط‌خواندنی و /tmp موقتی است؛ UPLOAD_STORAGE=s3 یا یک Vercel Blob Store لازم است.';
+        $credentials = blobCredentials();
+        if ($credentials['kind'] === 'oidc' && $credentials['store_id'] === '') {
+            // Nearly configured: the store is connected (an OIDC token exists)
+            // but the store id is missing, so the API would reject every call.
+            $problems[] = 'اتصال Blob ناقص است: VERCEL_OIDC_TOKEN وجود دارد ولی BLOB_STORE_ID تنظیم نشده است. در بخش Storage پروژهٔ Vercel، فروشگاه را دوباره به پروژه متصل کنید (یا UPLOAD_STORAGE=vercel-blob را همراه BLOB_STORE_ID تنظیم کنید).';
+        } else {
+            $problems[] = 'روی Vercel فایل‌سیستم فقط‌خواندنی و /tmp موقتی است؛ UPLOAD_STORAGE=s3 یا یک Vercel Blob Store لازم است.';
+        }
     }
 
-    if ($driver !== 'local' && !str_starts_with(UPLOAD_BASE_URL, 'https://')) {
+    // HTTPS is mandatory in production (and on Vercel). A development or test
+    // environment may legitimately point at a local simulator over http.
+    if ($driver !== 'local' && storageRequiresHttps() && !str_starts_with(UPLOAD_BASE_URL, 'https://')) {
         $problems[] = 'UPLOAD_BASE_URL باید نشانی https عمومی فضای ذخیره‌سازی باشد (مقدار فعلی: ' . UPLOAD_BASE_URL . ').';
     }
 
     $onVercel = env_value('VERCEL') !== '';
     $bodyCap = $onVercel ? '4.5MB (سقف غیرقابل تغییر پلتفرم Vercel)' : ini_get('post_max_size');
+    $credentials = blobCredentials();
     return [
         'driver' => $driver,
         'ok' => $problems === [],
@@ -259,8 +371,27 @@ function storageConfigurationStatus(): array {
             'app_image_limit' => (string)MAX_FILE_SIZE,
             'app_video_limit' => (string)MAX_VIDEO_SIZE,
             'temp_dir_writable' => is_writable(sys_get_temp_dir()) ? 'yes' : 'no',
+            // Without GD the stored image is the original validated upload
+            // (no re-encode, no downscale); uploads keep working either way.
+            'image_reencoding' => storageHasImageLibrary()
+                ? 'فعال (WebP/PNG بازکدگذاری و کوچک‌سازی)'
+                : 'غیرفعال — افزونهٔ GD روی این میزبان در دسترس نیست؛ تصویر پس از بررسی نوع واقعی همان‌گونه ذخیره می‌شود.',
+        ],
+        // Identifiers only: never a token, and never rendered anywhere public.
+        'blob' => [
+            'auth' => $credentials['kind'],
+            'store_id' => $credentials['store_id'],
+            'usable' => blobIsUsable(),
+            'suggested_base_url' => $driver === 'vercel-blob' && !str_starts_with(UPLOAD_BASE_URL, 'https://')
+                ? blobPublicOrigin()
+                : '',
         ],
     ];
+}
+
+/** Is the image re-encoding pipeline available? (Vercel's PHP runtime ships without GD.) */
+function storageHasImageLibrary(): bool {
+    return function_exists('imagecreatefromstring') && (function_exists('imagewebp') || function_exists('imagepng'));
 }
 
 /** Editor-facing explanation of why an upload could not be stored ('' = storage is fine). */
@@ -346,8 +477,13 @@ function storeValidatedFile(string $path, string $kind, string $folder): string 
     $temporary = null;
     try {
         // Decode/re-encode images: remove metadata and trailing executable/polyglot data.
-        if ($kind === 'image') {
-            $image = @imagecreatefromstring(file_get_contents($path));
+        // The Vercel PHP runtime has no GD, so this is best-effort: when the
+        // image library is missing the original bytes are stored instead of
+        // rejecting the upload. validateUpload() has already proven the real
+        // MIME type (finfo) and that the bytes really decode as an image.
+        if ($kind === 'image' && storageHasImageLibrary()) {
+            $raw = @file_get_contents($path);
+            $image = $raw === false ? false : @imagecreatefromstring($raw);
             if (!$image) return '';
             // Cap the stored resolution. A phone photo is often 4000px wide, but
             // the widest slot in the design system is ~1600px, so anything above
@@ -394,13 +530,22 @@ function storeValidatedFile(string $path, string $kind, string $folder): string 
             }
         } elseif ($driver === 'vercel-blob') {
             $stored = blobPutObject($key, $path, $info['mime'], $kind);
-            if ($stored === '') throw new RuntimeException('Vercel Blob فایل را نپذیرفت (BLOB_READ_WRITE_TOKEN را بررسی کنید).');
+            if ($stored === '') {
+                $credentials = blobCredentials();
+                $suffix = $credentials['kind'] === 'oidc'
+                    ? 'اعتبارنامهٔ OIDC پذیرفته نشد (اتصال Store به پروژه و متغیر BLOB_STORE_ID را بررسی کنید).'
+                    : 'BLOB_READ_WRITE_TOKEN پذیرفته نشد (در تنظیمات پروژهٔ Vercel بررسی شود).';
+                throw new RuntimeException('Vercel Blob فایل را نپذیرفت. ' . $suffix);
+            }
             if (rtrim($stored, '/') !== rtrim($url, '/')) {
                 // The public URL must stay derivable from the key, otherwise the
                 // deletion/registry paths (storageKey) cannot resolve the object.
                 blobDeleteObject($stored);
-                $origin = preg_replace('~^(https://[^/]+).*$~', '$1', $stored);
-                throw new RuntimeException('UPLOAD_BASE_URL باید برابر مبدأ Blob Store باشد: ' . $origin);
+                $origin = (string)preg_replace('~^https?://([^/]+).*$~', '$1', $stored);
+                throw new RuntimeException(
+                    'UPLOAD_BASE_URL باید دقیقاً برابر مبدأ Blob Store باشد. مقدار لازم: ' . $origin
+                    . ' (مقدار فعلی: ' . UPLOAD_BASE_URL . ')'
+                );
             }
             if (!storageUrlIsPublic($url)) {
                 blobDeleteObject($url);

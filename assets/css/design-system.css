@@ -700,7 +700,7 @@ html[data-theme="dark"] .jhd-drawer-search button { color: #0d241b; }
   position: relative;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: auto;
   background: var(--jhd-surface);
   border: 1px solid var(--jhd-border);
   border-radius: var(--jhd-radius);
@@ -708,6 +708,11 @@ html[data-theme="dark"] .jhd-drawer-search button { color: #0d241b; }
   box-shadow: var(--jhd-shadow-1);
   transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
 }
+/* A card that is alone in its column fills it, so cards in one grid row end on
+   the same baseline. Stacked cards (a sidebar list of mini items, for example)
+   keep their own height — with `height: 100%` each of them would grow to the
+   full column and overflow the ones below it. */
+.jhd-card:only-child { height: 100%; }
 .jhd-card::before {
   content: '';
   position: absolute;
@@ -1934,8 +1939,10 @@ html[data-theme="dark"] .jhd-brand img, html[data-theme="dark"] .footer-brand im
   body { font-size: 15px; }
   .jhd-header-row { padding-block: .4rem; }
   .jhd-brand strong { font-size: .98rem; }
-  .jhd-section { padding-block: 1.7rem; }
-  .jhd-section-head { align-items: flex-start; flex-direction: column; gap: .35rem; }
+  /* فاصلهٔ بخش‌ها روی گوشی جمع‌وجور می‌شود تا صفحه با یک دست پیموده شود */
+  .jhd-section { padding-block: 1.35rem; }
+  .jhd-section-head { align-items: flex-start; flex-direction: column; gap: .3rem; margin-bottom: .8rem; }
+  .jhd-section-head h2 { font-size: 1.05rem; }
   .jhd-card-body { padding: .75rem .8rem .85rem; }
   .jhd-editorial-row { grid-template-columns: 1fr; }
   .jhd-editorial-row .jhd-row-index { display: none; }
@@ -2637,57 +2644,116 @@ html { scroll-behavior: smooth; }
   .jhd-rail-wrap { position: relative; }
 }
 
-/* ── کارت فشردهٔ موبایل برای صفحه‌های فهرست ───────────────────────────────
- * روی گوشی، کارت‌های ستونیِ تمام‌عرض یک فهرست دوازده‌تایی را به هفت هزار
- * پیکسل می‌کشانند. در همین اندازه، کارت به ردیفی جمع‌وجور تبدیل می‌شود:
- * تصویر در کنار، عنوان دو خط، متادیتا و دکمه در یک ردیف. همان اجزا، همان
+/* ── کارت فشردهٔ موبایل — یک اندازه برای همهٔ صفحه‌ها ─────────────────────
+ * روی گوشی، کارت‌های ستونیِ تمام‌عرض یک فهرست دوازده‌تایی را به چند هزار
+ * پیکسل می‌کشانند. در این اندازه هر کارت (به‌جز کارت شاخص) به یک ردیف
+ * جمع‌وجور تبدیل می‌شود:
+ *
+ *   ┌──────────────────────────┐
+ *   │  تصویر  │ عنوان دوخط     │
+ *   │  کوچک   │ خلاصهٔ دوخط    │
+ *   │         │ تاریخ/دسته     │
+ *   └──────────────────────────┘
+ *
+ * تصویر نسبت ثابت دارد و هرگز کشیده نمی‌شود، عنوان و خلاصه بریده می‌شوند،
+ * متادیتا یک ردیف می‌ماند و دکمه ارتفاع قابل‌لمس دارد. این قاعده برای خبر،
+ * مقاله، گزارش، پژوهش، درس، کتاب، موضوع، ویدیو و صوت یکسان است و بین
+ * صفحهٔ اصلی، ریل‌های افقی و فهرست‌ها تفاوتی نمی‌گذارد. همان اجزا، همان
  * کلاس‌ها و همان زبان بصری — فقط چیدمان متناسب با صفحهٔ کوچک.
- * ریلِ صفحهٔ اصلی و کارت شاخص از این قاعده مستثنا هستند.
  * ───────────────────────────────────────────────────────────────────────── */
 @media (max-width: 575.98px) {
-  .jhd-card-grid:not(.jhd-card-grid--rail) > [class*="col-"] > .jhd-card:not(.jhd-card--featured) {
-    flex-direction: row;
-    align-items: stretch;
-  }
-  .jhd-card-grid:not(.jhd-card-grid--rail) > [class*="col-"] > .jhd-card:not(.jhd-card--featured) > .jhd-card-media {
-    flex: 0 0 38%;
-    width: 38%;
+  .jhd-card:not(.jhd-card--featured) { flex-direction: row; align-items: stretch; }
+  .jhd-card:not(.jhd-card--featured) > .jhd-card-media {
+    flex: 0 0 33%;
+    width: 33%;
+    min-width: 84px;
+    max-width: 118px;
     aspect-ratio: 1 / 1;
+    /* ترازِ آغازین یعنی قاب تصویر با قدِ متن کشیده نمی‌شود. */
+    align-self: flex-start;
     border-inline-end: 1px solid var(--jhd-border);
   }
-  .jhd-card-grid:not(.jhd-card-grid--rail) > [class*="col-"] > .jhd-card:not(.jhd-card--featured) > .jhd-card-body {
-    padding: .6rem .7rem .55rem;
-    gap: .3rem;
+  /* جلد کتاب نسبت کتابی خود را نگه می‌دارد */
+  .jhd-card--book:not(.jhd-card--featured) > .jhd-card-media {
+    flex-basis: 29%;
+    width: 29%;
+    aspect-ratio: 3 / 4;
+  }
+  .jhd-card--video:not(.jhd-card--featured) > .jhd-card-media,
+  .jhd-card--audio:not(.jhd-card--featured) > .jhd-card-media,
+  .jhd-card--media:not(.jhd-card--featured) > .jhd-card-media { aspect-ratio: 4 / 3; }
+
+  .jhd-card:not(.jhd-card--featured) > .jhd-card-body {
+    padding: .5rem .6rem .55rem;
+    gap: .2rem;
     min-width: 0;
   }
-  .jhd-card-grid:not(.jhd-card-grid--rail) > [class*="col-"] > .jhd-card:not(.jhd-card--featured) .jhd-card-title {
+  .jhd-card:not(.jhd-card--featured) .jhd-card-title {
     font-size: .95rem;
-    line-height: 1.6;
-    min-height: 0;
-  }
-  .jhd-card-grid:not(.jhd-card-grid--rail) > [class*="col-"] > .jhd-card:not(.jhd-card--featured) .jhd-card-summary {
+    line-height: 1.55;
     -webkit-line-clamp: 2;
     line-clamp: 2;
-    font-size: .8rem;
-    line-height: 1.7;
+    min-height: 0;
   }
-  .jhd-card-grid:not(.jhd-card-grid--rail) > [class*="col-"] > .jhd-card:not(.jhd-card--featured) .jhd-card-foot {
-    padding-top: .4rem;
+  .jhd-card:not(.jhd-card--featured) .jhd-card-summary {
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    font-size: .78rem;
+    line-height: 1.65;
   }
-  /* نشان نوع محتوا روی تصویر کوچک جا نمی‌شود؛ ظریف‌تر می‌شود */
-  .jhd-card-grid:not(.jhd-card-grid--rail) > [class*="col-"] > .jhd-card:not(.jhd-card--featured) .jhd-card-badge {
-    font-size: .62rem;
-    padding: .12rem .4rem;
-    top: .35rem;
-    inset-inline-start: .35rem;
+  .jhd-card:not(.jhd-card--featured) .jhd-card-meta {
+    font-size: .68rem;
+    gap: .1rem .4rem;
+    max-height: 1.95em;
+    overflow: hidden;
   }
-  /* جلد کتاب در حالت فشرده نسبت کتابی خود را نگه می‌دارد */
-  .jhd-card-grid:not(.jhd-card-grid--rail) > [class*="col-"] > .jhd-card--book:not(.jhd-card--featured) > .jhd-card-media {
-    aspect-ratio: 3 / 4;
-    flex-basis: 32%;
-    width: 32%;
+  /* زیرموضوع‌ها در کنار هم جا نمی‌شوند؛ دو تای نخست کافی است */
+  .jhd-card:not(.jhd-card--featured) .jhd-card-kids .jhd-chip:nth-child(n+3) { display: none; }
+  .jhd-card:not(.jhd-card--featured) .jhd-card-foot {
+    padding-top: .3rem;
+    font-size: .72rem;
+    min-height: 2.35rem;
   }
-  .jhd-card-grid:not(.jhd-card-grid--rail) { row-gap: .6rem !important; }
+  .jhd-card:not(.jhd-card--featured) .jhd-card-author { font-size: .72rem; }
+  /* هدف لمسِ دکمه به اندازهٔ انگشت (≈۳۸px) نزدیک می‌شود، نه کوچک‌تر */
+  .jhd-card:not(.jhd-card--featured) .btn-read-more {
+    font-size: .74rem;
+    padding: .45rem .65rem;
+    min-height: 2.25rem;
+    display: inline-flex;
+    align-items: center;
+  }
+  .jhd-card:not(.jhd-card--featured) .jhd-card-badge {
+    font-size: .6rem;
+    padding: .1rem .38rem;
+    top: .3rem;
+    inset-inline-start: .3rem;
+  }
+  /* هدف لمس: روی گوشی همهٔ کارت یکی است — ضربه به هر جای کارت، مطلب را باز
+     می‌کند؛ تراشهٔ موضوع و دکمهٔ «ادامه» بالای این لایه باقی می‌مانند. */
+  .jhd-card:not(.jhd-card--featured) .jhd-card-title a::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+  }
+  .jhd-card:not(.jhd-card--featured) .jhd-card-meta,
+  .jhd-card:not(.jhd-card--featured) .jhd-card-kids,
+  .jhd-card:not(.jhd-card--featured) .jhd-card-foot { position: relative; z-index: 2; }
+  /* روی قابِ کوچک، نشان‌های «دارای ویدیو/صوت/PDF» فقط شلوغ می‌کنند */
+  .jhd-card:not(.jhd-card--featured) .jhd-card-flags { display: none; }
+  .jhd-card:not(.jhd-card--featured) .jhd-card-index { display: none; }
+  .jhd-card:not(.jhd-card--featured) .jhd-media-duration { font-size: .62rem; padding: .05rem .3rem; }
+
+  /* شبکه: فاصلهٔ کم و منظم در همهٔ فهرست‌ها و ریل‌ها */
+  .jhd-card-grid { row-gap: .55rem !important; column-gap: .55rem !important; }
+  .jhd-card-grid--rail > [class*="col-"] { width: min(88%, 330px); max-width: min(88%, 330px); }
+
+  /* کارت شاخص: عمودی می‌ماند تا نقش سرمقاله را حفظ کند، اما کوتاه‌تر */
+  .jhd-card--featured > .jhd-card-media { aspect-ratio: 16 / 9; max-height: 190px; }
+  .jhd-card--featured > .jhd-card-body { padding: .7rem .8rem .8rem; gap: .35rem; }
+  .jhd-card--featured .jhd-card-title { font-size: 1.05rem; -webkit-line-clamp: 3; line-clamp: 3; }
+  .jhd-card--featured .jhd-card-summary { -webkit-line-clamp: 2; line-clamp: 2; font-size: .82rem; }
 }
 
 /* ── صفحهٔ محتوا: ریتم مطبوعاتی ──────────────────────────────────────────
