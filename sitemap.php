@@ -1,113 +1,242 @@
 <?php
+/**
+ * sitemap.php — canonical XML sitemap for Google and other crawlers.
+ *
+ * Rules:
+ * - Only public, indexable URLs are included.
+ * - URLs are generated through the same route helpers used by the site,
+ *   so canonical/sitemap links stay aligned.
+ * - Search, authentication, admin, installer and other private URLs stay out.
+ * - Published content is discovered directly from the database.
+ * - Topic paths preserve parent/child hierarchy.
+ */
 require_once __DIR__ . '/includes/functions.php';
-// Sitemap needs an absolute base URL
-$__sitemapBase = SITE_URL && filter_var(SITE_URL, FILTER_VALIDATE_URL) && preg_match('~^https?://~i', SITE_URL)
+
+$base = SITE_URL && filter_var(SITE_URL, FILTER_VALIDATE_URL)
     ? rtrim(SITE_URL, '/')
-    : 'https://jametulhoda.gt.tc';
-// SITE_URL may intentionally be only an origin while BASE_PATH denotes a
-// subdirectory. Include that prefix exactly once in every sitemap location.
-if (BASE_PATH !== '' && !str_ends_with($__sitemapBase, BASE_PATH)) {
-    $__sitemapBase .= BASE_PATH;
-}
+    : 'https://jametulhoda.vercel.app';
+
 header('Content-Type: application/xml; charset=utf-8');
-header('Cache-Control: public, max-age=900');
+header('Cache-Control: public, max-age=900, stale-while-revalidate=3600');
+
+$entries = [];
+$seen = [];
 
 /**
- * Sitemap entries are built from the central route registry so every <loc>
- * matches the site's active URL mode: index.php?p=… in Query mode (works with
- * or without mod_rewrite) or the /pretty/path form in Pretty mode. This keeps
- * the sitemap crawlable on InfinityFree where pretty URLs are not guaranteed.
+ * Add one URL after generating its exact public form.
+ * $params are passed to the central url() helper.
  */
-$entries = [];
-$add = static function (string $route, array $params, string $priority) use (&$entries): void {
-    $entries[] = ['route' => $route, 'params' => $params, 'priority' => $priority];
+$add = static function (
+    string $route,
+    array $params = [],
+    ?string $lastmod = null
+) use (&$entries, &$seen): void {
+    $relative = $route === 'home' ? url() : url($route, $params);
+    $loc = jhd_absolute_url($relative);
+
+    if ($loc === '' || isset($seen[$loc])) return;
+    $seen[$loc] = true;
+
+    $entry = ['loc' => $loc];
+    if ($lastmod) {
+        $ts = strtotime($lastmod);
+        if ($ts !== false) {
+            $entry['lastmod'] = gmdate('Y-m-d', $ts);
+        }
+    }
+    $entries[] = $entry;
 };
 
-$add('', [], '1.0');
+/**
+ * Public landing pages which are real, crawlable parts of the site.
+ * Search and account/authentication pages are intentionally excluded.
+ */
 foreach ([
-    'news', 'articles', 'reports', 'events', 'books', 'lessons', 'research',
-    'media', 'topics', 'about', 'contact', 'speeches', 'announcements',
-    'programs', 'religious-activities', 'videos', 'audios', 'qa',
-] as $listing) {
-    $add($listing, [], '0.7');
+    'home',
+    'news',
+    'articles',
+    'reports',
+    'research',
+    'books',
+    'lessons',
+    'topics',
+    'media',
+    'videos',
+    'audios',
+    'speeches',
+    'events',
+    'programs',
+    'announcements',
+    'religious-activities',
+    'qa',
+    'about',
+    'contact',
+] as $route) {
+    $add($route);
 }
 
 $db = jhd_db();
-if ($db !== null):
-// Topics
-try {
-    foreach ($db->query("SELECT slug FROM topics WHERE is_active=1 ORDER BY id LIMIT 10000") as $row) {
-        $add('topic', ['slug' => $row['slug']], '0.9');
-    }
-} catch (Exception $e) {}
 
-// Posts with typed detail URLs (same canonical logic as postUrl()).
-try {
-    foreach ($db->query("SELECT slug, post_type FROM posts WHERE status='published' ORDER BY id LIMIT 10000") as $row) {
-        $route = match ($row['post_type']) {
-            'article' => 'article',
-            'news' => 'news',
-            'research' => 'research',
-            'report' => 'report',
-            'speech' => 'speech',
-            'program', 'religious', 'announcement' => 'event',
-            default => 'post',
+if ($db !== null) {
+    // ── Topics: build full parent/child slug paths in memory, avoiding N+1 DB queries.
+    try {
+        $rows = $db->query("
+            SELECT id, parent_id, slug
+            FROM topics
+            WHERE is_active = 1
+              AND COALESCE(slug, '') <> ''
+            ORDER BY id
+            LIMIT 50000
+        ")->fetchAll();
+
+        $byId = [];
+        foreach ($rows as $row) {
+            $byId[(int)$row['id']] = [
+                'parent_id' => (int)($row['parent_id'] ?? 0),
+                'slug' => trim((string)$row['slug']),
+            ];
+        }
+
+        $topicPath = static function (int $id, array $trail = []) use (&$topicPath, $byId): string {
+            if (!isset($byId[$id]) || isset($trail[$id])) return '';
+            $trail[$id] = true;
+
+            $own = trim($byId[$id]['slug']);
+            if ($own === '') return '';
+
+            $parent = (int)$byId[$id]['parent_id'];
+            if ($parent > 0 && isset($byId[$parent])) {
+                $parentPath = $topicPath($parent, $trail);
+                if ($parentPath !== '') return $parentPath . '/' . $own;
+            }
+            return $own;
         };
-        $add($route, ['slug' => $row['slug']], '0.8');
-    }
-} catch (Exception $e) {}
 
-// Media detail pages (/video/{id}, /audio/{id}).
-try {
-    // فقط صوت و ویدیو صفحهٔ جزئیات دارند؛ اسناد (PDF/Word) مقصد /video/{id}
-    // ندارند و اگر وارد نقشهٔ سایت شوند یک نشانی ۴۰۴ به موتور جستجو می‌دهند.
-    foreach ($db->query("SELECT m.id, m.kind FROM media_files m LEFT JOIN posts p ON p.id=m.ref_id AND m.ref_type='post' LEFT JOIN lessons l ON l.id=m.ref_id AND m.ref_type='lesson' WHERE m.kind IN ('audio','video') AND (p.status='published' OR l.status='published') ORDER BY m.id LIMIT 10000") as $row) {
-        $add($row['kind'] === 'audio' ? 'audio' : 'video', ['id' => (int)$row['id']], '0.6');
+        foreach ($byId as $id => $_row) {
+            $slugPath = $topicPath((int)$id);
+            if ($slugPath !== '') $add('topic', ['slug' => $slugPath]);
+        }
+    } catch (Throwable $e) {
+        error_log('sitemap topics failed: ' . get_class($e));
     }
-} catch (Exception $e) {}
 
-// Lessons
-try {
-    foreach ($db->query("SELECT slug FROM lessons WHERE status='published' ORDER BY id LIMIT 10000") as $row) {
-        $add('lesson', ['slug' => $row['slug']], '0.8');
+    // ── Published posts: one canonical detail URL per published post.
+    try {
+        $stmt = $db->query("
+            SELECT slug,
+                   post_type,
+                   COALESCE(updated_at, published_at, created_at) AS lastmod
+            FROM posts
+            WHERE status = 'published'
+              AND COALESCE(slug, '') <> ''
+            ORDER BY COALESCE(updated_at, published_at, created_at) DESC, id DESC
+            LIMIT 50000
+        ");
+
+        foreach ($stmt->fetchAll() as $row) {
+            $route = match ((string)$row['post_type']) {
+                'article' => 'article',
+                'news' => 'news',
+                'research' => 'research',
+                'report' => 'report',
+                'speech' => 'speech',
+                'program', 'religious', 'announcement' => 'event',
+                default => 'post',
+            };
+            $add($route, ['slug' => (string)$row['slug']], $row['lastmod'] ?? null);
+        }
+    } catch (Throwable $e) {
+        error_log('sitemap posts failed: ' . get_class($e));
     }
-} catch (Exception $e) {}
 
-// Lesson collections
-try {
-    foreach ($db->query("SELECT slug FROM lesson_collections WHERE is_active=1 LIMIT 1000") as $row) {
-        $add('lessons', ['collection' => $row['slug']], '0.6');
+    // ── Published lessons.
+    try {
+        $stmt = $db->query("
+            SELECT slug, COALESCE(updated_at, created_at) AS lastmod
+            FROM lessons
+            WHERE status = 'published'
+              AND COALESCE(slug, '') <> ''
+            ORDER BY COALESCE(updated_at, created_at) DESC, id DESC
+            LIMIT 50000
+        ");
+        foreach ($stmt->fetchAll() as $row) {
+            $add('lesson', ['slug' => (string)$row['slug']], $row['lastmod'] ?? null);
+        }
+    } catch (Throwable $e) {
+        error_log('sitemap lessons failed: ' . get_class($e));
     }
-} catch (Exception $e) {}
 
-// Books
-try {
-    foreach ($db->query("SELECT id, slug FROM books WHERE status='published' ORDER BY id LIMIT 10000") as $row) {
-        $slug = trim($row['slug'] ?? '');
-        $add('book', $slug !== '' ? ['slug' => $slug] : ['id' => (int)$row['id']], '0.7');
+    // ── Published books.
+    try {
+        $stmt = $db->query("
+            SELECT id, slug, COALESCE(updated_at, created_at) AS lastmod
+            FROM books
+            WHERE status = 'published'
+            ORDER BY COALESCE(updated_at, created_at) DESC, id DESC
+            LIMIT 50000
+        ");
+        foreach ($stmt->fetchAll() as $row) {
+            $slug = trim((string)($row['slug'] ?? ''));
+            $params = $slug !== ''
+                ? ['slug' => $slug]
+                : ['id' => (int)$row['id']];
+            $add('book', $params, $row['lastmod'] ?? null);
+        }
+    } catch (Throwable $e) {
+        error_log('sitemap books failed: ' . get_class($e));
     }
-} catch (Exception $e) {}
 
-endif;
-
-// Categories (helper already degrades to an empty list without a database)
-try {
-    foreach (getCategories() as $row) {
-        $add('category', ['slug' => $row['slug']], '0.6');
+    // ── Active categories.
+    try {
+        $stmt = $db->query("
+            SELECT slug
+            FROM categories
+            WHERE is_active = 1
+              AND COALESCE(slug, '') <> ''
+            ORDER BY id
+            LIMIT 50000
+        ");
+        foreach ($stmt->fetchAll() as $row) {
+            $add('category', ['slug' => (string)$row['slug']]);
+        }
+    } catch (Throwable $e) {
+        error_log('sitemap categories failed: ' . get_class($e));
     }
-} catch (Exception $e) {}
+
+    // ── Public audio/video detail pages attached to published content.
+    try {
+        $stmt = $db->query("
+            SELECT DISTINCT m.id, m.kind, m.created_at
+            FROM media_files m
+            LEFT JOIN posts p
+              ON m.ref_type = 'post' AND p.id = m.ref_id
+            LEFT JOIN lessons l
+              ON m.ref_type = 'lesson' AND l.id = m.ref_id
+            WHERE m.kind IN ('audio', 'video')
+              AND (p.status = 'published' OR l.status = 'published')
+            ORDER BY m.id
+            LIMIT 50000
+        ");
+
+        foreach ($stmt->fetchAll() as $row) {
+            $kind = $row['kind'] === 'audio' ? 'audio' : 'video';
+            $add($kind, ['id' => (int)$row['id']], $row['created_at'] ?? null);
+        }
+    } catch (Throwable $e) {
+        error_log('sitemap media failed: ' . get_class($e));
+    }
+}
 
 echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
 echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
+
 foreach ($entries as $entry) {
-    // Home is the bare origin; every other entry uses the central url() helper
-    // so the location is exactly the public URL the site links to.
-    $loc = $entry['route'] === ''
-        ? rtrim($__sitemapBase, '/') . '/'
-        : jhd_absolute_url(url($entry['route'], $entry['params']));
-    echo '  <url>' . "\n";
-    echo '    <loc>' . htmlspecialchars($loc, ENT_XML1 | ENT_QUOTES, 'UTF-8') . '</loc>' . "\n";
-    echo '    <priority>' . $entry['priority'] . '</priority>' . "\n";
-    echo '  </url>' . "\n";
+    echo "  <url>\n";
+    echo '    <loc>' . htmlspecialchars($entry['loc'], ENT_XML1 | ENT_QUOTES, 'UTF-8') . "</loc>\n";
+    if (!empty($entry['lastmod'])) {
+        echo '    <lastmod>' . htmlspecialchars($entry['lastmod'], ENT_XML1 | ENT_QUOTES, 'UTF-8') . "</lastmod>\n";
+    }
+    echo "  </url>\n";
 }
-echo '</urlset>' . "\n";
+
+echo "</urlset>\n";
