@@ -17,7 +17,7 @@ on:
       snapshot:
         description: 'Also save the rendered HTML of every page as a snapshot'
         type: boolean
-        default: false
+        default: true
 
 jobs:
   responsive:
