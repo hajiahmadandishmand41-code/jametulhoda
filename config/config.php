@@ -34,7 +34,7 @@ define('BASE_PATH', rtrim('/' . trim(env_value('BASE_PATH'), '/'), '/'));
  * which form url()/the typed helpers GENERATE and which form <link canonical>
  * declares. See includes/functions.php (jhd_routes / url).
  */
-define('JHD_PRETTY_URLS', filter_var(env_value('JHD_PRETTY_URLS', 'false'), FILTER_VALIDATE_BOOLEAN));
+define('JHD_PRETTY_URLS', filter_var(env_value('JHD_PRETTY_URLS', env_value('VERCEL') ? 'true' : 'false'), FILTER_VALIDATE_BOOLEAN));
 /** Absolute project root (the directory that holds router.php). */
 define('BASE_DIR', dirname(__DIR__));
 define('STORAGE_DIR', BASE_DIR . '/storage');
