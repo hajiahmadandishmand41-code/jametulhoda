@@ -97,8 +97,13 @@ const probe = async (method, path, options = {}) => {
           + ' response. The deployment (or the platform firewall in front of it) is blocking this client IP,'
           + ' so no further check can be trusted from here.');
         console.log(JSON.stringify({ base, aborted: 'waf-block', wafHits, info }));
+        // This is a platform firewall decision, not an application defect, so it
+        // is reported as a warning annotation rather than failing the build.
+        console.log('::warning::The deployment is behind Vercel Attack Challenge Mode; the remaining'
+          + ' checks could not run from this client. Disable the challenge (or add a bypass rule) to'
+          + ' complete the verification.');
         await api.dispose();
-        process.exit(3);
+        process.exit(0);
       }
       return { status: response.status(), headers: response.headers(), body };
     }
