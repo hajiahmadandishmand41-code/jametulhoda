@@ -61,6 +61,12 @@ foreach (explode(";\n", (string)$statements) as $statement) {
 
 $endpoint = rtrim(getenv('BLOB_API_BASE') ?: 'http://127.0.0.1:9111', '/');
 $publicBase = rtrim(getenv('UPLOAD_BASE_URL') ?: $endpoint . '/public', '/');
+/** Simulator requests this process has made. The server keeps one shared log, so
+ *  the request-shape assertions below must only look at their own entries. */
+$requestLog = static function () use ($endpoint): array {
+    return json_decode((string)@file_get_contents($endpoint . '/__log'), true) ?: [];
+};
+$logStart = count($requestLog());
 
 check(storageDriver() === 'vercel-blob', 'the blob driver is selected', storageDriver());
 $credentials = blobCredentials();
@@ -126,11 +132,10 @@ foreach (['image', 'video', 'audio', 'pdf'] as $kind) {
 }
 
 // ── Deletion uses the documented contract ───────────────────────────────────
-$before = count(json_decode((string)@file_get_contents($endpoint . '/__log'), true) ?: []);
 $imageUrl = $stored['image'] ?? '';
 if ($imageUrl !== '') {
     check(deleteStoredFile($imageUrl), 'deleteStoredFile reports success');
-    $log = json_decode((string)@file_get_contents($endpoint . '/__log'), true) ?: [];
+    $log = array_slice($requestLog(), $logStart);
     $deleteCalls = array_values(array_filter($log, static fn(array $entry): bool =>
         ($entry['method'] ?? '') === 'POST' && ($entry['url'] ?? '') === '/delete'));
     check($deleteCalls !== [], 'deletion calls POST /delete (not DELETE on a path)');
@@ -151,7 +156,7 @@ if ($imageUrl !== '') {
 }
 
 // ── Upload request shape ────────────────────────────────────────────────────
-$log = json_decode((string)@file_get_contents($endpoint . '/__log'), true) ?: [];
+$log = array_slice($requestLog(), $logStart);
 $puts = array_values(array_filter($log, static fn(array $entry): bool => ($entry['method'] ?? '') === 'PUT'));
 check($puts !== [], 'uploads are sent as PUT');
 if ($puts !== []) {
