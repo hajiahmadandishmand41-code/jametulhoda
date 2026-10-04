@@ -66,6 +66,7 @@ jobs:
           REQUEST_TIMEOUT_MS: '120000'
           ONLY_PATHS: '/,/news,/topics,/books,/login'
           SKIP_ASSETS: '1'
+          CACHE_PROBE: '1'
         run: node tests/perf-measure.mjs 2>&1 | tee preview-report.txt
 
       # Published straight away: the later production sweep is slow and we do

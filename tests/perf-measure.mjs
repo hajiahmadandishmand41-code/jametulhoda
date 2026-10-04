@@ -196,6 +196,25 @@ for (const r of docRows) {
 }
 report.push('');
 
+// Edge-cache probe: does a repeat anonymous GET of "/" actually hit the CDN?
+// `x-vercel-cache: MISS` on every sample is the difference between a visitor
+// waiting for a full render and one being served in tens of milliseconds.
+if (process.env.CACHE_PROBE === '1') {
+  report.push('### Edge cache probe — 6 sequential GETs of `/`');
+  report.push('');
+  report.push('| # | status | x-vercel-cache | age | TTFB | cache-control |');
+  report.push('|---|---|---|---|---|---|');
+  console.log('cache probe:');
+  for (let i = 1; i <= 6; i++) {
+    const r = await measureOnce(base + '/');
+    const row = `| ${i} | ${r.status} | ${r.headers['x-vercel-cache'] || '—'} | ${r.headers['age'] || '—'} | ${fmt(r.ttfb)} | ${r.headers['cache-control'] || '—'} |`;
+    report.push(row);
+    console.log('  ' + row);
+    await sleep(3000);
+  }
+  report.push('');
+}
+
 const text = report.join('\n');
 writeFileSync(`perf-report-${label}.md`, text);
 console.log('');

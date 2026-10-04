@@ -42,7 +42,7 @@ function jhd_profile_enabled(): bool {
 
 /** Mutable counters for the current request. */
 function &jhd_profile_state(): array {
-    static $state = ['queries' => 0, 'db_ms' => 0.0, 'connects' => 0, 'connect_ms' => 0.0, 'fingerprints' => [], 'samples' => []];
+    static $state = ['queries' => 0, 'db_ms' => 0.0, 'connects' => 0, 'connect_ms' => 0.0, 'prepare_ms' => 0.0, 'prepares' => 0, 'fingerprints' => [], 'samples' => []];
     return $state;
 }
 
@@ -54,6 +54,20 @@ function jhd_profile_record_query(string $sql, float $ms): void {
     $key = substr(md5(preg_replace('/\s+/', ' ', $sql) ?? $sql), 0, 8);
     $state['fingerprints'][$key] = ($state['fingerprints'][$key] ?? 0) + 1;
     $state['samples'][$key] = $sql;
+}
+
+/**
+ * PDO::prepare() is a NETWORK call on PostgreSQL when emulated prepares are
+ * off: the driver sends Parse/Describe and waits. It therefore costs a full
+ * round trip before execute() sends a second one. Measuring it separately is
+ * what distinguishes "our PHP is slow" from "every statement pays two
+ * transatlantic round trips".
+ */
+function jhd_profile_record_prepare(float $ms): void {
+    if (!jhd_profile_enabled()) return;
+    $state =& jhd_profile_state();
+    $state['prepares']++;
+    $state['prepare_ms'] += $ms;
 }
 
 function jhd_profile_record_connect(float $ms): void {
@@ -82,17 +96,26 @@ function jhd_profile_boot(): void {
         if (headers_sent()) return;
         $state =& jhd_profile_state();
         $total = (microtime(true) - JHD_REQUEST_START) * 1000;
-        $db = $state['db_ms'] + $state['connect_ms'];
+        $db = $state['db_ms'] + $state['connect_ms'] + $state['prepare_ms'];
         // Which edge region served this request? Together with dbconnect;dur
         // this is what separates a slow application from a slow network path
         // between the function and the database.
         $region = preg_replace('/[^a-zA-Z0-9_-]/', '', (string)env_value('VERCEL_REGION'));
         $regionPart = $region !== '' ? ', region;desc="' . $region . '"' : '';
+        // Database endpoint region (token only, e.g. "eu-central-1"). This is
+        // infrastructure topology, not a credential: no host, user, password
+        // or project reference is derivable from it. It is what proves whether
+        // the function and the database sit on opposite sides of the planet.
+        $dbHost = (string)parse_url((string)env_value('DATABASE_URL'), PHP_URL_HOST);
+        if (preg_match('/^aws-\d+-([a-z]{2}-[a-z]+-\d+)\./', $dbHost, $m)) {
+            $regionPart .= ', dbregion;desc="' . $m[1] . '"';
+        }
         header(sprintf(
-            'Server-Timing: total;dur=%.1f, php;dur=%.1f, db;dur=%.1f, dbconnect;dur=%.1f, q;desc="%d", qdup;desc="%d", conn;desc="%d", sess;desc="%s", mem;desc="%d"',
+            'Server-Timing: total;dur=%.1f, php;dur=%.1f, dbexec;dur=%.1f, dbprepare;dur=%.1f, dbconnect;dur=%.1f, q;desc="%d", qdup;desc="%d", conn;desc="%d", sess;desc="%s", mem;desc="%d"',
             $total,
             max(0, $total - $db),
             $state['db_ms'],
+            $state['prepare_ms'],
             $state['connect_ms'],
             $state['queries'],
             jhd_profile_duplicate_queries(),
@@ -140,7 +163,9 @@ final class JhdProfiledStatement extends PDOStatement {
 /** PDO that times prepare()/query()/exec() when profiling is on. */
 final class JhdProfiledPDO extends PDO {
     public function prepare(string $query, array $options = []): PDOStatement|false {
+        $t = microtime(true);
         $stmt = parent::prepare($query, $options);
+        jhd_profile_record_prepare((microtime(true) - $t) * 1000);
         if ($stmt instanceof JhdProfiledStatement) $stmt->jhdSql = $query;
         return $stmt;
     }
