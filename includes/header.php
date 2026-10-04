@@ -14,10 +14,10 @@ require_once __DIR__ . '/member-auth.php';
  * traffic without invoking PHP or PostgreSQL at all — this is what turns the
  * measured `x-vercel-cache: MISS` on every single homepage hit into a HIT.
  *
- * Nothing personalised is ever shared: the moment a request carries a session
- * cookie (signed-in visitor, admin, any POST) the response goes back to
- * `no-cache`, and `Vary: Cookie` keeps the two populations in separate cache
- * entries. Admin pages set their own `no-store` and are not touched here.
+ * Nothing personalised is ever shared: the shared-cache policy is only applied
+ * to a request that carried no cookie at all, started no session and emitted no
+ * Set-Cookie. Anything else keeps `no-cache`. Admin pages set their own
+ * `no-store` and are not touched here.
  *
  * The decision is taken at the END of the request, because a controller may
  * still start a session while rendering (a CSRF-protected form, a flash
@@ -26,7 +26,6 @@ require_once __DIR__ . '/member-auth.php';
  * (the whole admin panel) keeps its own policy untouched.
  */
 header('Cache-Control: no-cache');
-header('Vary: Cookie');
 if (!function_exists('jhd_register_public_cache_policy')) {
     function jhd_register_public_cache_policy(): void {
         static $registered = false;
@@ -48,8 +47,28 @@ if (!function_exists('jhd_register_public_cache_policy')) {
                 if (stripos($line, 'Cache-Control:') === 0) $current = trim(substr($line, 14));
             }
             if (strtolower($current) !== 'no-cache') return; // controller set its own policy
+            /**
+             * Browsers must always revalidate (a signed-in visitor must never
+             * reuse the anonymous shell from their own cache).
+             *
+             * The shared cache is driven by `Vercel-CDN-Cache-Control`, which
+             * Vercel consumes and does not forward to the browser.
+             *
+             * Measured reason for not using `Vary: Cookie` here: Vercel's CDN
+             * refuses to cache any response whose Vary names Cookie — six
+             * sequential GETs of "/" returned `x-vercel-cache: MISS` every
+             * time with Vary set. This response is only produced for a request
+             * that carried no cookie at all and started no session, so there
+             * is nothing visitor-specific in it to leak.
+             */
+            header('Cache-Control: public, max-age=0, must-revalidate');
             header(sprintf(
-                'Cache-Control: public, max-age=0, s-maxage=%d, stale-while-revalidate=%d',
+                'Vercel-CDN-Cache-Control: public, s-maxage=%d, stale-while-revalidate=%d',
+                $seconds,
+                max($seconds * 10, 600)
+            ));
+            header(sprintf(
+                'CDN-Cache-Control: public, s-maxage=%d, stale-while-revalidate=%d',
                 $seconds,
                 max($seconds * 10, 600)
             ));
