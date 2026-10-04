@@ -1,0 +1,271 @@
+name: Perf audit
+
+# Real, repeatable measurement of the live deployment and of the PHP bootstrap
+# itself. Reports are published as commit comments so they can be read through
+# the GitHub API alone (the Actions log archive is not reachable everywhere).
+on:
+  push:
+    branches: ['arena/**']
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Base URL to measure'
+        required: true
+        default: 'https://jametulhoda.vercel.app'
+      label:
+        description: 'Report label (before/after/…)'
+        required: true
+        default: 'run'
+      samples:
+        description: 'Samples per URL'
+        required: false
+        default: '3'
+
+permissions:
+  contents: write
+
+jobs:
+  measure:
+    name: Measure live deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The Vercel Git integration publishes a Preview deployment for this very
+      # commit. Measuring it is the only honest "after" number: same platform,
+      # same Supabase, new code.
+      - name: Resolve the Preview deployment for this commit
+        id: preview
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          url=""
+          for attempt in $(seq 1 30); do
+            for dep in $(gh api "repos/${GITHUB_REPOSITORY}/deployments?sha=${GITHUB_SHA}" --jq '.[].id' 2>/dev/null); do
+              u=$(gh api "repos/${GITHUB_REPOSITORY}/deployments/${dep}/statuses" --jq '[.[]|select(.state=="success")][0].environment_url // empty' 2>/dev/null)
+              if [ -n "$u" ]; then url="$u"; break; fi
+            done
+            [ -n "$url" ] && break
+            sleep 20
+          done
+          echo "preview_url=$url" >> "$GITHUB_OUTPUT"
+          echo "Preview URL: ${url:-none}"
+
+      - name: Measure the Preview deployment (new code)
+        if: steps.preview.outputs.preview_url != ''
+        continue-on-error: true
+        env:
+          TEST_BASE_URL: ${{ steps.preview.outputs.preview_url }}
+          LABEL: preview
+          SAMPLES: '6'
+          THROTTLE_MS: '300'
+          REQUEST_TIMEOUT_MS: '120000'
+          ONLY_PATHS: '/,/news,/topics,/books,/login'
+          SKIP_ASSETS: '1'
+          CACHE_PROBE: '1'
+        run: node tests/perf-measure.mjs 2>&1 | tee preview-report.txt
+
+      # Published straight away: the later production sweep is slow and we do
+      # not want the result of this commit to wait for it.
+      - name: Publish the Preview measurement
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "## Preview deployment of this commit (new code, real Vercel + Supabase)"
+            echo "url: ${{ steps.preview.outputs.preview_url }}"
+            echo '```text'
+            tail -n 70 preview-report.txt 2>/dev/null || echo "no preview measured"
+            echo '```'
+          } > preview-comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$(cat preview-comment.md)" >/dev/null
+
+      - name: Homepage cold/warm burst
+        id: home
+        continue-on-error: true
+        env:
+          TEST_BASE_URL: ${{ inputs.target || vars.PERF_TARGET || 'https://jametulhoda.vercel.app' }}
+          LABEL: home-${{ inputs.label || 'push' }}
+          SAMPLES: '6'
+          THROTTLE_MS: '500'
+          REQUEST_TIMEOUT_MS: '90000'
+          ONLY_PATHS: '/'
+          SKIP_ASSETS: '1'
+        run: node tests/perf-measure.mjs 2>&1 | tee home-report.txt
+
+      - name: Publish the production homepage burst
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "## Production homepage burst — ${{ inputs.target || 'https://jametulhoda.vercel.app' }}"
+            echo '```text'
+            tail -n 40 home-report.txt 2>/dev/null || echo "no output"
+            echo '```'
+          } > home-comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$(cat home-comment.md)" >/dev/null
+
+      - name: Full route + asset sweep
+        id: sweep
+        continue-on-error: true
+        env:
+          TEST_BASE_URL: ${{ inputs.target || vars.PERF_TARGET || 'https://jametulhoda.vercel.app' }}
+          LABEL: ${{ inputs.label || 'push' }}
+          SAMPLES: ${{ inputs.samples || '1' }}
+          ASSET_SAMPLES: '1'
+          THROTTLE_MS: '100'
+          REQUEST_TIMEOUT_MS: '25000'
+          ONLY_PATHS: ${{ inputs.sweep_paths || '/,/news,/articles,/topics,/books,/lessons,/events,/research,/login,/admin,/sitemap.xml,/robots.txt,/this-route-does-not-exist-xyz' }}
+        run: node tests/perf-measure.mjs 2>&1 | tee sweep-report.txt
+
+      - name: Publish measurement
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "## Perf audit — ${{ inputs.target || 'https://jametulhoda.vercel.app' }} (${{ inputs.label || 'push' }})"
+            echo
+            echo "### Homepage burst"
+            echo '```text'
+            tail -n 60 home-report.txt 2>/dev/null || echo "no output"
+            echo '```'
+            echo "### Preview deployment of this commit (new code, real Vercel + Supabase)"
+            echo "url: ${{ steps.preview.outputs.preview_url }}"
+            echo '```text'
+            tail -n 60 preview-report.txt 2>/dev/null || echo "no preview measured"
+            echo '```'
+            echo "### Route + asset sweep"
+            echo '```text'
+            tail -n 160 sweep-report.txt 2>/dev/null || echo "no output"
+            echo '```'
+          } > comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$(cat comment.md)" >/dev/null
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf-report-${{ inputs.label || 'push' }}-${{ github.run_id }}
+          path: |
+            perf-report-*.md
+            *-report.txt
+          if-no-files-found: ignore
+
+  profile:
+    name: Local PHP bootstrap profile (PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: jhdtest
+          POSTGRES_USER: jhdtest
+          POSTGRES_DB: jhdtest
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo, pdo_pgsql, mbstring, fileinfo, gd, dom, curl, zip
+          ini-values: display_errors=0, log_errors=1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Load schema
+        env:
+          PGPASSWORD: jhdtest
+        run: |
+          psql -h 127.0.0.1 -U jhdtest -d jhdtest -v ON_ERROR_STOP=0 -f database/database.postgres.sql > schema.log 2>&1 || true
+          echo "schema errors:"; grep -c ERROR schema.log || true
+          psql -h 127.0.0.1 -U jhdtest -d jhdtest -c "\dt" | head -40
+
+      - name: Start PHP server
+        env:
+          DATABASE_URL: 'postgresql://jhdtest:jhdtest@127.0.0.1:5432/jhdtest?sslmode=disable'
+          APP_ENV: development
+          JHD_PROFILE: '1'
+          JHD_PROFILE_LOG: '1'
+          JHD_PRETTY_URLS: 'true'
+        run: |
+          nohup php -S 127.0.0.1:8099 router.php > php-server.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:8099/ && break; sleep 1; done
+          echo "--- homepage headers ---"
+          curl -sS -D - -o /dev/null http://127.0.0.1:8099/
+
+      - name: Profile routes
+        id: localprof
+        continue-on-error: true
+        env:
+          TEST_BASE_URL: 'http://127.0.0.1:8099'
+          LABEL: local
+          SAMPLES: '5'
+          THROTTLE_MS: '0'
+          REQUEST_TIMEOUT_MS: '30000'
+        run: node tests/perf-measure.mjs 2>&1 | tee local-report.txt
+
+      - name: Restore pre-optimisation baseline and re-profile
+        id: baseline
+        continue-on-error: true
+        # Output is echoed into the published comment; failures are visible there.
+        env:
+          DATABASE_URL: 'postgresql://jhdtest:jhdtest@127.0.0.1:5432/jhdtest?sslmode=disable'
+          APP_ENV: development
+          JHD_PROFILE: '1'
+          JHD_PROFILE_LOG: '1'
+          JHD_PRETTY_URLS: 'true'
+        run: |
+          pkill -f 'php -S 127.0.0.1:8099' || true
+          git log --oneline -1 ${{ vars.PERF_BASELINE_SHA || 'c3a45c36f477a29e678436d73d7ca216c05f8d79' }}
+          bash tests/perf-baseline-restore.sh ${{ vars.PERF_BASELINE_SHA || 'c3a45c36f477a29e678436d73d7ca216c05f8d79' }} 2>&1 | tee baseline-restore.log
+          nohup php -S 127.0.0.1:8099 router.php > php-baseline.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:8099/ && break; sleep 1; done
+          TEST_BASE_URL=http://127.0.0.1:8099 LABEL=local-baseline SAMPLES=5 THROTTLE_MS=0 \
+            REQUEST_TIMEOUT_MS=30000 node tests/perf-measure.mjs 2>&1 | tee local-baseline.txt
+          git checkout -- . || true
+
+      - name: Publish local profile
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "## Local PHP profile (PostgreSQL service, JHD_PROFILE=1)"
+            echo '```text'
+            tail -n 200 local-report.txt 2>/dev/null || echo "no output"
+            echo '```'
+            echo "### AFTER — per-request profile (unique)"
+            echo '```text'
+            grep -o 'JHD_PROFILE .*' php-server.log 2>/dev/null | awk '{print $2, $3, $4, $5, $6, $7}' | sort -u | head -n 30 || true
+            echo '```'
+            echo "### BEFORE — pre-optimisation baseline (same instrument)"
+            echo '```text'
+            grep -E '^  /' local-baseline.txt 2>/dev/null | head -n 30 || tail -n 25 baseline-restore.log 2>/dev/null || echo "baseline step did not run"
+            echo '```'
+            echo '```text'
+            grep -o 'JHD_PROFILE .*' php-baseline.log 2>/dev/null | awk '{print $2, $3, $4, $5, $6, $7}' | sort -u | head -n 30 || true
+            echo '```'
+          } > local-comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$(cat local-comment.md)" >/dev/null
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf-report-local-${{ inputs.label || 'push' }}-${{ github.run_id }}
+          path: |
+            perf-report-*.md
+            local-report.txt
+            php-server.log
+          if-no-files-found: ignore

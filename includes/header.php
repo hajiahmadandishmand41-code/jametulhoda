@@ -4,10 +4,78 @@ require_once __DIR__ . '/functions.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/member-auth.php';
 
-// HTML documents are never long-lived cache objects: every asset link inside
-// them carries a ?v= fingerprint, and a redeploy must reach the visitor on the
-// next navigation. `no-cache` allows store-and-revalidate, never blind reuse.
+/**
+ * HTML cache policy.
+ *
+ * Browsers still never reuse a page blindly (`max-age=0`): a redeploy or an
+ * edit must reach the visitor on the next navigation. What changes here is the
+ * *shared* cache. An anonymous GET of a public page is identical for every
+ * visitor, so the Vercel edge may hold it for a short window and answer repeat
+ * traffic without invoking PHP or PostgreSQL at all — this is what turns the
+ * measured `x-vercel-cache: MISS` on every single homepage hit into a HIT.
+ *
+ * Nothing personalised is ever shared: the shared-cache policy is only applied
+ * to a request that carried no cookie at all, started no session and emitted no
+ * Set-Cookie. Anything else keeps `no-cache`. Admin pages set their own
+ * `no-store` and are not touched here.
+ *
+ * The decision is taken at the END of the request, because a controller may
+ * still start a session while rendering (a CSRF-protected form, a flash
+ * message). Only a response that is still carrying exactly this default
+ * `no-cache` is ever upgraded, so a page that deliberately set `no-store`
+ * (the whole admin panel) keeps its own policy untouched.
+ */
 header('Cache-Control: no-cache');
+if (!function_exists('jhd_register_public_cache_policy')) {
+    function jhd_register_public_cache_policy(): void {
+        static $registered = false;
+        if ($registered) return;
+        $registered = true;
+        $seconds = (int)env_value('JHD_PUBLIC_CACHE_SECONDS', '60');
+        $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+        if ($seconds <= 0 || !in_array($method, ['GET', 'HEAD'], true)) return;
+        register_shutdown_function(static function () use ($seconds): void {
+            if (headers_sent()) return;
+            if (http_response_code() !== 200) return;
+            // A session was materialised, or a cookie is being issued/was sent:
+            // the response is visitor-specific and must not enter a shared cache.
+            if (session_status() === PHP_SESSION_ACTIVE) return;
+            if (!empty($_COOKIE)) return;
+            $current = '';
+            foreach (headers_list() as $line) {
+                if (stripos($line, 'Set-Cookie:') === 0) return;
+                if (stripos($line, 'Cache-Control:') === 0) $current = trim(substr($line, 14));
+            }
+            if (strtolower($current) !== 'no-cache') return; // controller set its own policy
+            /**
+             * Browsers must always revalidate (a signed-in visitor must never
+             * reuse the anonymous shell from their own cache).
+             *
+             * The shared cache is driven by `Vercel-CDN-Cache-Control`, which
+             * Vercel consumes and does not forward to the browser.
+             *
+             * Measured reason for not using `Vary: Cookie` here: Vercel's CDN
+             * refuses to cache any response whose Vary names Cookie — six
+             * sequential GETs of "/" returned `x-vercel-cache: MISS` every
+             * time with Vary set. This response is only produced for a request
+             * that carried no cookie at all and started no session, so there
+             * is nothing visitor-specific in it to leak.
+             */
+            header('Cache-Control: public, max-age=0, must-revalidate');
+            header(sprintf(
+                'Vercel-CDN-Cache-Control: public, s-maxage=%d, stale-while-revalidate=%d',
+                $seconds,
+                max($seconds * 10, 600)
+            ));
+            header(sprintf(
+                'CDN-Cache-Control: public, s-maxage=%d, stale-while-revalidate=%d',
+                $seconds,
+                max($seconds * 10, 600)
+            ));
+        });
+    }
+}
+jhd_register_public_cache_policy();
 
 // The homepage is intentionally DB-optional before installation. Controllers
 // other than index.php keep the normal authenticated/database behavior.
@@ -19,7 +87,7 @@ $GLOBALS['JHD_PUBLIC_DB_READY'] = $jhdPublicDbReady;
 $jhdDbNotice = $jhdPublicDbReady ? '' : jhd_db_notice();
 
 if ($jhdPublicDbReady) {
-    startSecureSession();
+    startPublicSession();
     $siteName = getSetting('site_name', SITE_NAME);
     if ($siteName === 'مدرسه علمیه جامعه‌الهدی') $siteName = SITE_NAME;
     $siteSlogan = getSetting('site_slogan', SITE_SLOGAN);
@@ -92,7 +160,21 @@ $isActiveNav = function (string $route) use ($currentPath): bool {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#103d2e">
 <meta name="plyr-sprite" content="<?= asset('vendor/plyr.svg') ?>">
-<?php if ($jhdPublicDbReady): ?><meta name="csrf-token" content="<?= sanitize(generateCsrfToken()) ?>"><?php endif; ?>
+<?php
+/**
+ * CSRF meta tag.
+ *
+ * It is emitted only when a session already exists. Measured reason: no script
+ * in this project reads `meta[name=csrf-token]` (grep over assets/js, admin,
+ * includes, pages finds zero consumers), yet generateCsrfToken() force-starts
+ * a database-backed session. That single tag was opening a SECOND PostgreSQL
+ * connection, running two CREATE TABLE IF NOT EXISTS statements and taking a
+ * `SELECT … FOR UPDATE` row lock on every anonymous page view.
+ *
+ * Forms keep using csrfField(), which still creates the session on demand, so
+ * CSRF protection is unchanged.
+ */
+if ($jhdPublicDbReady && session_status() === PHP_SESSION_ACTIVE): ?><meta name="csrf-token" content="<?= sanitize(generateCsrfToken()) ?>"><?php endif; ?>
 <title><?= sanitize($metaTitle) ?></title>
 <meta name="description" content="<?= sanitize($metaDesc) ?>">
 <?php if ($noindexSeo): ?><meta name="robots" content="noindex, follow"><?php endif; ?>

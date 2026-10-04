@@ -18,23 +18,45 @@ require_once __DIR__ . '/storage.php';
 /** Core tables the public site needs before it can query anything. */
 const JHD_CORE_TABLES = ['users', 'settings', 'posts', 'topics', 'post_topics', 'books', 'lessons', 'media_files'];
 
-/** Does $table exist in the connected database? (name-spaced away from includes/identity.php's jhd_table_exists) */
-function jhd_core_table_exists(PDO $db, string $table): bool {
+/**
+ * Which of $tables exist in the connected database?
+ *
+ * One round trip for the whole list. The previous one-query-per-table loop
+ * cost eight sequential `information_schema` lookups on every single request;
+ * against a pooled PostgreSQL endpoint that is eight network round trips
+ * before the page has read a single row of content.
+ *
+ * @param string[] $tables
+ * @return array<string,bool> table name ⇒ exists
+ */
+function jhd_core_tables_exist(PDO $db, array $tables): array {
+    $result = array_fill_keys($tables, false);
+    if (!$tables) return $result;
     try {
         $driver = databaseDriver();
+        $marks = implode(',', array_fill(0, count($tables), '?'));
         if ($driver === 'mysql') {
-            $sql = 'SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?';
+            $sql = "SELECT TABLE_NAME AS name FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ($marks)";
         } elseif ($driver === 'sqlite') {
-            $sql = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?";
+            $sql = "SELECT name FROM sqlite_master WHERE type='table' AND name IN ($marks)";
         } else {
-            $sql = 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ANY(current_schemas(false)) AND table_name = ?';
+            $sql = "SELECT table_name AS name FROM information_schema.tables WHERE table_schema = ANY(current_schemas(false)) AND table_name IN ($marks)";
         }
         $stmt = $db->prepare($sql);
-        $stmt->execute([$table]);
-        return (int)$stmt->fetchColumn() > 0;
+        $stmt->execute(array_values($tables));
+        foreach ($stmt->fetchAll() as $row) {
+            $name = (string)($row['name'] ?? $row['NAME'] ?? '');
+            if ($name !== '' && array_key_exists($name, $result)) $result[$name] = true;
+        }
     } catch (Throwable $e) {
-        return false;
+        return array_fill_keys($tables, false);
     }
+    return $result;
+}
+
+/** Does $table exist in the connected database? (name-spaced away from includes/identity.php's jhd_table_exists) */
+function jhd_core_table_exists(PDO $db, string $table): bool {
+    return jhd_core_tables_exist($db, [$table])[$table] ?? false;
 }
 
 /**
@@ -48,8 +70,8 @@ function jhd_db(): ?PDO {
     $resolved = true;
     $candidate = tryGetDB();
     if ($candidate === null) return $db = null;
-    foreach (JHD_CORE_TABLES as $table) {
-        if (!jhd_core_table_exists($candidate, $table)) {
+    foreach (jhd_core_tables_exist($candidate, JHD_CORE_TABLES) as $table => $exists) {
+        if (!$exists) {
             error_log('Database reachable but schema incomplete: missing table ' . $table);
             return $db = null;
         }
@@ -1003,6 +1025,14 @@ function getPosts(array $opts = []): array {
         $where[]  = "p.post_type = ?";
         $params[] = $opts['type'];
     }
+    // Several post types in one round trip (used by the homepage events strip).
+    if (!empty($opts['types']) && is_array($opts['types'])) {
+        $types = array_values(array_filter($opts['types'], static fn($t): bool => is_string($t) && $t !== ''));
+        if ($types) {
+            $where[] = 'p.post_type IN (' . implode(',', array_fill(0, count($types), '?')) . ')';
+            foreach ($types as $t) $params[] = $t;
+        }
+    }
     if (!empty($opts['search'])) {
         $where[]  = "(p.title ILIKE ? OR p.summary ILIKE ? OR p.content ILIKE ?)";
         $s        = '%' . $opts['search'] . '%';
@@ -1087,6 +1117,11 @@ function getPostBySlug(string $slug): ?array {
 // ─── Topics (core) ───────────────────────────────────────────────────────────
 
 function getTopics(array $opts = []): array {
+    // The same topic list is requested several times per page (header tree,
+    // footer list, topic chips). Memoize per argument set for this request.
+    static $memo = [];
+    $memoKey = json_encode($opts);
+    if (is_string($memoKey) && array_key_exists($memoKey, $memo)) return $memo[$memoKey];
     try {
         $db = getDB();
         $where = ["1=1"]; $params=[];
@@ -1108,7 +1143,10 @@ function getTopics(array $opts = []): array {
         $sql = "SELECT * FROM topics WHERE $whereStr ORDER BY sort_order ASC, name ASC$limitSql";
         $stmt = $db->prepare($sql);
         $stmt->execute($params);
-        return $stmt->fetchAll();
+        $rows = $stmt->fetchAll();
+        jhd_prime_topic_cache($rows);
+        if (is_string($memoKey)) $memo[$memoKey] = $rows;
+        return $rows;
     } catch (PDOException $e) { return []; }
 }
 
@@ -1162,8 +1200,42 @@ function getTopicBySlug(string $slug): ?array {
     } catch (PDOException $e) { return null; }
 }
 
+/**
+ * Request-scoped identity map for topic rows.
+ *
+ * Measured reason: topicUrl() builds the /topics/parent/child path through
+ * getTopicBreadcrumbs(), which walks the parent chain one getTopicById() query
+ * at a time — for every topic link on the page, and the navigation tree is
+ * rendered twice (desktop menu + mobile drawer). The profiler logged
+ * `85x SELECT * FROM topics WHERE id=?` on the homepage and `72x` on every
+ * other page. The rows are tiny and already fetched by getTopics(), so they
+ * are cached here and primed in bulk below.
+ *
+ * @return array<int,array|null>
+ */
+function &jhd_topic_row_cache(): array {
+    static $cache = [];
+    return $cache;
+}
+
+/** Remember topic rows we already hold (called with every getTopics() result). */
+function jhd_prime_topic_cache(array $rows): void {
+    $cache =& jhd_topic_row_cache();
+    foreach ($rows as $row) {
+        if (!is_array($row)) continue;
+        $id = (int)($row['id'] ?? 0);
+        if ($id > 0 && !array_key_exists($id, $cache)) $cache[$id] = $row;
+    }
+}
+
 function getTopicById(int $id): ?array {
-    try { $db=getDB(); $stmt=$db->prepare("SELECT * FROM topics WHERE id=?"); $stmt->execute([$id]); $row=$stmt->fetch(); return $row ?: null; } catch(PDOException $e){ return null; }
+    if ($id < 1) return null;
+    $cache =& jhd_topic_row_cache();
+    if (array_key_exists($id, $cache)) return $cache[$id];
+    try {
+        $db=getDB(); $stmt=$db->prepare("SELECT * FROM topics WHERE id=?"); $stmt->execute([$id]); $row=$stmt->fetch();
+        return $cache[$id] = ($row ?: null);
+    } catch(PDOException $e){ return $cache[$id] = null; }
 }
 
 function getTopicTree(array $opts = []): array {
@@ -1196,6 +1268,8 @@ function getTopicChildren(int $parentId): array {
 }
 
 function getTopicBreadcrumbs(int $topicId): array {
+    static $memo = [];
+    if (array_key_exists($topicId, $memo)) return $memo[$topicId];
     $crumbs=[]; $current=getTopicById($topicId);
     $guard=0;
     while($current && $guard<10){
@@ -1204,7 +1278,7 @@ function getTopicBreadcrumbs(int $topicId): array {
         $current=getTopicById((int)$current['parent_id']);
         $guard++;
     }
-    return $crumbs;
+    return $memo[$topicId] = $crumbs;
 }
 
 function getTopicsForPost(int $postId): array {
@@ -1412,6 +1486,10 @@ function getLessonBySlug(string $slug): ?array {
 }
 
 function getLessonCollections(array $opts=[]): array {
+    // Requested once per rendered navigation (desktop menu + mobile drawer).
+    static $memo = [];
+    $memoKey = json_encode($opts);
+    if (is_string($memoKey) && array_key_exists($memoKey, $memo)) return $memo[$memoKey];
     try{
         $db=getDB();
         $where=["1=1"]; $params=[];
@@ -1419,7 +1497,10 @@ function getLessonCollections(array $opts=[]): array {
         if(isset($opts['featured'])){ $where[]="is_featured=?"; $params[]=(int)$opts['featured']; }
         $whereStr=implode(' AND ',$where);
         $stmt=$db->prepare("SELECT * FROM lesson_collections WHERE $whereStr ORDER BY sort_order ASC, title ASC");
-        $stmt->execute($params); return $stmt->fetchAll();
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll();
+        if (is_string($memoKey)) $memo[$memoKey] = $rows;
+        return $rows;
     }catch(PDOException $e){ return []; }
 }
 function getLessonCollectionBySlug(string $slug): ?array {

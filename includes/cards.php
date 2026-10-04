@@ -697,6 +697,11 @@ function jhd_section_children(array $section): array {
     if (array_key_exists('JHD_PUBLIC_DB_READY', $GLOBALS) && !$GLOBALS['JHD_PUBLIC_DB_READY']) {
         return jhd_static_section_children($section);
     }
+    // The very same submenu is built twice on every page — once for the
+    // desktop navigation and once for the mobile drawer. Build it once.
+    static $memo = [];
+    $memoKey = (string)($section['route'] ?? '') . '|' . implode(',', (array)($section['types'] ?? []));
+    if (array_key_exists($memoKey, $memo)) return $memo[$memoKey];
     $route = (string)($section['route'] ?? '');
     $children = [];
     foreach (getCategoriesForTypes($section['types'] ?? []) as $c) {
@@ -716,7 +721,7 @@ function jhd_section_children(array $section): array {
             $children[] = ['label' => (string)$col['title'], 'url' => collectionUrl($col)];
         }
     }
-    return $children;
+    return $memo[$memoKey] = $children;
 }
 
 /** Static submenu fallback used when the public shell has no database. */

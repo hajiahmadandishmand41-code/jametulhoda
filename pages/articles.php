@@ -8,7 +8,7 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
-startSecureSession();
+startPublicSession();
 
 $search = trim($_GET['q'] ?? '');
 $topicSlug = trim($_GET['topic'] ?? '');

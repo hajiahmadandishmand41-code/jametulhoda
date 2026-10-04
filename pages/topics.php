@@ -8,7 +8,7 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
-startSecureSession();
+startPublicSession();
 
 // The atlas remains complete at scale: page through root topics while each
 // root card keeps its real descendants accessible from the topic hub.

@@ -41,7 +41,7 @@ foreach ($_GET as $__queryValue) {
 // The session store itself degrades gracefully (includes/auth.php), so this is
 // safe on a deployment whose database is not reachable yet.
 if ($__p !== '' && $__p !== 'home') {
-    startSecureSession();
+    startPublicSession();
 }
 
 // ─── Query-URL front controller ────────────────────────────────────────────
@@ -93,7 +93,10 @@ $db = jhd_db();
 $GLOBALS['JHD_PUBLIC_DB_READY'] = $jhdPublicDbReady;
 
 if ($jhdPublicDbReady) {
-    startSecureSession();
+    // Anonymous GETs get no session at all (see startPublicSession): that is
+    // where the second PostgreSQL connection, the two CREATE TABLE statements
+    // and the `SELECT … FOR UPDATE` session row lock used to come from.
+    startPublicSession();
 
     // ─── ۱. مطلب شاخص و دو مطلب کناری ─────────────────────────────────────
     $heroPost = getPosts(['featured' => 1, 'limit' => 1])[0]
@@ -102,20 +105,22 @@ if ($jhdPublicDbReady) {
         ?? getPosts(['limit' => 1])[0]
         ?? null;
     $heroId = $heroPost ? (int)$heroPost['id'] : 0;
+    // The hero's topic is resolved below from the shared preload (one bulk
+    // query for every card on the page) instead of its own extra round trip.
     $heroTopic = null;
-    if ($heroPost) {
-        $ht = getTopicsForPost((int)$heroPost['id']);
-        $heroTopic = $ht[0] ?? null;
-    }
+    // One combined list feeds both the sidebar and the "latest" strip. The
+    // previous code ran getPosts(limit 6) and getPosts(limit 12) separately
+    // even though the first result set is a prefix of the second.
+    $recentPool = getPosts(['limit' => 12]);
     $featuredSide = array_slice(array_values(array_filter(
-        getPosts(['limit' => 6]),
+        array_slice($recentPool, 0, 6),
         static fn(array $p): bool => (int)$p['id'] !== $heroId
     )), 0, 2);
 
     // ─── ۲. تازه‌ترین مطالب (ترکیبی) ─────────────────────────────────────
     $usedIds = array_merge([$heroId], array_map(static fn(array $p): int => (int)$p['id'], $featuredSide));
     $latest = array_slice(array_values(array_filter(
-        getPosts(['limit' => 12]),
+        $recentPool,
         static fn(array $p): bool => !in_array((int)$p['id'], $usedIds, true)
     )), 0, 6);
 
@@ -133,11 +138,9 @@ if ($jhdPublicDbReady) {
         $featuredTopics = getTopics(['limit' => 8]);
     }
 
-    $eventPool = array_merge(
-        getPosts(['type' => 'program', 'limit' => 4]),
-        getPosts(['type' => 'religious', 'limit' => 4]),
-        getPosts(['type' => 'announcement', 'limit' => 4])
-    );
+    // Programs, religious activities and announcements come from one table and
+    // are merged straight away: one query instead of three round trips.
+    $eventPool = getPosts(['types' => ['program', 'religious', 'announcement'], 'limit' => 12]);
     $now = time();
     $upcoming = array_values(array_filter($eventPool, static fn(array $e): bool => strtotime((string)($e['published_at'] ?? $e['created_at'] ?? '')) >= $now));
     $past = array_values(array_filter($eventPool, static fn(array $e): bool => strtotime((string)($e['published_at'] ?? $e['created_at'] ?? '')) < $now));
@@ -190,35 +193,22 @@ if ($jhdPublicDbReady) {
     }
 
     $specialBanner = getActiveBanner();
-
-    $homeCounts = ['published' => 0, 'topics' => 0, 'books' => 0, 'lessons' => 0, 'media' => 0];
-    try {
-        foreach ([
-            'published' => "SELECT COUNT(*) FROM posts WHERE status='published'",
-            'topics' => "SELECT COUNT(*) FROM topics WHERE is_active=1",
-            'books' => "SELECT COUNT(*) FROM books WHERE status='published'",
-            'lessons' => "SELECT COUNT(*) FROM lessons WHERE status='published'",
-            'media' => "SELECT COUNT(*) FROM media_files",
-        ] as $key => $sql) {
-            $homeCounts[$key] = (int)$db->query($sql)->fetchColumn();
-        }
-    } catch (Throwable) {
-        $homeCounts = ['published' => 0, 'topics' => 0, 'books' => 0, 'lessons' => 0, 'media' => 0];
-    }
-    $homeContentTotal = $homeCounts['published'] + $homeCounts['books'] + $homeCounts['lessons'];
+    // NOTE: five COUNT(*) queries (posts/topics/books/lessons/media) used to run
+    // here into $homeCounts/$homeContentTotal. Neither variable is rendered
+    // anywhere on this page, so they were five full table scans per homepage
+    // request with no consumer. Removed.
 } else {
     // حالت پیش‌نصب: قالب اصلی سایت کاملاً رندر می‌شود و فقط داده‌ها خالی‌اند.
     $heroPost = null; $heroTopic = null; $featuredSide = []; $latest = [];
     $newsPool = []; $latestArticles = []; $latestReports = []; $latestResearch = [];
     $featuredTopics = []; $latestEvents = []; $latestBooks = []; $latestLessons = [];
     $latestVideos = []; $latestAudios = []; $specialBanner = null;
-    $homeCounts = ['published' => 0, 'topics' => 0, 'books' => 0, 'lessons' => 0, 'media' => 0];
-    $homeContentTotal = 0;
 }
 jhd_preload_post_topics(array_merge(
     $heroPost ? [$heroPost] : [], $featuredSide, $latest, $newsPool,
     $latestArticles, $latestReports, $latestResearch, $latestEvents
 ));
+if ($heroPost) $heroTopic = jhd_card_topics($heroPost, 1)[0] ?? null;
 require_once __DIR__ . '/includes/header.php';
 $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $latestReports || $latestResearch || $featuredTopics || $latestEvents || $latestBooks || $latestLessons || $latestVideos || $latestAudios;
 ?>

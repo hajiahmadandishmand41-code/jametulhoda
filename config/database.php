@@ -426,7 +426,15 @@ function newDatabaseConnection(): PDO {
     // it encrypts the connection without assuming a provider-specific CA
     // bundle is present on the Vercel PHP runtime.
     $ssl = $options['sslmode'] ?? 'require';
-    if (!in_array($ssl, ['require', 'verify-ca', 'verify-full'], true)) {
+    $allowedSslModes = ['require', 'verify-ca', 'verify-full'];
+    // A local/CI PostgreSQL server has no TLS listener. Plain connections stay
+    // refused in production and on Vercel, where TLS is non-negotiable.
+    if (APP_ENV !== 'production' && env_value('VERCEL') === '') {
+        $allowedSslModes[] = 'disable';
+        $allowedSslModes[] = 'prefer';
+        $allowedSslModes[] = 'allow';
+    }
+    if (!in_array($ssl, $allowedSslModes, true)) {
         throw new DatabaseUnavailableException('Unsupported sslmode in DATABASE_URL. Use sslmode=require for Supabase/Neon.');
     }
 
@@ -508,7 +516,12 @@ function newDatabaseConnection(): PDO {
         );
     }
 
-    $dsn = 'pgsql:host=' . $host . ';port=' . $port . ';dbname=' . $name . ';sslmode=' . $ssl . ';connect_timeout=10';
+    // Connect timeout. A web request must never sit on a TCP/TLS handshake to an
+    // unreachable pooler for longer than the visitor is willing to wait; CLI
+    // jobs (migrations, imports) may take the slower, more patient path.
+    $connectTimeout = (int)env_value('DB_CONNECT_TIMEOUT', PHP_SAPI === 'cli' ? '15' : '5');
+    if ($connectTimeout < 1 || $connectTimeout > 60) $connectTimeout = 5;
+    $dsn = 'pgsql:host=' . $host . ';port=' . $port . ';dbname=' . $name . ';sslmode=' . $ssl . ';connect_timeout=' . $connectTimeout;
     // Neon requires SNI/endpoint routing; the endpoint option keeps pooled and
     // direct hostnames working with older libpq builds.
     if (isset($options['options']) && is_string($options['options']) && $options['options'] !== '') {
@@ -518,13 +531,45 @@ function newDatabaseConnection(): PDO {
         $ca = '/etc/ssl/certs/ca-certificates.crt';
         if (is_file($ca)) $dsn .= ';sslrootcert=' . $ca;
     }
-    $pdo = new PDO($dsn, $user, $pass, [
+    $pdoOptions = [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
         PDO::ATTR_PERSISTENT => false,
-    ]);
-    $pdo->exec("SET TIME ZONE 'Asia/Kabul'");
+    ];
+    $connectStart = microtime(true);
+    if (function_exists('jhd_profile_enabled') && jhd_profile_enabled()) {
+        $pdoOptions[PDO::ATTR_STATEMENT_CLASS] = [JhdProfiledStatement::class, []];
+        $pdo = new JhdProfiledPDO($dsn, $user, $pass, $pdoOptions);
+    } else {
+        $pdo = new PDO($dsn, $user, $pass, $pdoOptions);
+    }
+    if (function_exists('jhd_profile_record_connect')) {
+        jhd_profile_record_connect((microtime(true) - $connectStart) * 1000);
+    }
+    /**
+     * Server-side safety limits, applied in ONE round trip together with the
+     * time zone (PostgreSQL accepts several simple statements per exec()).
+     *
+     * Why these exist: before this, a connection had no statement_timeout and
+     * no lock_timeout at all. A single serverless invocation that was killed
+     * while holding the `SELECT … FOR UPDATE` lock on an app_sessions row left
+     * every later request for that session waiting on the lock *forever* —
+     * which is exactly the "homepage sometimes takes minutes" symptom. With
+     * lock_timeout the waiter now fails fast instead of hanging, and
+     * idle_in_transaction_session_timeout reaps the orphaned holder.
+     *
+     * CLI keeps generous limits so migrations and bulk imports still work.
+     */
+    $isCli = PHP_SAPI === 'cli';
+    $statementTimeout = (int)env_value('DB_STATEMENT_TIMEOUT_MS', $isCli ? '0' : '8000');
+    $lockTimeout = (int)env_value('DB_LOCK_TIMEOUT_MS', $isCli ? '0' : '3000');
+    $idleTxTimeout = (int)env_value('DB_IDLE_TX_TIMEOUT_MS', $isCli ? '0' : '15000');
+    $limits = ["SET TIME ZONE 'Asia/Kabul'"];
+    if ($statementTimeout > 0) $limits[] = 'SET statement_timeout = ' . $statementTimeout;
+    if ($lockTimeout > 0) $limits[] = 'SET lock_timeout = ' . $lockTimeout;
+    if ($idleTxTimeout > 0) $limits[] = 'SET idle_in_transaction_session_timeout = ' . $idleTxTimeout;
+    $pdo->exec(implode('; ', $limits));
     return $pdo;
 }
 
