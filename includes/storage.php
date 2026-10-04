@@ -329,6 +329,12 @@ function jhdDirectUploadPath(string $field): string {
     return jhdDirectUploadPaths($field)[0] ?? '';
 }
 
+function jhdAdoptDirectField(string $field, string $kind, string $entity, int $id, array $context = []): string {
+    $path = jhdDirectUploadPath($field);
+    if ($path === '') return '';
+    return adoptDirectUpload($path, $kind, contentStorageFolder($entity, $id, $context), $field);
+}
+
 function storageUrl(string $key): string {
     $safe = storageKey($key);
     if (!$safe || $key !== $safe) throw new InvalidArgumentException('Invalid storage key');
