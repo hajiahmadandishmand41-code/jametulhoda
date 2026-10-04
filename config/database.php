@@ -518,12 +518,22 @@ function newDatabaseConnection(): PDO {
         $ca = '/etc/ssl/certs/ca-certificates.crt';
         if (is_file($ca)) $dsn .= ';sslrootcert=' . $ca;
     }
-    $pdo = new PDO($dsn, $user, $pass, [
+    $pdoOptions = [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
         PDO::ATTR_PERSISTENT => false,
-    ]);
+    ];
+    $connectStart = microtime(true);
+    if (function_exists('jhd_profile_enabled') && jhd_profile_enabled()) {
+        $pdoOptions[PDO::ATTR_STATEMENT_CLASS] = [JhdProfiledStatement::class, []];
+        $pdo = new JhdProfiledPDO($dsn, $user, $pass, $pdoOptions);
+    } else {
+        $pdo = new PDO($dsn, $user, $pass, $pdoOptions);
+    }
+    if (function_exists('jhd_profile_record_connect')) {
+        jhd_profile_record_connect((microtime(true) - $connectStart) * 1000);
+    }
     $pdo->exec("SET TIME ZONE 'Asia/Kabul'");
     return $pdo;
 }

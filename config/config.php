@@ -97,6 +97,10 @@ if (APP_ENV === 'production' && is_dir(STORAGE_DIR . '/logs') && is_writable(STO
 // Timezone
 date_default_timezone_set('Asia/Kabul');
 
+// Opt-in request profiler (Server-Timing). Completely inert unless JHD_PROFILE=1.
+require_once __DIR__ . '/../includes/profiler.php';
+jhd_profile_boot();
+
 // All entrypoints share non-disclosing failures and response hardening.
 if (PHP_SAPI !== 'cli') {
     // A pre-existing PHP buffer may auto-flush after 4096 bytes. Keep our own

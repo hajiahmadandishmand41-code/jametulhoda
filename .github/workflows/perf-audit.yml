@@ -1,0 +1,102 @@
+name: Perf audit
+
+# Real, repeatable measurement of the live deployment: HTTP status, TTFB,
+# full response time, transferred bytes and the headers that prove whether the
+# CDN or the PHP function answered. Run it before and after a change.
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Base URL to measure'
+        required: true
+        default: 'https://jametulhoda.vercel.app'
+      label:
+        description: 'Report label (before/after/…)'
+        required: true
+        default: 'run'
+      samples:
+        description: 'Samples per URL'
+        required: false
+        default: '3'
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    name: Measure live deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Measure
+        env:
+          TEST_BASE_URL: ${{ inputs.target }}
+          LABEL: ${{ inputs.label }}
+          SAMPLES: ${{ inputs.samples }}
+        run: node tests/perf-measure.mjs
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-report-${{ inputs.label }}
+          path: perf-report-*.md
+          if-no-files-found: ignore
+
+  profile:
+    name: Local PHP bootstrap profile (PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: jhdtest
+          POSTGRES_USER: jhdtest
+          POSTGRES_DB: jhdtest
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo, pdo_pgsql, mbstring, fileinfo, gd, dom, curl, zip
+          ini-values: display_errors=0, log_errors=1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Load schema
+        env:
+          PGPASSWORD: jhdtest
+        run: psql -h 127.0.0.1 -U jhdtest -d jhdtest -v ON_ERROR_STOP=0 -f database/database.postgres.sql > /dev/null 2>&1 || true
+      - name: Start PHP server
+        env:
+          DATABASE_URL: 'postgresql://jhdtest:jhdtest@127.0.0.1:5432/jhdtest?sslmode=disable'
+          APP_ENV: development
+          JHD_PROFILE: '1'
+          JHD_PRETTY_URLS: 'true'
+        run: |
+          php -S 127.0.0.1:8099 router.php > php-server.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:8099/ && break; sleep 1; done
+      - name: Profile routes
+        env:
+          TEST_BASE_URL: 'http://127.0.0.1:8099'
+          LABEL: 'local-${{ inputs.label }}'
+          SAMPLES: '5'
+          THROTTLE_MS: '0'
+        run: node tests/perf-measure.mjs
+      - name: PHP server log
+        if: always()
+        run: tail -n 200 php-server.log || true
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-report-local-${{ inputs.label }}
+          path: perf-report-*.md
+          if-no-files-found: ignore
