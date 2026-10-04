@@ -215,6 +215,31 @@ function replacePostImage(int $postId, int $imageId, array $file, string $entity
     return ['ok' => true, 'path' => $newPath];
 }
 
+/** جایگزینی یک تصویر گالری از فایل مستقیم Supabase. */
+function replacePostImageDirect(int $postId, int $imageId, string $stagingReference, string $entity): array {
+    if ($postId < 1 || $imageId < 1) return ['ok'=>false,'error'=>'درخواست نامعتبر است.'];
+    $db = getDB();
+    $stmt = $db->prepare('SELECT image_path FROM post_images WHERE id=? AND post_id=?');
+    $stmt->execute([$imageId,$postId]);
+    $oldPath=(string)$stmt->fetchColumn();
+    if ($oldPath==='') return ['ok'=>false,'error'=>'تصویر در گالری این مطلب یافت نشد.'];
+    $newPath=adoptDirectUpload($stagingReference,'image',contentStorageFolder($entity,$postId));
+    if ($newPath==='') return ['ok'=>false,'error'=>'فایل تازهٔ مستقیم معتبر نیست یا در Storage ثبت نشد.'];
+    $db->beginTransaction();
+    try {
+        $db->prepare('UPDATE post_images SET image_path=? WHERE id=? AND post_id=?')->execute([$newPath,$imageId,$postId]);
+        $post=$db->prepare('SELECT featured_image FROM posts WHERE id=?'); $post->execute([$postId]);
+        if ((string)$post->fetchColumn()===$oldPath) $db->prepare('UPDATE posts SET featured_image=? WHERE id=?')->execute([$newPath,$postId]);
+        $db->commit();
+    } catch(Throwable) {
+        if($db->inTransaction())$db->rollBack();
+        scheduleFileDeletion($newPath);
+        return ['ok'=>false,'error'=>'جایگزینی تصویر مستقیم در دیتابیس انجام نشد.'];
+    }
+    scheduleFileDeletion($oldPath);
+    return ['ok'=>true,'path'=>$newPath];
+}
+
 /** تغییر ترتیب رسانه‌های یک مطلب (ویدیو/صوت/مستندات). */
 function setMediaOrder(int $refId, array $orderedIds, string $kind, string $refType = 'post'): bool {
     if (!in_array($refType, ['post', 'lesson', 'book'], true)) return false;
