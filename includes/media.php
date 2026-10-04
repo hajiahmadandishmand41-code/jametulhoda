@@ -269,8 +269,9 @@ function handleDirectMediaUploads(string $refType, int $refId, array $paths, str
         if ($url === '') { $result['errors'][]='یکی از فایل‌های مستقیم در Storage قابل ثبت نبود.'; continue; }
         $title = basename(parse_url($url, PHP_URL_PATH) ?: $url);
         try {
-            $stmt = getDB()->prepare('INSERT INTO media_files (ref_type,ref_id,kind,file_path,title,sort_order,created_at) VALUES (?,?,?,?,?,?,NOW()) RETURNING id');
-            $stmt->execute([$refType,$refId,$kind,$url,$title,0]);
+            $stmt = getDB()->prepare('INSERT INTO media_files (ref_type,ref_id,kind,file_path,title,sort_order,created_at)
+                 VALUES (?,?,?,?,?,COALESCE((SELECT MAX(sort_order)+1 FROM media_files x WHERE x.ref_type=? AND x.ref_id=? AND x.kind=?),0),NOW()) RETURNING id');
+            $stmt->execute([$refType,$refId,$kind,$url,$title,$refType,$refId,$kind]);
             $mediaId=(int)$stmt->fetchColumn(); $stmt->closeCursor();
             if ($mediaId<1) throw new RuntimeException('Media row id was not created.');
             $result['uploaded']++;
