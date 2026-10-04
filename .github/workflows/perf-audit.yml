@@ -68,6 +68,22 @@ jobs:
           SKIP_ASSETS: '1'
         run: node tests/perf-measure.mjs 2>&1 | tee preview-report.txt
 
+      # Published straight away: the later production sweep is slow and we do
+      # not want the result of this commit to wait for it.
+      - name: Publish the Preview measurement
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "## Preview deployment of this commit (new code, real Vercel + Supabase)"
+            echo "url: ${{ steps.preview.outputs.preview_url }}"
+            echo '```text'
+            tail -n 70 preview-report.txt 2>/dev/null || echo "no preview measured"
+            echo '```'
+          } > preview-comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$(cat preview-comment.md)" >/dev/null
+
       - name: Homepage cold/warm burst
         id: home
         continue-on-error: true
@@ -81,6 +97,19 @@ jobs:
           SKIP_ASSETS: '1'
         run: node tests/perf-measure.mjs 2>&1 | tee home-report.txt
 
+      - name: Publish the production homepage burst
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "## Production homepage burst — ${{ inputs.target || 'https://jametulhoda.vercel.app' }}"
+            echo '```text'
+            tail -n 40 home-report.txt 2>/dev/null || echo "no output"
+            echo '```'
+          } > home-comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$(cat home-comment.md)" >/dev/null
+
       - name: Full route + asset sweep
         id: sweep
         continue-on-error: true
@@ -88,9 +117,10 @@ jobs:
           TEST_BASE_URL: ${{ inputs.target || vars.PERF_TARGET || 'https://jametulhoda.vercel.app' }}
           LABEL: ${{ inputs.label || 'push' }}
           SAMPLES: ${{ inputs.samples || '1' }}
-          ASSET_SAMPLES: '2'
-          THROTTLE_MS: '150'
-          REQUEST_TIMEOUT_MS: '40000'
+          ASSET_SAMPLES: '1'
+          THROTTLE_MS: '100'
+          REQUEST_TIMEOUT_MS: '25000'
+          ONLY_PATHS: ${{ inputs.sweep_paths || '/,/news,/articles,/topics,/books,/lessons,/events,/research,/login,/admin,/sitemap.xml,/robots.txt,/this-route-does-not-exist-xyz' }}
         run: node tests/perf-measure.mjs 2>&1 | tee sweep-report.txt
 
       - name: Publish measurement
