@@ -4,6 +4,8 @@ name: Perf audit
 # full response time, transferred bytes and the headers that prove whether the
 # CDN or the PHP function answered. Run it before and after a change.
 on:
+  push:
+    branches: ['arena/**']
   workflow_dispatch:
     inputs:
       target:
@@ -34,15 +36,15 @@ jobs:
           node-version: 22
       - name: Measure
         env:
-          TEST_BASE_URL: ${{ inputs.target }}
-          LABEL: ${{ inputs.label }}
-          SAMPLES: ${{ inputs.samples }}
+          TEST_BASE_URL: ${{ inputs.target || vars.PERF_TARGET || 'https://jametulhoda.vercel.app' }}
+          LABEL: ${{ inputs.label || 'push' }}
+          SAMPLES: ${{ inputs.samples || '3' }}
         run: node tests/perf-measure.mjs
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: perf-report-${{ inputs.label }}
+          name: perf-report-${{ inputs.label || 'push' }}-${{ github.run_id }}
           path: perf-report-*.md
           if-no-files-found: ignore
 
@@ -86,7 +88,7 @@ jobs:
       - name: Profile routes
         env:
           TEST_BASE_URL: 'http://127.0.0.1:8099'
-          LABEL: 'local-${{ inputs.label }}'
+          LABEL: 'local-${{ inputs.label || 'push' }}'
           SAMPLES: '5'
           THROTTLE_MS: '0'
         run: node tests/perf-measure.mjs
@@ -97,6 +99,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: perf-report-local-${{ inputs.label }}
+          name: perf-report-local-${{ inputs.label || 'push' }}-${{ github.run_id }}
           path: perf-report-*.md
           if-no-files-found: ignore
