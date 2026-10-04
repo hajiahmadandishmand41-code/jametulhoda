@@ -120,7 +120,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             // آپلود ویدیو شاخص جدید
-            if (!$error && (($_FILES['featured_video']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE)) {
+            $directFeaturedVideo = jhdDirectUploadPath('featured_video');
+            if (!$error && $directFeaturedVideo !== '') {
+                $upV = adoptDirectUpload($directFeaturedVideo, 'video', contentStorageFolder($storageEntity, $id));
+                if ($upV) {
+                    if ($featVid) scheduleFileDeletion($featVid);
+                    $featVid = $upV;
+                } else {
+                    $error = 'خطا در ثبت ویدیوی شاخص مستقیم در Storage.' . storageFailureHint();
+                }
+            } elseif (!$error && (($_FILES['featured_video']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE)) {
                 if (($_FILES['featured_video']['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
                     $error = jhd_upload_error_message((int)$_FILES['featured_video']['error']);
                 } else {
