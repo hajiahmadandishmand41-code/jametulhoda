@@ -79,6 +79,31 @@ function handleMediaUploads(string $refType, int $refId, array $files, string $k
     $fileTypes = $asList($files['type'] ?? '');
     $sizes     = $asList($files['size'] ?? 0);
     $result = ['provided' => 0, 'uploaded' => 0, 'errors' => [], 'stored' => []];
+
+    // Large files are removed from multipart by the browser bridge and arrive
+    // as signed Supabase staging keys. Infer the matching field kind so every
+    // existing controller automatically supports the direct path.
+    $direct = $_POST['jhd_direct'] ?? [];
+    if (is_array($direct)) {
+        $directPaths = [];
+        foreach ($direct as $field => $paths) {
+            if (!is_string($field)) continue;
+            $fieldKind = str_contains($field, 'audio') ? 'audio'
+                : (str_contains($field, 'video') ? 'video'
+                : ((str_contains($field, 'document') || str_contains($field, 'attachment') || ($field === 'files' && strtolower((string)($_POST['kind'] ?? '')) === 'document')) ? 'document' : ''));
+            if ($fieldKind !== $kind) continue;
+            $list = is_array($paths) ? $paths : [$paths];
+            foreach ($list as $path) if (is_string($path) && $path !== '') $directPaths[] = $path;
+        }
+        if ($directPaths) {
+            $directResult = handleDirectMediaUploads($refType, $refId, array_values(array_unique($directPaths)), $kind, $context);
+            $result['provided'] += (int)$directResult['provided'];
+            $result['uploaded'] += (int)$directResult['uploaded'];
+            $result['errors'] = array_merge($result['errors'], (array)$directResult['errors']);
+            $result['stored'] = array_merge($result['stored'], (array)$directResult['stored']);
+        }
+    }
+
     $uploadError = static function (int $code): string {
         return match ($code) {
             UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => 'اندازهٔ فایل از حد مجاز سرور بیشتر است.',
