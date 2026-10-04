@@ -1,7 +1,4 @@
-# Ignore Dockerfile.vercel so Vercel does not build a container image or push to VCR
-Dockerfile.vercel
-
-# Exclude local tools, tests, and non-runtime files
+Dockerfile
 .git
 .github
 tests

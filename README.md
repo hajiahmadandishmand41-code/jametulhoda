@@ -10,7 +10,7 @@
 
 ## معماری
 
-- **PHP 8.3+**؛ production با Apache داخل `Dockerfile.vercel`، بدون استفاده از PHP built-in server در production.
+- **PHP 8.3+**؛ production با ران‌تایم Serverless Vercel (`vercel-php@0.7.4`) یا Apache داخل `Dockerfile`، بدون استفاده از PHP built-in server در production.
 - **MySQL/MariaDB (InfinityFree) یا PostgreSQL (Neon)**؛ PDO با prepared statements بومی، `DB_*` برای MySQL و `DATABASE_URL` با TLS تأییدشده برای PostgreSQL. قطعه‌های SQL مخصوص PostgreSQL به‌صورت شفاف برای MySQL نرمال‌سازی می‌شوند (`config/database.php`).
 - **Session پایدار در دیتابیس فعال** (PostgreSQL یا MySQL)؛ session فایل فقط برای آزمون/development.
 - **Storage:** local در development، S3-compatible در production. آدرس عمومی با مسیر فیزیکی جداست.
