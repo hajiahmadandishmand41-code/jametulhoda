@@ -82,8 +82,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         }
 
         $newLogo = '';
-        if ($error === '' && isset($_FILES['logo'])) {
-            $file = $_FILES['logo'];
+        if ($error === '' && (isset($_FILES['logo']) || jhdDirectUploadPath('logo') !== '')) {
+            $directLogo = jhdDirectUploadPath('logo');
+            if ($directLogo !== '') {
+                $newLogo = adoptDirectUpload($directLogo, 'image', 'site');
+            } else {
+                $file = $_FILES['logo'];
             if (!is_array($file) || !is_string($file['name'] ?? null)) {
                 $error = 'فایل لوگو معتبر نیست.';
             } elseif (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
@@ -91,6 +95,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 if ($newLogo === '') {
                     $error = 'بارگذاری لوگو ناموفق بود. فقط تصویر معتبر با حجم مجاز پذیرفته می‌شود.';
                 }
+            }
             }
         }
 
