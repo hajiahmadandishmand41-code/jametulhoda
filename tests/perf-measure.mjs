@@ -18,6 +18,10 @@ const base = (process.env.TEST_BASE_URL || 'https://jametulhoda.vercel.app').rep
 const samples = Number(process.env.SAMPLES || 3);
 const label = process.env.LABEL || 'run';
 const throttle = Number(process.env.THROTTLE_MS || 250);
+// Hard ceiling per request. Without it a single hanging route eats the whole
+// CI budget and we learn nothing about the remaining routes.
+const timeoutMs = Number(process.env.REQUEST_TIMEOUT_MS || 60000);
+const only = (process.env.ONLY_PATHS || '').split(',').map((s) => s.trim()).filter(Boolean);
 
 const DOCUMENT_ROUTES = [
   '/', '/login', '/register', '/topics', '/news', '/articles', '/lessons',
@@ -55,6 +59,7 @@ async function measureOnce(url) {
   try {
     const res = await fetch(url, {
       redirect: 'manual',
+      signal: AbortSignal.timeout(timeoutMs),
       headers: { 'user-agent': 'jhd-perf-measure/1.0', 'accept-encoding': 'gzip, br' },
     });
     const tFirst = process.hrtime.bigint();
@@ -133,6 +138,9 @@ function table(rows, title) {
   return out.join('\n');
 }
 
+const docList = only.length ? only : DOCUMENT_ROUTES;
+const assetList = only.length ? [] : STATIC_ASSETS;
+
 console.log(`# Perf measurement — ${label}`);
 console.log(`target: ${base}`);
 console.log(`samples per URL: ${samples}`);
@@ -140,14 +148,14 @@ console.log(`started: ${new Date().toISOString()}`);
 console.log('');
 
 const docRows = [];
-for (const p of DOCUMENT_ROUTES) {
+for (const p of docList) {
   const r = await measure(p);
   docRows.push(r);
   console.log(`  ${p} -> ${r.statuses.join('/')}  ttfb(med)=${fmt(r.medTtfb)} total=${fmt(r.medTotal)} bytes=${r.bytes}`);
 }
 
 const assetRows = [];
-for (const p of STATIC_ASSETS) {
+for (const p of assetList) {
   const r = await measure(p);
   assetRows.push(r);
   console.log(`  ${p} -> ${r.statuses.join('/')}  ttfb(med)=${fmt(r.medTtfb)} cache=${r.headers['x-vercel-cache'] || '—'}`);

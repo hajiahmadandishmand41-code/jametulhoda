@@ -1,8 +1,8 @@
 name: Perf audit
 
-# Real, repeatable measurement of the live deployment: HTTP status, TTFB,
-# full response time, transferred bytes and the headers that prove whether the
-# CDN or the PHP function answered. Run it before and after a change.
+# Real, repeatable measurement of the live deployment and of the PHP bootstrap
+# itself. Reports are published as commit comments so they can be read through
+# the GitHub API alone (the Actions log archive is not reachable everywhere).
 on:
   push:
     branches: ['arena/**']
@@ -22,30 +22,68 @@ on:
         default: '3'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   measure:
     name: Measure live deployment
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Measure
+
+      - name: Homepage cold/warm burst
+        id: home
+        continue-on-error: true
+        env:
+          TEST_BASE_URL: ${{ inputs.target || vars.PERF_TARGET || 'https://jametulhoda.vercel.app' }}
+          LABEL: home-${{ inputs.label || 'push' }}
+          SAMPLES: '8'
+          THROTTLE_MS: '500'
+          REQUEST_TIMEOUT_MS: '120000'
+          ONLY_PATHS: '/'
+        run: node tests/perf-measure.mjs 2>&1 | tee home-report.txt
+
+      - name: Full route + asset sweep
+        id: sweep
+        continue-on-error: true
         env:
           TEST_BASE_URL: ${{ inputs.target || vars.PERF_TARGET || 'https://jametulhoda.vercel.app' }}
           LABEL: ${{ inputs.label || 'push' }}
-          SAMPLES: ${{ inputs.samples || '3' }}
-        run: node tests/perf-measure.mjs
-      - name: Upload report
+          SAMPLES: ${{ inputs.samples || '2' }}
+          THROTTLE_MS: '150'
+          REQUEST_TIMEOUT_MS: '45000'
+        run: node tests/perf-measure.mjs 2>&1 | tee sweep-report.txt
+
+      - name: Publish measurement
         if: always()
-        uses: actions/upload-artifact@v4
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "## Perf audit — ${{ inputs.target || 'https://jametulhoda.vercel.app' }} (${{ inputs.label || 'push' }})"
+            echo
+            echo "### Homepage burst"
+            echo '```text'
+            tail -n 60 home-report.txt 2>/dev/null || echo "no output"
+            echo '```'
+            echo "### Route + asset sweep"
+            echo '```text'
+            tail -n 160 sweep-report.txt 2>/dev/null || echo "no output"
+            echo '```'
+          } > comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$(cat comment.md)" >/dev/null
+
+      - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: perf-report-${{ inputs.label || 'push' }}-${{ github.run_id }}
-          path: perf-report-*.md
+          path: |
+            perf-report-*.md
+            *-report.txt
           if-no-files-found: ignore
 
   profile:
@@ -72,10 +110,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+
       - name: Load schema
         env:
           PGPASSWORD: jhdtest
-        run: psql -h 127.0.0.1 -U jhdtest -d jhdtest -v ON_ERROR_STOP=0 -f database/database.postgres.sql > /dev/null 2>&1 || true
+        run: |
+          psql -h 127.0.0.1 -U jhdtest -d jhdtest -v ON_ERROR_STOP=0 -f database/database.postgres.sql > schema.log 2>&1 || true
+          echo "schema errors:"; grep -c ERROR schema.log || true
+          psql -h 127.0.0.1 -U jhdtest -d jhdtest -c "\dt" | head -40
+
       - name: Start PHP server
         env:
           DATABASE_URL: 'postgresql://jhdtest:jhdtest@127.0.0.1:5432/jhdtest?sslmode=disable'
@@ -83,22 +126,45 @@ jobs:
           JHD_PROFILE: '1'
           JHD_PRETTY_URLS: 'true'
         run: |
-          php -S 127.0.0.1:8099 router.php > php-server.log 2>&1 &
+          nohup php -S 127.0.0.1:8099 router.php > php-server.log 2>&1 &
           for i in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:8099/ && break; sleep 1; done
+          echo "--- homepage headers ---"
+          curl -sS -D - -o /dev/null http://127.0.0.1:8099/
+
       - name: Profile routes
+        id: localprof
+        continue-on-error: true
         env:
           TEST_BASE_URL: 'http://127.0.0.1:8099'
-          LABEL: "local-${{ inputs.label && inputs.label || 'push' }}"
+          LABEL: local
           SAMPLES: '5'
           THROTTLE_MS: '0'
-        run: node tests/perf-measure.mjs
-      - name: PHP server log
+          REQUEST_TIMEOUT_MS: '30000'
+        run: node tests/perf-measure.mjs 2>&1 | tee local-report.txt
+
+      - name: Publish local profile
         if: always()
-        run: tail -n 200 php-server.log || true
-      - name: Upload report
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "## Local PHP profile (PostgreSQL service, JHD_PROFILE=1)"
+            echo '```text'
+            tail -n 200 local-report.txt 2>/dev/null || echo "no output"
+            echo '```'
+            echo "### PHP server log (tail)"
+            echo '```text'
+            tail -n 60 php-server.log 2>/dev/null || true
+            echo '```'
+          } > local-comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$(cat local-comment.md)" >/dev/null
+
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
         with:
           name: perf-report-local-${{ inputs.label || 'push' }}-${{ github.run_id }}
-          path: perf-report-*.md
+          path: |
+            perf-report-*.md
+            local-report.txt
+            php-server.log
           if-no-files-found: ignore
