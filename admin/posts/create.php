@@ -111,7 +111,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $raw = saveBase64Thumbnail($_POST['auto_thumbnail'], contentStorageFolder($post_type, $postId));
                     if ($raw) $featImg = $raw;
                 }
-                if ((($_FILES['featured_video']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE)) {
+                $directFeaturedVideo = jhdDirectUploadPath('featured_video');
+                if ($directFeaturedVideo !== '') {
+                    $featVid = adoptDirectUpload($directFeaturedVideo, 'video', contentStorageFolder($post_type, $postId));
+                    if (!$featVid) throw new RuntimeException('ویدیوی شاخص مستقیم در Storage ثبت نشد.' . storageFailureHint());
+                } elseif ((($_FILES['featured_video']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE)) {
                     if (($_FILES['featured_video']['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
                         throw new RuntimeException(jhd_upload_error_message((int)$_FILES['featured_video']['error']));
                     }
