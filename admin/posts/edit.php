@@ -83,7 +83,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $featVid = $post['featured_video'] ?? '';
 
             // آپلود تصویر شاخص جدید
-            if ((($_FILES['featured_image']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE)) {
+            $directFeatured = jhdDirectUploadPath('featured_image');
+            if ($directFeatured !== '') {
+                $up = adoptDirectUpload($directFeatured, 'image', contentStorageFolder($storageEntity, $id));
+                if ($up) {
+                    if ($featImg) scheduleFileDeletion($featImg);
+                    $featImg = $up;
+                } else {
+                    $error = 'خطا در ثبت تصویر شاخص مستقیم در Storage.' . storageFailureHint();
+                }
+            } elseif ((($_FILES['featured_image']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE)) {
                 if (($_FILES['featured_image']['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
                     $error = jhd_upload_error_message((int)$_FILES['featured_image']['error']);
                 } else {
@@ -162,6 +171,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 setPostTopics($id, $topicIds, $primaryTopicId > 0 ? $primaryTopicId : null);
 
                 // تصاویر اضافی تازه (با ترتیب واقعی در post_images.sort_order)
+                foreach (jhdDirectUploadPaths('images') as $directPath) {
+                    $imgPath = adoptDirectUpload($directPath, 'image', contentStorageFolder($storageEntity, $id));
+                    if ($imgPath) {
+                        addPostImageUnique($id, $imgPath, '', false);
+                    } else {
+                        throw new RuntimeException('یکی از تصاویر مستقیم گالری در Storage ثبت نشد.' . storageFailureHint());
+                    }
+                }
                 if (!empty($_FILES['images']['name'][0])) {
                     $imageErrors = [];
                     foreach ($_FILES['images']['name'] as $k => $name) {
