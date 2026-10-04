@@ -269,6 +269,10 @@ function adoptDirectUpload(string $stagingReference, string $kind, string $folde
     $staging = storageKey($stagingReference);
     if ($staging === '' || !str_starts_with($staging, 'staging/') || !in_array($kind, ['image','audio','video','pdf','word'], true)) return '';
     if (!storageFolderIsAllowed($folder)) return '';
+    $pending = getDB()->prepare('SELECT 1 FROM pending_uploads WHERE reference=? LIMIT 1');
+    $pending->execute([storageUrl($staging)]);
+    if (!$pending->fetchColumn()) return '';
+
     $info = supabaseStorageObjectInfo($staging);
     if (empty($info['ok'])) return '';
 
@@ -282,9 +286,15 @@ function adoptDirectUpload(string $stagingReference, string $kind, string $folde
     ];
     if (!in_array($ext, $allowed[$kind], true)) return '';
     $mime = (string)($info['mime'] ?? '');
-    if ($mime === '') $mime = match($kind) {
-        'image'=>'image/jpeg','audio'=>'audio/mpeg','video'=>'video/mp4','pdf'=>'application/pdf','word'=>'application/octet-stream'
-    };
+    $mimeAllowed = [
+        'image'=>['image/jpeg','image/png','image/gif','image/webp'],
+        'audio'=>['audio/mpeg','audio/ogg','audio/wav','audio/x-wav','audio/mp4','audio/x-m4a'],
+        'video'=>['video/mp4','video/webm','video/ogg','video/quicktime','video/x-matroska'],
+        'pdf'=>['application/pdf'],
+        'word'=>['application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+    ];
+    if ($mime === '') $mime = $mimeAllowed[$kind][0];
+    if (!in_array($mime, $mimeAllowed[$kind], true)) return '';
 
     $finalKey = $folder . '/' . bin2hex(random_bytes(20)) . '.' . $ext;
     if (!supabaseStorageMoveObject($staging, $finalKey)) return '';
