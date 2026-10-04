@@ -49,8 +49,6 @@ if (!$alreadyInstalled && $isVercelRuntime) {
         // been configured. The POST path will report the real connection error.
     }
 }
-    }
-}
 
 /*
  * In Vercel Production the installer is never generally public. It can be
