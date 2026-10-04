@@ -55,8 +55,18 @@ const postLogin = async (body, withCookie = true) =>
     body: new URLSearchParams(body).toString(),
   });
 
+// The controller answers a missing/invalid CSRF token by re-rendering the form
+// with an explicit error and WITHOUT attempting authentication (pages/login.php).
+// That is the contract being guarded here, not a particular status code.
 const noCsrf = await postLogin({ identifier: 'nobody@example.com', password: 'wrong-password' });
-check('POST /login without a CSRF token is refused', [400, 403, 419].includes(noCsrf.status) || (await noCsrf.clone().text()).includes('نامعتبر'), `status=${noCsrf.status}`);
+const noCsrfBody = await noCsrf.text();
+check(
+  'POST /login without a CSRF token is refused',
+  [400, 403, 419].includes(noCsrf.status)
+    || (noCsrf.status === 200 && /نشست شما منقضی شده است/.test(noCsrfBody)),
+  `status=${noCsrf.status}`
+);
+check('POST /login without a CSRF token signs nobody in', !/location/i.test(noCsrf.headers.get('location') || '') && !/\/admin\/dashboard|\/account/.test(noCsrf.headers.get('location') || ''));
 
 const badCreds = await postLogin({ csrf_token: token || '', identifier: 'nobody@example.com', password: 'definitely-wrong' });
 const badBody = await badCreds.text();
