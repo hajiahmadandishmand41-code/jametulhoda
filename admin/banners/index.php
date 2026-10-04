@@ -51,8 +51,9 @@ if($_SERVER['REQUEST_METHOD']==='POST' && !isset($_POST['delete'])){
                 $row=$current->fetch();
                 if(!$row) $error='بنر موردنظر یافت نشد.';
                 $image=(string)($row['image'] ?? '');
-                if(!$error && !empty($_FILES['image']['name'])){
-                    $newImage=uploadContentImage($_FILES['image'],'banner',$editId);
+                $directImage = jhdDirectUploadPath('image');
+                if(!$error && $directImage!==''){
+                    $newImage=adoptDirectUpload($directImage,'image',contentStorageFolder('banner',$editId));
                     if(!$newImage) $error='تصویر بنر معتبر نیست.';
                     else { if($image) scheduleFileDeletion($image); $image=$newImage; }
                 }
@@ -64,7 +65,10 @@ if($_SERVER['REQUEST_METHOD']==='POST' && !isset($_POST['delete'])){
                     $insert->execute([$title,$desc ?: null,$link ?: null,$btn ?: null,$active,$sort]);
                     $bannerId=(int)$insert->fetchColumn(); $insert->closeCursor();
                     if($bannerId<1) throw new RuntimeException('شناسه بنر ایجاد نشد.');
-                    if(!empty($_FILES['image']['name'])){
+                    $directImage = jhdDirectUploadPath('image');
+                    if($directImage!==''){
+                        $image=adoptDirectUpload($directImage,'image',contentStorageFolder('banner',$bannerId));
+                    } elseif(!empty($_FILES['image']['name'])){
                         $image=uploadContentImage($_FILES['image'],'banner',$bannerId);
                         if(!$image) throw new RuntimeException('تصویر بنر معتبر نیست.');
                         $db->prepare('UPDATE featured_banners SET image=? WHERE id=?')->execute([$image,$bannerId]);

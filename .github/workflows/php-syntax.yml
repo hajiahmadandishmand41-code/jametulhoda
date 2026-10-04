@@ -1,0 +1,32 @@
+name: PHP syntax check
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  php-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: curl, mbstring, dom, fileinfo, pdo_pgsql, pdo_sqlite, zip
+          coverage: none
+      - name: Lint every PHP file
+        shell: bash
+        run: |
+          set -euo pipefail
+          status=0
+          while IFS= read -r -d '' file; do
+            echo "::group::$file"
+            php -l "$file" || status=1
+            echo "::endgroup::"
+          done < <(find . -type f -name '*.php' -not -path './vendor/*' -print0)
+          exit "$status"

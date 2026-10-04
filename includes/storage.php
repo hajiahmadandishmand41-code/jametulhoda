@@ -49,7 +49,9 @@ function storageKey(string $value): string {
     $root = dirname(__DIR__) . '/';
     if (str_starts_with($value, $root)) $value = substr($value, strlen($root));
     if (str_starts_with($value, UPLOAD_DIR)) $value = 'uploads/' . substr($value, strlen(UPLOAD_DIR));
-    if (str_starts_with($value, UPLOAD_BASE_URL . '/')) $value = substr($value, strlen(UPLOAD_BASE_URL) + 1);
+    $supabasePublicBase = supabaseStoragePublicBaseUrl();
+    if ($supabasePublicBase !== '' && str_starts_with($value, $supabasePublicBase . '/')) $value = substr($value, strlen($supabasePublicBase) + 1);
+    elseif (str_starts_with($value, UPLOAD_BASE_URL . '/')) $value = substr($value, strlen(UPLOAD_BASE_URL) + 1);
     elseif (str_starts_with($value, BASE_PATH . '/uploads/')) $value = substr($value, strlen(BASE_PATH . '/uploads/'));
     elseif (str_starts_with($value, '/uploads/')) $value = substr($value, 9);
     elseif (str_starts_with($value, 'uploads/')) $value = substr($value, 8);
@@ -60,7 +62,7 @@ function storageKey(string $value): string {
     // Legacy single-directory uploads remain readable.  Do not weaken this
     // allowlist: it is the boundary that prevents a database value from being
     // turned into an arbitrary local/S3 key.
-    $folders = ['posts','reports','articles','research','lessons','books','book-covers','topics','site','media','images','documents','avatars','banners',
+    $folders = ['staging','posts','reports','articles','research','lessons','books','book-covers','topics','site','media','images','documents','avatars','banners',
 
                 'audio','video','audios','videos',
                 UPLOAD_IMAGES,UPLOAD_AUDIO,UPLOAD_VIDEO,UPLOAD_DOCUMENTS];
@@ -120,12 +122,226 @@ function contentStorageFolder(string $entity, int $id, array $context = []): str
 function storageFolderIsAllowed(string $folder): bool {
     if (!preg_match('~^(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+$~D', $folder) || str_contains($folder, '..')) return false;
     $root = explode('/', $folder)[0] ?? '';
-    return in_array($root, ['posts','reports','articles','research','lessons','books','book-covers','topics','site','media','images','documents','avatars','banners','audio','video','audios','videos'], true);
+    return in_array($root, ['staging','posts','reports','articles','research','lessons','books','book-covers','topics','site','media','images','documents','avatars','banners','audio','video','audios','videos'], true);
+}
+
+function supabaseStoragePublicBaseUrl(): string {
+    $url = rtrim(trim(env_value('SUPABASE_URL')), '/');
+    $bucket = trim(env_value('SUPABASE_STORAGE_BUCKET', 'site-media'));
+    if ($url === '' || $bucket === '' || !filter_var($url, FILTER_VALIDATE_URL)) return '';
+    return $url . '/storage/v1/object/public/' . rawurlencode($bucket);
+}
+
+function supabaseStorageApiBase(): string {
+    $url = rtrim(trim(env_value('SUPABASE_URL')), '/');
+    if ($url === '' || !filter_var($url, FILTER_VALIDATE_URL)) return '';
+    return $url . '/storage/v1';
+}
+
+function supabaseStorageBucket(): string {
+    return trim(env_value('SUPABASE_STORAGE_BUCKET', 'site-media'));
+}
+
+function supabaseTusEndpoint(): string {
+    $configured = rtrim(trim(env_value('SUPABASE_TUS_ENDPOINT')), '/');
+    if ($configured !== '') return $configured;
+    $api = supabaseStorageApiBase();
+    if ($api === '') return '';
+    $host = (string)parse_url($api, PHP_URL_HOST);
+    if (preg_match('/^([A-Za-z0-9-]+)\\.supabase\\.co$/i', $host, $m)) {
+        return 'https://' . $m[1] . '.storage.supabase.co/storage/v1/upload/resumable';
+    }
+    throw new RuntimeException('برای این Supabase URL، SUPABASE_TUS_ENDPOINT باید تنظیم شود.');
+}
+
+/** Authenticated server-to-Supabase Storage REST request; the service key never reaches the browser. */
+function supabaseStorageRequest(string $method, string $path, array $headers = [], ?string $body = null): array {
+    $base = supabaseStorageApiBase();
+    $serviceKey = trim(env_value('SUPABASE_SERVICE_ROLE_KEY'));
+    if ($base === '' || $serviceKey === '') return [0, '', 'Supabase Storage credentials are not configured.'];
+    $url = $base . '/' . ltrim($path, '/');
+    $ch = curl_init($url);
+    $http = ['apikey: ' . $serviceKey, 'Authorization: Bearer ' . $serviceKey];
+    foreach ($headers as $k => $v) $http[] = $k . ': ' . $v;
+    curl_setopt_array($ch, [
+        CURLOPT_CUSTOMREQUEST => strtoupper($method),
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => $http,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => 60,
+        CURLOPT_FOLLOWLOCATION => false,
+    ]);
+    if ($body !== null) curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+    $response = curl_exec($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $error = curl_error($ch);
+    curl_close($ch);
+    return [$status, $response === false ? '' : (string)$response, $error];
+}
+
+function supabaseStoragePath(string $key): string {
+    $safe = storageKey($key);
+    if ($safe === '') throw new InvalidArgumentException('Invalid Supabase storage key.');
+    return rawurlencode(supabaseStorageBucket()) . '/' . implode('/', array_map('rawurlencode', explode('/', $safe)));
+}
+
+function supabaseCreateSignedUpload(string $key): array {
+    $safe = storageKey($key);
+    if ($safe === '' || !str_starts_with($safe, 'staging/')) return ['ok'=>false,'error'=>'Invalid staging key.'];
+    [$status, $body, $error] = supabaseStorageRequest(
+        'POST',
+        'object/upload/sign/' . rawurlencode(supabaseStorageBucket()) . '/' . implode('/', array_map('rawurlencode', explode('/', $safe))),
+        ['Content-Type'=>'application/json'],
+        json_encode(['upsert'=>false], JSON_UNESCAPED_SLASHES)
+    );
+    if ($status < 200 || $status >= 300) return ['ok'=>false,'error'=>'Supabase signed upload failed (HTTP '.$status.').'.($error!==''?' '.$error:'')];
+    $data = json_decode($body, true);
+    $signed = is_array($data) ? (string)($data['signedURL'] ?? $data['url'] ?? '') : '';
+    $token = is_array($data) ? (string)($data['token'] ?? '') : '';
+    if ($signed !== '' && $token === '') {
+        $query = (string)parse_url($signed, PHP_URL_QUERY);
+        parse_str($query, $params);
+        $token = (string)($params['token'] ?? '');
+    }
+    if ($token === '') return ['ok'=>false,'error'=>'Supabase did not return a signed upload token.'];
+    return ['ok'=>true,'token'=>$token,'signed_url'=>$signed];
+}
+
+function supabaseStorageUploadObject(string $key, string $filePath, string $mime): bool {
+    $safe = storageKey($key);
+    if ($safe === '' || !is_file($filePath)) return false;
+    $payload = @file_get_contents($filePath);
+    if ($payload === false) return false;
+    [$status, , $error] = supabaseStorageRequest(
+        'POST',
+        'object/' . rawurlencode(supabaseStorageBucket()) . '/' . implode('/', array_map('rawurlencode', explode('/', $safe))),
+        ['Content-Type'=>$mime, 'x-upsert'=>'false', 'Cache-Control'=>'public, max-age=31536000, immutable'],
+        $payload
+    );
+    if ($status < 200 || $status >= 300) {
+        error_log('Supabase Storage upload failed with HTTP '.$status.($error!==''?' '.$error:''));
+        return false;
+    }
+    return !empty(supabaseStorageObjectInfo($safe)['ok']);
+}
+
+function supabaseStorageDeleteObject(string $key): bool {
+    $safe = storageKey($key);
+    if ($safe === '') return false;
+    [$status] = supabaseStorageRequest(
+        'DELETE',
+        'object/' . rawurlencode(supabaseStorageBucket()) . '/' . implode('/', array_map('rawurlencode', explode('/', $safe)))
+    );
+    return $status === 200 || $status === 204;
+}
+
+function supabaseStorageObjectInfo(string $key): array {
+    $safe = storageKey($key);
+    if ($safe === '') return ['ok'=>false,'error'=>'Invalid key.'];
+    [$status, $body, $error] = supabaseStorageRequest(
+        'GET',
+        'object/info/' . rawurlencode(supabaseStorageBucket()) . '/' . implode('/', array_map('rawurlencode', explode('/', $safe)))
+    );
+    if ($status !== 200) return ['ok'=>false,'error'=>'Supabase object lookup failed (HTTP '.$status.').'.($error!==''?' '.$error:'')];
+    $data = json_decode($body, true);
+    if (!is_array($data)) return ['ok'=>false,'error'=>'Invalid Supabase object metadata.'];
+    $size = (int)($data['size'] ?? $data['metadata']['size'] ?? 0);
+    return ['ok'=>true,'size'=>$size,'mime'=>(string)($data['mimetype'] ?? $data['metadata']['mimetype'] ?? $data['contentType'] ?? '')];
+}
+
+function supabaseStorageMoveObject(string $sourceKey, string $destinationKey): bool {
+    $source = storageKey($sourceKey); $destination = storageKey($destinationKey);
+    if ($source === '' || $destination === '') return false;
+    [$status, $body] = supabaseStorageRequest(
+        'POST',
+        'object/move',
+        ['Content-Type'=>'application/json'],
+        json_encode([
+            'bucketId'=>supabaseStorageBucket(),
+            'sourceKey'=>$source,
+            'destinationKey'=>$destination,
+        ], JSON_UNESCAPED_SLASHES)
+    );
+    return $status >= 200 && $status < 300 && $body !== '';
+}
+
+function adoptDirectUpload(string $stagingReference, string $kind, string $folder, string $originalName = ''): string {
+    $staging = storageKey($stagingReference);
+    if ($staging === '' || !str_starts_with($staging, 'staging/') || !in_array($kind, ['image','audio','video','pdf','word'], true)) return '';
+    if (!storageFolderIsAllowed($folder)) return '';
+    $pending = getDB()->prepare('SELECT 1 FROM pending_uploads WHERE reference=? LIMIT 1');
+    $pending->execute([storageUrl($staging)]);
+    if (!$pending->fetchColumn()) return '';
+
+    $info = supabaseStorageObjectInfo($staging);
+    if (empty($info['ok'])) return '';
+
+    $ext = strtolower(pathinfo($staging, PATHINFO_EXTENSION));
+    $allowed = [
+        'image'=>['jpg','jpeg','png','gif','webp'],
+        'audio'=>['mp3','ogg','wav','m4a'],
+        'video'=>['mp4','webm','mov','mkv'],
+        'pdf'=>['pdf'],
+        'word'=>['doc','docx'],
+    ];
+    if (!in_array($ext, $allowed[$kind], true)) return '';
+    $mime = (string)($info['mime'] ?? '');
+    $mimeAllowed = [
+        'image'=>['image/jpeg','image/png','image/gif','image/webp'],
+        'audio'=>['audio/mpeg','audio/ogg','audio/wav','audio/x-wav','audio/mp4','audio/x-m4a'],
+        'video'=>['video/mp4','video/webm','video/ogg','video/quicktime','video/x-matroska'],
+        'pdf'=>['application/pdf'],
+        'word'=>['application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+    ];
+    if ($mime === '') $mime = $mimeAllowed[$kind][0];
+    if (!in_array($mime, $mimeAllowed[$kind], true)) return '';
+
+    $finalKey = $folder . '/' . bin2hex(random_bytes(20)) . '.' . $ext;
+    if (!supabaseStorageMoveObject($staging, $finalKey)) return '';
+    $url = storageUrl($finalKey);
+    try {
+        getDB()->prepare('INSERT INTO stored_files (file_key,url,mime,size) VALUES (?,?,?,?)')->execute([$finalKey,$url,$mime,(int)$info['size']]);
+        getDB()->prepare('DELETE FROM pending_uploads WHERE reference=?')->execute([storageUrl($staging)]);
+        $scope =& contentUploadScope();
+        if ($scope['active']) $scope['completed'][] = $url;
+        return $url;
+    } catch (Throwable $e) {
+        // The final object is now unreferenced; queue it for the ordinary storage GC.
+        try { getDB()->prepare('INSERT INTO storage_deletions (reference) VALUES (?) ON CONFLICT DO NOTHING')->execute([$url]); } catch (Throwable) {}
+        return '';
+    }
+}
+
+function jhdDirectUploadPaths(string $field): array {
+    $all = $_POST['jhd_direct'] ?? [];
+    $values = is_array($all) ? ($all[$field] ?? []) : [];
+    if (!is_array($values)) $values = [$values];
+    $out = [];
+    foreach ($values as $value) {
+        if (!is_string($value)) continue;
+        $key = storageKey($value);
+        if ($key !== '' && str_starts_with($key, 'staging/')) $out[] = $key;
+    }
+    return array_values(array_unique($out));
+}
+
+function jhdDirectUploadPath(string $field): string {
+    return jhdDirectUploadPaths($field)[0] ?? '';
+}
+
+function jhdAdoptDirectField(string $field, string $kind, string $entity, int $id, array $context = []): string {
+    $path = jhdDirectUploadPath($field);
+    if ($path === '') return '';
+    return adoptDirectUpload($path, $kind, contentStorageFolder($entity, $id, $context), $field);
 }
 
 function storageUrl(string $key): string {
-    if (!storageKey($key) || $key !== storageKey($key)) throw new InvalidArgumentException('Invalid storage key');
-    return UPLOAD_BASE_URL . '/' . implode('/', array_map('rawurlencode', explode('/', $key)));
+    $safe = storageKey($key);
+    if (!$safe || $key !== $safe) throw new InvalidArgumentException('Invalid storage key');
+    if (storageDriver() === 'supabase') {
+        return supabaseStoragePublicBaseUrl() . '/' . implode('/', array_map('rawurlencode', explode('/', $safe)));
+    }
+    return UPLOAD_BASE_URL . '/' . implode('/', array_map('rawurlencode', explode('/', $safe)));
 }
 
 /**
@@ -140,10 +356,13 @@ function storageUrl(string $key): string {
  */
 function storageDriver(): string {
     $configured = strtolower(trim(env_value('UPLOAD_STORAGE', 'local')));
-    if (in_array($configured, ['s3', 'vercel-blob', 'blob'], true)) {
+    if (in_array($configured, ['supabase','s3','vercel-blob','blob'], true)) {
         return $configured === 'blob' ? 'vercel-blob' : $configured;
     }
     if (env_value('VERCEL') !== '') {
+        if (strtolower(trim(env_value('APP_ENV'))) === 'production' || trim(env_value('SUPABASE_URL')) !== '') {
+            if (trim(env_value('SUPABASE_URL')) !== '' && trim(env_value('SUPABASE_SERVICE_ROLE_KEY')) !== '') return 'supabase';
+        }
         // Never report local storage on Vercel: the filesystem is ephemeral and
         // a local-looking status hides a missing platform credential.
         return blobIsUsable() ? 'vercel-blob' : 'vercel-unconfigured';
@@ -340,7 +559,14 @@ function storageConfigurationStatus(): array {
     $driver = storageDriver();
     $problems = [];
 
-    if ($driver === 's3') {
+    if ($driver === 'supabase') {
+        foreach (['SUPABASE_URL','SUPABASE_SERVICE_ROLE_KEY','SUPABASE_STORAGE_BUCKET'] as $variable) {
+            if (env_value($variable) === '') $problems[] = "$variable تنظیم نشده است.";
+        }
+        if ($problems === [] && !str_starts_with(trim(env_value('SUPABASE_URL')), 'https://')) {
+            $problems[] = 'SUPABASE_URL باید با https:// شروع شود.';
+        }
+    } elseif ($driver === 's3') {
         foreach (['S3_ENDPOINT', 'S3_REGION', 'S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'] as $variable) {
             if (env_value($variable) === '') $problems[] = "$variable تنظیم نشده است.";
         }
@@ -381,7 +607,7 @@ function storageConfigurationStatus(): array {
         'ok' => $problems === [],
         'problems' => $problems,
         'limits' => [
-            'public_base_url' => UPLOAD_BASE_URL,
+            'public_base_url' => $driver === 'supabase' ? supabaseStoragePublicBaseUrl() : UPLOAD_BASE_URL,
             'upload_max_filesize' => (string)ini_get('upload_max_filesize'),
             'post_max_size' => (string)ini_get('post_max_size'),
             'max_file_uploads' => (string)ini_get('max_file_uploads'),
@@ -569,6 +795,14 @@ function storeValidatedFile(string $path, string $kind, string $folder): string 
                 blobDeleteObject($url);
                 throw new RuntimeException('نشانی عمومی فایل ذخیره‌شده در دسترس نیست.');
             }
+        } elseif ($driver === 'supabase') {
+            if (!supabaseStorageUploadObject($key, $path, $info['mime'])) {
+                throw new RuntimeException('Supabase Storage فایل را نپذیرفت.');
+            }
+            if (!storageUrlIsPublic($url)) {
+                supabaseStorageDeleteObject($key);
+                throw new RuntimeException('نشانی عمومی فایل Supabase در دسترس نیست.');
+            }
         } elseif ($driver === 'local') {
             // Local disk is durable on classic/shared hosts (e.g. InfinityFree);
             // Vercel's ephemeral filesystem never reaches this branch.
@@ -582,6 +816,7 @@ function storeValidatedFile(string $path, string $kind, string $folder): string 
         } catch (Throwable $e) {
             if ($driver === 's3') storageClient()->deleteObject(['Bucket'=>env_value('S3_BUCKET'),'Key'=>$key]);
             elseif ($driver === 'vercel-blob') blobDeleteObject($url);
+            elseif ($driver === 'supabase') supabaseStorageDeleteObject($key);
             else @unlink(UPLOAD_DIR . $key);
             throw $e;
         }
@@ -607,6 +842,8 @@ function deleteStoredFile(string $reference): bool {
     } elseif ($driver === 'vercel-blob') {
         $blobUrl = storageUrlSchemeAllowed($reference) ? $reference : storageUrl($key);
         if (!blobDeleteObject($blobUrl)) return false;
+    } elseif ($driver === 'supabase') {
+        if (!supabaseStorageDeleteObject($key)) return false;
     } elseif ($driver === 'local') {
         $path = realpath(UPLOAD_DIR . $key);
         $base = realpath(UPLOAD_DIR);

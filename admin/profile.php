@@ -45,7 +45,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             }
         } else {
             $avatar = $me['avatar'];
-            if (!empty($_FILES['avatar']['name'])) {
+            $directAvatar = jhdDirectUploadPath('avatar');
+            if ($directAvatar !== '') {
+                $uploaded = adoptDirectUpload($directAvatar, 'image', contentStorageFolder('avatar', (int)$me['id']));
+            } elseif (!empty($_FILES['avatar']['name'])) {
                 $uploaded = uploadContentImage($_FILES['avatar'], 'avatar', (int)$me['id']);
                 if ($uploaded === '') {
                     $error = 'بارگذاری تصویر ناموفق بود. فقط تصویر JPG/PNG/WebP/GIF با حجم مجاز پذیرفته می‌شود.';

@@ -106,11 +106,24 @@ try {
                 $single = $_FILES['image'];
                 $slots = ['0' => ['name' => (string)$single['name'], 'type' => (string)($single['type'] ?? ''), 'tmp_name' => (string)$single['tmp_name'], 'error' => (int)($single['error'] ?? UPLOAD_ERR_NO_FILE), 'size' => (int)($single['size'] ?? 0)]];
             }
-            if (empty($slots)) $fail('فایلی برای افزودن به گالری ارسال نشده است.');
+            $directPaths = jhdDirectUploadPaths('images');
+            if (empty($slots) && !$directPaths) $fail('فایلی برای افزودن به گالری ارسال نشده است.');
             $alts = is_array($_POST['alts'] ?? null) ? $_POST['alts'] : [];
             $added = 0;
             $addedIds = [];
             $errors = [];
+
+            foreach ($directPaths as $directIndex => $directPath) {
+                $imgPath = adoptDirectUpload($directPath, 'image', contentStorageFolder($entity, $postId));
+                if ($imgPath === '') { $errors[] = 'یکی از تصاویر مستقیم در Storage معتبر نیست.'; continue; }
+                try {
+                    $addedIds[] = addPostImageUnique($postId, $imgPath, (string)($alts[$directIndex] ?? ''), false);
+                    $added++;
+                } catch (Throwable) {
+                    scheduleFileDeletion($imgPath);
+                    $errors[] = 'ثبت تصویر مستقیم در گالری انجام نشد.';
+                }
+            }
             foreach ($slots as $key => $entry) {
                 if (trim($entry['name']) === '' && $entry['error'] === UPLOAD_ERR_NO_FILE) continue; // untouched empty slot
                 $file = [
@@ -198,9 +211,14 @@ try {
 
         case 'replace':
             $imageId = (int)($_POST['image_id'] ?? 0);
-            $file = $_FILES['image'] ?? null;
-            if (!is_array($file)) $fail('فایلی ارسال نشده است.');
-            $result = replacePostImage($postId, $imageId, $file, $entity);
+            $directImage = jhdDirectUploadPath('image');
+            if ($directImage !== '') {
+                $result = replacePostImageDirect($postId, $imageId, $directImage, $entity);
+            } else {
+                $file = $_FILES['image'] ?? null;
+                if (!is_array($file)) $fail('فایلی ارسال نشده است.');
+                $result = replacePostImage($postId, $imageId, $file, $entity);
+            }
             if (empty($result['ok'])) $fail((string)($result['error'] ?? 'جایگزینی تصویر انجام نشد.'));
             echo json_encode(['ok' => true, 'path' => imgUrl((string)($result['path'] ?? ''))], JSON_UNESCAPED_UNICODE);
             break;

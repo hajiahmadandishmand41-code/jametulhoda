@@ -55,8 +55,9 @@ if(isset($_POST['save_collection'])){
                 $currentRow=$current->fetch();
                 if(!$currentRow) $error='مجموعه موردنظر یافت نشد.';
                 $cover=(string)($currentRow['cover_image'] ?? '');
-                if(!$error && !empty($_FILES['cover_image']['name'])){
-                    $newCover=uploadContentImage($_FILES['cover_image'],'lesson_collection',$editId);
+                $directCover = jhdDirectUploadPath('cover_image');
+                if(!$error && $directCover!==''){
+                    $newCover=adoptDirectUpload($directCover,'image',contentStorageFolder('lesson_collection',$editId));
                     if(!$newCover) $error='خطا در آپلود کاور.';
                     else { if($cover) scheduleFileDeletion($cover); $cover=$newCover; }
                 }
@@ -68,7 +69,10 @@ if(isset($_POST['save_collection'])){
                     $insert->execute([$title,$slug,$desc ?: null,$sort,$is_active,$is_featured]);
                     $collectionId=(int)$insert->fetchColumn(); $insert->closeCursor();
                     if($collectionId<1) throw new RuntimeException('شناسه مجموعه ایجاد نشد.');
-                    if(!empty($_FILES['cover_image']['name'])){
+                    $directCover = jhdDirectUploadPath('cover_image');
+                    if($directCover!==''){
+                        $cover=adoptDirectUpload($directCover,'image',contentStorageFolder('lesson_collection',$collectionId));
+                    } elseif(!empty($_FILES['cover_image']['name'])){
                         $cover=uploadContentImage($_FILES['cover_image'],'lesson_collection',$collectionId);
                         if(!$cover) throw new RuntimeException('خطا در آپلود کاور.');
                         $db->prepare('UPDATE lesson_collections SET cover_image=? WHERE id=?')->execute([$cover,$collectionId]);

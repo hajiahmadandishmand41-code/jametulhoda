@@ -79,6 +79,31 @@ function handleMediaUploads(string $refType, int $refId, array $files, string $k
     $fileTypes = $asList($files['type'] ?? '');
     $sizes     = $asList($files['size'] ?? 0);
     $result = ['provided' => 0, 'uploaded' => 0, 'errors' => [], 'stored' => []];
+
+    // Large files are removed from multipart by the browser bridge and arrive
+    // as signed Supabase staging keys. Infer the matching field kind so every
+    // existing controller automatically supports the direct path.
+    $direct = $_POST['jhd_direct'] ?? [];
+    if (is_array($direct)) {
+        $directPaths = [];
+        foreach ($direct as $field => $paths) {
+            if (!is_string($field)) continue;
+            $fieldKind = str_contains($field, 'audio') ? 'audio'
+                : (str_contains($field, 'video') ? 'video'
+                : ((str_contains($field, 'document') || str_contains($field, 'attachment') || ($field === 'files' && strtolower((string)($_POST['kind'] ?? '')) === 'document')) ? 'document' : ''));
+            if ($fieldKind !== $kind) continue;
+            $list = is_array($paths) ? $paths : [$paths];
+            foreach ($list as $path) if (is_string($path) && $path !== '') $directPaths[] = $path;
+        }
+        if ($directPaths) {
+            $directResult = handleDirectMediaUploads($refType, $refId, array_values(array_unique($directPaths)), $kind, $context);
+            $result['provided'] += (int)$directResult['provided'];
+            $result['uploaded'] += (int)$directResult['uploaded'];
+            $result['errors'] = array_merge($result['errors'], (array)$directResult['errors']);
+            $result['stored'] = array_merge($result['stored'], (array)$directResult['stored']);
+        }
+    }
+
     $uploadError = static function (int $code): string {
         return match ($code) {
             UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => 'اندازهٔ فایل از حد مجاز سرور بیشتر است.',
@@ -218,6 +243,45 @@ function syncPrimaryMediaFile(string $refType, int $refId, string $kind, string 
     $existing->closeCursor();
     if ($exists) return;
     $db->prepare('INSERT INTO media_files (ref_type,ref_id,kind,file_path,title,sort_order,created_at) VALUES (?,?,?,?,?,-1000000,NOW())')->execute([$refType,$refId,$kind,$path,mb_substr($title,0,280)]);
+}
+
+/** Adopt browser-direct uploads that already exist in the Supabase staging area. */
+function handleDirectMediaUploads(string $refType, int $refId, array $paths, string $kind, array $context = []): array {
+    ensureMediaTable();
+    if ($refId < 1 || !in_array($refType, ['post','lesson','book'], true) || !in_array($kind, ['audio','video','document'], true)) {
+        throw new InvalidArgumentException('Invalid direct media upload target.');
+    }
+    $result = ['provided'=>count($paths),'uploaded'=>0,'errors'=>[],'stored'=>[]];
+    if (!$paths) return $result;
+    $folderEntity = $refType === 'post' ? ((string)($context['post_type'] ?? 'post')) : $refType;
+    $folder = contentStorageFolder($folderEntity, $refId, $context);
+    foreach ($paths as $path) {
+        if (!is_string($path) || $path === '') continue;
+        $url = adoptDirectUpload($path, $kind === 'document' ? 'pdf' : $kind, $folder);
+        if ($url === '') {
+            // A direct Word attachment can arrive here through the document input;
+            // infer it from the staging extension when the requested kind is document.
+            $ext = strtolower(pathinfo(storageKey($path), PATHINFO_EXTENSION));
+            if ($kind === 'document' && in_array($ext,['doc','docx'],true)) {
+                $url = adoptDirectUpload($path, 'word', $folder);
+            }
+        }
+        if ($url === '') { $result['errors'][]='یکی از فایل‌های مستقیم در Storage قابل ثبت نبود.'; continue; }
+        $title = basename(parse_url($url, PHP_URL_PATH) ?: $url);
+        try {
+            $stmt = getDB()->prepare('INSERT INTO media_files (ref_type,ref_id,kind,file_path,title,sort_order,created_at)
+                 VALUES (?,?,?,?,?,COALESCE((SELECT MAX(sort_order)+1 FROM media_files x WHERE x.ref_type=? AND x.ref_id=? AND x.kind=?),0),NOW()) RETURNING id');
+            $stmt->execute([$refType,$refId,$kind,$url,$title,$refType,$refId,$kind]);
+            $mediaId=(int)$stmt->fetchColumn(); $stmt->closeCursor();
+            if ($mediaId<1) throw new RuntimeException('Media row id was not created.');
+            $result['uploaded']++;
+            $result['stored'][]=['ref_type'=>$refType,'ref_id'=>$refId,'kind'=>$kind,'path'=>$url];
+        } catch (Throwable $e) {
+            scheduleFileDeletion($url);
+            $result['errors'][]='ثبت متادیتای یکی از فایل‌های مستقیم انجام نشد.';
+        }
+    }
+    return $result;
 }
 
 function deleteMediaFile(int $mediaId, string $refType, int $refId): bool {

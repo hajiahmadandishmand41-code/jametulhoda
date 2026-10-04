@@ -13,6 +13,7 @@ name: Production checks
 on:
   push:
     branches: ['**']
+  pull_request:
   workflow_dispatch:
     inputs:
       target:
@@ -55,19 +56,19 @@ jobs:
         id: probe
         continue-on-error: true
         env:
-          TEST_BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.target || 'https://jametulhoda.vercel.app' }}
+          TEST_BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.target || (github.ref == 'refs/heads/main' && 'https://jametulhoda.vercel.app' || format('https://jametulhoda-git-{0}-eshop4.vercel.app', github.head_ref || github.ref_name)) }}
           PROBE_THROTTLE_MS: '400'
         run: node tests/production-probe.mjs 2>&1 | tee probe-report.txt
 
       # The report is published as a commit comment so it can be read through the
       # GitHub API alone, without access to the Actions log archive.
       - name: Publish the probe report
-        if: always()
+        if: always() && github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           {
-            echo "### Production probe — ${{ github.event_name == 'workflow_dispatch' && inputs.target || 'https://jametulhoda.vercel.app' }}"
+            echo "### Production probe — ${{ github.event_name == 'workflow_dispatch' && inputs.target || (github.ref == 'refs/heads/main' && 'https://jametulhoda.vercel.app' || format('https://jametulhoda-git-{0}-eshop4.vercel.app', github.head_ref || github.ref_name)) }}"
             echo
             echo "- commit: \`${GITHUB_SHA}\`"
             echo "- probe conclusion: ${{ steps.probe.outcome }}"
@@ -118,7 +119,7 @@ jobs:
       - name: Run end-to-end audit
         if: steps.creds.outputs.ready == 'true'
         env:
-          TEST_BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.target || 'https://jametulhoda.vercel.app' }}
+          TEST_BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.target || (github.ref == 'refs/heads/main' && 'https://jametulhoda.vercel.app' || format('https://jametulhoda-git-{0}-eshop4.vercel.app', github.head_ref || github.ref_name)) }}
           JHD_ADMIN_IDENTIFIER: ${{ secrets.JHD_ADMIN_IDENTIFIER }}
           JHD_ADMIN_PASSWORD: ${{ secrets.JHD_ADMIN_PASSWORD }}
           JHD_ADMIN_PASSWORD_ALT: ${{ secrets.JHD_ADMIN_PASSWORD_ALT }}

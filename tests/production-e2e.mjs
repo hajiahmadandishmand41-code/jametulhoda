@@ -20,7 +20,7 @@
  *   JHD_E2E_KEEP=1          keep the created content instead of deleting it
  *   JHD_E2E_OVERSIZE=1      also prove the platform request-size ceiling
  */
-import { request } from '@playwright/test';
+import { chromium, request } from '@playwright/test';
 import fs from 'node:fs';
 import { passSecurityCheckpoint } from './checkpoint.mjs';
 
@@ -95,6 +95,61 @@ if (![302, 303].includes(login.status())) {
 
 const dashboard = await api.get('/admin/');
 check('admin dashboard after login', dashboard.status() === 200, String(dashboard.status()));
+/*
+ * Browser-path verification: exercise the real admin form so the client-side
+ * Supabase TUS bridge gets used. 4 MiB is above the 3.5 MiB direct threshold.
+ */
+const browser = await chromium.launch({ headless: true });
+const browserContext = await browser.newContext({ storageState });
+const page = await browserContext.newPage();
+const directTitle = 'e2e-direct-' + stamp;
+let directPostId = null;
+try {
+  await page.goto(base + '/admin/news/create.php', { waitUntil: 'domcontentloaded', timeout: 90000 });
+  await page.locator('input[name="title"]').fill(directTitle);
+  await page.locator('textarea[name="summary"]').fill('آزمون واقعی مسیر Direct/Resumable Supabase.');
+  await page.locator('textarea[name="content"]').fill('<p>آزمون مستقیم Storage</p>');
+  const directImage = Buffer.concat([imageBuffer, Buffer.alloc(Math.max(0, 4 * 1024 * 1024 - imageBuffer.length))]);
+  await page.locator('input[name="featured_image"]').setInputFiles({
+    name: 'direct-large.png',
+    mimeType: 'image/png',
+    buffer: directImage,
+  });
+  await page.locator('button[type="submit"]').click();
+  await page.waitForFunction(() => new URL(location.href).searchParams.has('id'), { timeout: 180000 });
+  directPostId = new URL(page.url()).searchParams.get('id');
+  check('browser direct/resumable upload form flow', Boolean(directPostId), page.url());
+
+  const directEditHtml = await page.content();
+  check('direct upload stored as Supabase public URL',
+    /https:\/\/qlqytmeqgaugikfmrpvh\.supabase\.co\/storage\/v1\/object\/public\/site-media\//.test(directEditHtml),
+    'Supabase public storage URL found in editor');
+
+  const diagAfterDirect = await api.get('/admin/diagnostics');
+  const diagDirectHtml = await diagAfterDirect.text();
+  const diagRows = [...diagDirectHtml.matchAll(/<td>([a-z_]+)<\/td>\s*<td>([^<]*)<\/td>\s*<td>([^<]*)<\/td>/g)];
+  const storedRow = diagRows.find((m) => m[1] === 'stored_files');
+  check('PostgreSQL stored_files metadata exists after direct upload',
+    Boolean(storedRow && Number.parseInt(storedRow[3].trim(), 10) >= 1),
+    storedRow ? 'rows=' + storedRow[3].trim() : 'stored_files row not found');
+} catch (err) {
+  check('browser direct/resumable upload form flow', false, err?.message || String(err));
+} finally {
+  await browserContext.close().catch(() => {});
+  await browser.close().catch(() => {});
+}
+
+if (directPostId) {
+  const deleteCsrfDirect = csrfOf(await (await api.get('/admin/news/')).text())
+    || csrfOf(await (await api.get('/admin/')).text());
+  const delDirect = await api.post('/admin/news/delete.php', {
+    form: { csrf_token: deleteCsrfDirect, id: directPostId },
+    maxRedirects: 0,
+  });
+  check('direct-upload audit content deleted again', [302, 303].includes(delDirect.status()), String(delDirect.status()));
+  const goneDirect = await api.get('/post.php?slug=' + encodeURIComponent(directTitle));
+  check('direct-upload audit content is no longer public', goneDirect.status() === 404, String(goneDirect.status()));
+}
 
 // ── 3. Database diagnostics: every table the app depends on ─────────────────
 const diag = await api.get('/admin/diagnostics');
