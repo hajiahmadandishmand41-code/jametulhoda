@@ -36,6 +36,8 @@
   async function sign(file, kind) {
     var body = new URLSearchParams();
     body.set('action', 'sign');
+    var csrf = csrfValue();
+    if (csrf) body.set('csrf_token', csrf);
     body.set('name', file.name);
     body.set('size', String(file.size));
     body.set('mime', file.type || 'application/octet-stream');
@@ -120,6 +122,8 @@
     await tusUpload(file, grant);
     var verifyBody = new URLSearchParams();
     verifyBody.set('action', 'finalize');
+    var csrf = csrfValue();
+    if (csrf) verifyBody.set('csrf_token', csrf);
     verifyBody.set('path', grant.path);
     verifyBody.set('size', String(file.size));
     var verify = await fetch('/admin/storage/direct', {
