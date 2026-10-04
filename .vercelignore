@@ -1,8 +1,0 @@
-Dockerfile
-.git
-.github
-tests
-test-results
-node_modules
-*.md
-.env.example
