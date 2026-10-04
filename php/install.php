@@ -21,6 +21,17 @@ $lockPath  = __DIR__ . '/../config/install.lock';
 $isVercelRuntime = env_value('VERCEL') !== '';
 
 /*
+ * This browser installer is intentionally disabled in Vercel Production.
+ * Production credentials and schema are managed by Vercel Environment
+ * Variables + database migrations, never by a public installation form.
+ */
+if ($isVercelRuntime && APP_ENV === 'production') {
+    http_response_code(404);
+    header('Cache-Control: no-store');
+    exit;
+}
+
+/*
  * Vercel Runtime filesystem is ephemeral/read-only for application state.
  * On Vercel, installation state lives in PostgreSQL and connection settings
  * remain in platform Environment Variables. Shared hosting still uses the
@@ -53,10 +64,10 @@ if (!$alreadyInstalled) {
 
 $defaults = [
     'db_driver' => env_value('DB_DRIVER', env_value('DATABASE_URL') !== '' ? 'pgsql' : 'mysql'),
-    'db_host' => env_value('DB_HOST'),
-    'db_port' => env_value('DB_PORT', env_value('DATABASE_URL') !== '' ? '5432' : '3306'),
+    'db_host' => '',
+    'db_port' => env_value('DATABASE_URL') !== '' ? '5432' : '3306',
     'db_name' => env_value('DB_NAME', 'postgres'),
-    'db_user' => env_value('DB_USER'),
+    'db_user' => '',
     'site_url' => env_value('SITE_URL', ''),
     'admin_username' => env_value('ADMIN_USERNAME', DEFAULT_ADMIN_USERNAME),
     'admin_name' => env_value('ADMIN_NAME', 'مدیر سایت'),
@@ -127,19 +138,34 @@ if (!$alreadyInstalled && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         jhd_string_field($_POST, $key, $default);
 
     try {
-        $driver = strtolower(trim($field('db_driver', $defaults['db_driver'])));
-        if (!in_array($driver, ['pgsql', 'mysql'], true)) {
-            throw new RuntimeException('نوع دیتابیس باید PostgreSQL یا MySQL باشد.');
-        }
+        if ($isVercelRuntime) {
+            // Vercel never accepts a second, browser-supplied DB endpoint.
+            // The installer and application share exactly the same canonical
+            // DATABASE_URL + Vercel-managed password source.
+            $driver = 'pgsql';
+            $runtimeUrl = postgresDatabaseUrl();
+            $runtimeParsed = parse_url($runtimeUrl);
+            $host = strtolower((string)($runtimeParsed['host'] ?? ''));
+            $port = (int)($runtimeParsed['port'] ?? 5432);
+            $name = rawurldecode(ltrim((string)($runtimeParsed['path'] ?? ''), '/'));
+            $user = rawurldecode((string)($runtimeParsed['user'] ?? ''));
+            $pass = '';
+            $pdo = newDatabaseConnection();
+        } else {
+            $driver = strtolower(trim($field('db_driver', $defaults['db_driver'])));
+            if (!in_array($driver, ['pgsql', 'mysql'], true)) {
+                throw new RuntimeException('نوع دیتابیس باید PostgreSQL یا MySQL باشد.');
+            }
 
-        $host = trim($field('db_host', $defaults['db_host']));
-        $port = (int)$field('db_port', $defaults['db_port']);
-        $name = trim($field('db_name', $defaults['db_name']));
-        $user = trim($field('db_user', $defaults['db_user']));
-        $pass = $field('db_pass');
+            $host = trim($field('db_host', $defaults['db_host']));
+            $port = (int)$field('db_port', $defaults['db_port']);
+            $name = trim($field('db_name', $defaults['db_name']));
+            $user = trim($field('db_user', $defaults['db_user']));
+            $pass = $field('db_pass');
 
-        if ($host === '' || $name === '' || $user === '' || $pass === '') {
-            throw new RuntimeException('Host، Port، Database، User و Password را کامل وارد کنید.');
+            if ($host === '' || $name === '' || $user === '' || $pass === '') {
+                throw new RuntimeException('Host، Port، Database، User و Password را کامل وارد کنید.');
+            }
         }
 
         $siteUrl = rtrim(trim($field('site_url', $defaults['site_url'])), '/');
@@ -169,18 +195,20 @@ if (!$alreadyInstalled && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             throw new RuntimeException('ایمیل مدیر معتبر نیست.');
         }
 
-        if ($driver === 'pgsql') {
-            $dsn = installerPgDsn($host, $port, $name);
-        } else {
-            $dsn = installerMysqlDsn($host, $port, $name);
-        }
+        if (!$isVercelRuntime) {
+            if ($driver === 'pgsql') {
+                $dsn = installerPgDsn($host, $port, $name);
+            } else {
+                $dsn = installerMysqlDsn($host, $port, $name);
+            }
 
-        $pdo = new PDO($dsn, $user, $pass, [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES => false,
-            PDO::ATTR_PERSISTENT => false,
-        ]);
+            $pdo = new PDO($dsn, $user, $pass, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES => false,
+                PDO::ATTR_PERSISTENT => false,
+            ]);
+        }
 
         $version = (string)$pdo->getAttribute(PDO::ATTR_SERVER_VERSION);
         $step('اتصال به دیتابیس', true, strtoupper($driver) . ' — نسخه سرور: ' . $version);
