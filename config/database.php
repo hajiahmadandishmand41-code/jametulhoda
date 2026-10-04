@@ -429,12 +429,60 @@ function newDatabaseConnection(): PDO {
     if (!in_array($ssl, ['require', 'verify-ca', 'verify-full'], true)) {
         throw new DatabaseUnavailableException('Unsupported sslmode in DATABASE_URL. Use sslmode=require for Supabase/Neon.');
     }
-    $host = $url['host'] ?? '';
+
+    $host = strtolower((string)($url['host'] ?? ''));
+    $port = (int)($url['port'] ?? 5432);
     $name = rawurldecode(ltrim($url['path'] ?? '', '/'));
+    $user = rawurldecode($url['user'] ?? '');
+    $pass = rawurldecode($url['pass'] ?? '');
+
     if (!preg_match('/^[a-zA-Z0-9.:-]+$/', $host) || !preg_match('/^[\w-]+$/', $name)) {
         throw new DatabaseUnavailableException('Invalid database host or name.');
     }
-    $dsn = 'pgsql:host=' . $host . ';port=' . (int)($url['port'] ?? 5432) . ';dbname=' . $name . ';sslmode=' . $ssl . ';connect_timeout=10';
+    if ($user === '') {
+        throw new DatabaseUnavailableException('DATABASE_URL must include a PostgreSQL username.');
+    }
+
+    // Vercel Production is IPv4-only for this deployment. Supabase direct
+    // db.<project-ref>.supabase.co is IPv6 by default, so Production must use
+    // the shared Session Pooler on port 5432. The pooler cluster index cannot
+    // be derived safely from the project region; the host must come from the
+    // Supabase Connect dialog and be stored in DATABASE_URL.
+    if (env_value('VERCEL') !== '' && APP_ENV === 'production') {
+        if ($port !== 5432 || !preg_match('/^aws-\d+-[a-z0-9-]+\.pooler\.supabase\.com$/', $host)) {
+            throw new DatabaseUnavailableException(
+                'Vercel Production requires the Supabase Session Pooler: aws-[INDEX]-[REGION].pooler.supabase.com:5432.'
+            );
+        }
+
+        $supabaseUrlHost = strtolower((string)parse_url(env_value('SUPABASE_URL'), PHP_URL_HOST));
+        $projectRef = '';
+        if (preg_match('/^([a-z0-9]+)\.supabase\.co$/', $supabaseUrlHost, $m)) {
+            $projectRef = $m[1];
+        }
+        if ($projectRef !== '' && $user !== 'postgres.' . $projectRef) {
+            throw new DatabaseUnavailableException(
+                'Vercel Production DATABASE_URL must use the Supabase Session Pooler username postgres.' . $projectRef . '.'
+            );
+        }
+        if (strtolower($name) !== 'postgres') {
+            throw new DatabaseUnavailableException('Vercel Production DATABASE_URL must use database postgres.');
+        }
+    }
+
+    // Keep the database password out of DATABASE_URL when Vercel supplies it
+    // as the integration-owned Secret POSTGRES_PASSWORD. A full password in
+    // DATABASE_URL remains supported for local/legacy deployments.
+    if ($pass === '') {
+        $pass = env_value('DATABASE_PASSWORD', env_value('POSTGRES_PASSWORD'));
+    }
+    if ($pass === '') {
+        throw new DatabaseUnavailableException(
+            'DATABASE_URL has no password and no DATABASE_PASSWORD/POSTGRES_PASSWORD secret is configured.'
+        );
+    }
+
+    $dsn = 'pgsql:host=' . $host . ';port=' . $port . ';dbname=' . $name . ';sslmode=' . $ssl . ';connect_timeout=10';
     // Neon requires SNI/endpoint routing; the endpoint option keeps pooled and
     // direct hostnames working with older libpq builds.
     if (isset($options['options']) && is_string($options['options']) && $options['options'] !== '') {
@@ -444,7 +492,7 @@ function newDatabaseConnection(): PDO {
         $ca = '/etc/ssl/certs/ca-certificates.crt';
         if (is_file($ca)) $dsn .= ';sslrootcert=' . $ca;
     }
-    $pdo = new PDO($dsn, rawurldecode($url['user'] ?? ''), rawurldecode($url['pass'] ?? ''), [
+    $pdo = new PDO($dsn, $user, $pass, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
