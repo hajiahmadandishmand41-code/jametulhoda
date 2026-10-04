@@ -30,7 +30,7 @@ function jhd_profile_enabled(): bool {
 
 /** Mutable counters for the current request. */
 function &jhd_profile_state(): array {
-    static $state = ['queries' => 0, 'db_ms' => 0.0, 'connects' => 0, 'connect_ms' => 0.0, 'fingerprints' => []];
+    static $state = ['queries' => 0, 'db_ms' => 0.0, 'connects' => 0, 'connect_ms' => 0.0, 'fingerprints' => [], 'samples' => []];
     return $state;
 }
 
@@ -41,6 +41,7 @@ function jhd_profile_record_query(string $sql, float $ms): void {
     $state['db_ms'] += $ms;
     $key = substr(md5(preg_replace('/\s+/', ' ', $sql) ?? $sql), 0, 8);
     $state['fingerprints'][$key] = ($state['fingerprints'][$key] ?? 0) + 1;
+    $state['samples'][$key] = $sql;
 }
 
 function jhd_profile_record_connect(float $ms): void {
@@ -82,6 +83,28 @@ function jhd_profile_boot(): void {
             session_status() === PHP_SESSION_ACTIVE ? 'on' : 'off',
             (int)round(memory_get_peak_usage(true) / 1024)
         ), false);
+        // Duplicate statements are the cheapest big win there is, so name them
+        // in the log (SQL text only — never bound values).
+        if (env_value('JHD_PROFILE_LOG') === '1') {
+            arsort($state['samples']);
+            $top = [];
+            foreach ($state['samples'] as $key => $sql) {
+                $count = $state['fingerprints'][$key] ?? 0;
+                if ($count < 2) continue;
+                $top[] = $count . 'x ' . preg_replace('/\s+/', ' ', substr($sql, 0, 120));
+                if (count($top) >= 12) break;
+            }
+            error_log(sprintf(
+                'JHD_PROFILE %s q=%d dup=%d conn=%d db=%.1fms total=%.1fms | %s',
+                (string)($_SERVER['REQUEST_URI'] ?? '-'),
+                $state['queries'],
+                jhd_profile_duplicate_queries(),
+                $state['connects'],
+                $state['db_ms'] + $state['connect_ms'],
+                $total,
+                implode(' || ', $top)
+            ));
+        }
     });
 }
 

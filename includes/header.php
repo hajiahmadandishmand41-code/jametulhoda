@@ -141,7 +141,21 @@ $isActiveNav = function (string $route) use ($currentPath): bool {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#103d2e">
 <meta name="plyr-sprite" content="<?= asset('vendor/plyr.svg') ?>">
-<?php if ($jhdPublicDbReady): ?><meta name="csrf-token" content="<?= sanitize(generateCsrfToken()) ?>"><?php endif; ?>
+<?php
+/**
+ * CSRF meta tag.
+ *
+ * It is emitted only when a session already exists. Measured reason: no script
+ * in this project reads `meta[name=csrf-token]` (grep over assets/js, admin,
+ * includes, pages finds zero consumers), yet generateCsrfToken() force-starts
+ * a database-backed session. That single tag was opening a SECOND PostgreSQL
+ * connection, running two CREATE TABLE IF NOT EXISTS statements and taking a
+ * `SELECT … FOR UPDATE` row lock on every anonymous page view.
+ *
+ * Forms keep using csrfField(), which still creates the session on demand, so
+ * CSRF protection is unchanged.
+ */
+if ($jhdPublicDbReady && session_status() === PHP_SESSION_ACTIVE): ?><meta name="csrf-token" content="<?= sanitize(generateCsrfToken()) ?>"><?php endif; ?>
 <title><?= sanitize($metaTitle) ?></title>
 <meta name="description" content="<?= sanitize($metaDesc) ?>">
 <?php if ($noindexSeo): ?><meta name="robots" content="noindex, follow"><?php endif; ?>

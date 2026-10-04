@@ -126,6 +126,7 @@ jobs:
           DATABASE_URL: 'postgresql://jhdtest:jhdtest@127.0.0.1:5432/jhdtest?sslmode=disable'
           APP_ENV: development
           JHD_PROFILE: '1'
+          JHD_PROFILE_LOG: '1'
           JHD_PRETTY_URLS: 'true'
         run: |
           nohup php -S 127.0.0.1:8099 router.php > php-server.log 2>&1 &
@@ -156,7 +157,7 @@ jobs:
             echo '```'
             echo "### PHP server log (tail)"
             echo '```text'
-            tail -n 60 php-server.log 2>/dev/null || true
+            grep -o 'JHD_PROFILE .*' php-server.log 2>/dev/null | sort -u | head -n 30 || true
             echo '```'
           } > local-comment.md
           gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$(cat local-comment.md)" >/dev/null
