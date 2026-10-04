@@ -41,10 +41,11 @@ jobs:
         env:
           TEST_BASE_URL: ${{ inputs.target || vars.PERF_TARGET || 'https://jametulhoda.vercel.app' }}
           LABEL: home-${{ inputs.label || 'push' }}
-          SAMPLES: '8'
+          SAMPLES: '6'
           THROTTLE_MS: '500'
-          REQUEST_TIMEOUT_MS: '120000'
+          REQUEST_TIMEOUT_MS: '90000'
           ONLY_PATHS: '/'
+          SKIP_ASSETS: '1'
         run: node tests/perf-measure.mjs 2>&1 | tee home-report.txt
 
       - name: Full route + asset sweep
@@ -53,9 +54,10 @@ jobs:
         env:
           TEST_BASE_URL: ${{ inputs.target || vars.PERF_TARGET || 'https://jametulhoda.vercel.app' }}
           LABEL: ${{ inputs.label || 'push' }}
-          SAMPLES: ${{ inputs.samples || '2' }}
+          SAMPLES: ${{ inputs.samples || '1' }}
+          ASSET_SAMPLES: '2'
           THROTTLE_MS: '150'
-          REQUEST_TIMEOUT_MS: '45000'
+          REQUEST_TIMEOUT_MS: '40000'
         run: node tests/perf-measure.mjs 2>&1 | tee sweep-report.txt
 
       - name: Publish measurement

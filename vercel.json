@@ -10,6 +10,34 @@
     }
   },
   "routes": [
-    { "src": "/(.*)", "dest": "/api/index.php" }
+    {
+      "src": "^/assets/.+\\.(?:css|js|mjs|woff|woff2)$",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable",
+        "X-Content-Type-Options": "nosniff"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/assets/.+\\.(?:svg|png|jpe?g|webp|gif|ico)$",
+      "headers": {
+        "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
+        "X-Content-Type-Options": "nosniff"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/assets/.+\\.(?:php|phtml|phar|ini|env|lock|json|sql|htaccess)$",
+      "dest": "/api/index.php"
+    },
+    {
+      "src": "^/(?!assets/).*$",
+      "dest": "/api/index.php"
+    },
+    { "handle": "filesystem" },
+    {
+      "src": "/(.*)",
+      "dest": "/api/index.php"
+    }
   ]
 }

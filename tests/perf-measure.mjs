@@ -22,6 +22,7 @@ const throttle = Number(process.env.THROTTLE_MS || 250);
 // CI budget and we learn nothing about the remaining routes.
 const timeoutMs = Number(process.env.REQUEST_TIMEOUT_MS || 60000);
 const only = (process.env.ONLY_PATHS || '').split(',').map((s) => s.trim()).filter(Boolean);
+const assetSamples = Number(process.env.ASSET_SAMPLES || samples);
 
 const DOCUMENT_ROUTES = [
   '/', '/login', '/register', '/topics', '/news', '/articles', '/lessons',
@@ -84,10 +85,10 @@ async function measureOnce(url) {
   }
 }
 
-async function measure(path) {
+async function measure(path, n = samples) {
   const url = base + path;
   const runs = [];
-  for (let i = 0; i < samples; i++) {
+  for (let i = 0; i < n; i++) {
     runs.push(await measureOnce(url));
     await sleep(throttle);
   }
@@ -139,7 +140,7 @@ function table(rows, title) {
 }
 
 const docList = only.length ? only : DOCUMENT_ROUTES;
-const assetList = only.length ? [] : STATIC_ASSETS;
+const assetList = process.env.SKIP_ASSETS === '1' ? [] : STATIC_ASSETS;
 
 console.log(`# Perf measurement — ${label}`);
 console.log(`target: ${base}`);
@@ -156,7 +157,7 @@ for (const p of docList) {
 
 const assetRows = [];
 for (const p of assetList) {
-  const r = await measure(p);
+  const r = await measure(p, assetSamples);
   assetRows.push(r);
   console.log(`  ${p} -> ${r.statuses.join('/')}  ttfb(med)=${fmt(r.medTtfb)} cache=${r.headers['x-vercel-cache'] || '—'}`);
 }

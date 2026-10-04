@@ -59,6 +59,39 @@ function ensureCoreAuthTables(): void {
     }
 }
 
+/** Did the visitor send our session cookie? (No cookie ⇒ nobody is signed in.) */
+function jhd_has_session_cookie(): bool {
+    $value = $_COOKIE[SESSION_NAME] ?? null;
+    return is_string($value) && $value !== '';
+}
+
+/**
+ * Session for a PUBLIC page — created only when it can possibly matter.
+ *
+ * Measured reason (not a guess): every session_start() on the database handler
+ * opens a SECOND PostgreSQL connection, runs two CREATE TABLE IF NOT EXISTS
+ * statements, then `BEGIN; INSERT … ON CONFLICT DO NOTHING; SELECT … FOR
+ * UPDATE` and holds that row lock plus an open transaction until the request
+ * ends. For an anonymous visitor reading the homepage none of that work has a
+ * consumer: there is no session to read and nothing to persist.
+ *
+ * So: a session is started for a public page only when
+ *   • the visitor already carries a session cookie (returning / signed-in), or
+ *   • the request is not a plain GET/HEAD (POST needs CSRF state).
+ * Everything that genuinely needs session state — login, CSRF token
+ * generation, the admin panel, the member area — keeps calling
+ * startSecureSession() directly and is unaffected.
+ */
+function startPublicSession(): void {
+    if (session_status() === PHP_SESSION_ACTIVE) return;
+    $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+    if ($method !== 'GET' && $method !== 'HEAD') {
+        startSecureSession();
+        return;
+    }
+    if (jhd_has_session_cookie()) startSecureSession();
+}
+
 function startSecureSession(): void {
     if (session_status() === PHP_SESSION_NONE) {
         // Keep session IDs long and hexadecimal for strong entropy and stable security audits.
@@ -111,6 +144,13 @@ function startSecureSession(): void {
 function jhd_session_user(bool $refresh = false): ?array {
     static $cache = null;
     if ($cache !== null && !$refresh) return $cache ?: null;
+    // Without a session cookie nobody can be signed in. Answering that from the
+    // cookie alone avoids creating an empty database-backed session (and its
+    // extra connection, DDL and row lock) on every anonymous page view.
+    if (session_status() !== PHP_SESSION_ACTIVE && !jhd_has_session_cookie()) {
+        $cache = false;
+        return null;
+    }
     startSecureSession();
     $cache = false;
     $id = (int)($_SESSION['uid'] ?? 0);
