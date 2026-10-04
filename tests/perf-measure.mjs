@@ -132,7 +132,7 @@ function table(rows, title) {
       r.bytes,
       r.headers['x-vercel-cache'] || '—',
       (r.headers['cache-control'] || '—').slice(0, 48),
-      (r.headers['server-timing'] || '—').slice(0, 70),
+      (r.headers['server-timing'] || '—').slice(0, 220),
     ].join(' | '));
   }
   out.push('');

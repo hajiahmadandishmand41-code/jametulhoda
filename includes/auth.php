@@ -121,6 +121,12 @@ function startSecureSession(): void {
         } elseif (APP_ENV === 'production' || env_value('VERCEL')) {
             throw new RuntimeException('Production requires database sessions.');
         }
+        // PHP's default cache limiter ("nocache") rewrites Cache-Control to
+        // `no-store, no-cache, must-revalidate` the moment a session starts,
+        // silently overriding the policy the application already decided.
+        // Caching is owned by includes/header.php (and by the admin pages,
+        // which set their own no-store), so disable the implicit one.
+        session_cache_limiter('');
         session_name(SESSION_NAME);
         $cookiePath = (defined('BASE_PATH') && BASE_PATH !== '') ? BASE_PATH . '/' : '/';
         session_set_cookie_params([

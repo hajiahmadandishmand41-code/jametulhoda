@@ -71,7 +71,7 @@ function jhd_profile_boot(): void {
         $total = (microtime(true) - JHD_REQUEST_START) * 1000;
         $db = $state['db_ms'] + $state['connect_ms'];
         header(sprintf(
-            'Server-Timing: total;dur=%.1f, php;dur=%.1f, db;dur=%.1f, dbconnect;dur=%.1f, q;desc="%d", qdup;desc="%d", conn;desc="%d", mem;desc="%d"',
+            'Server-Timing: total;dur=%.1f, php;dur=%.1f, db;dur=%.1f, dbconnect;dur=%.1f, q;desc="%d", qdup;desc="%d", conn;desc="%d", sess;desc="%s", mem;desc="%d"',
             $total,
             max(0, $total - $db),
             $state['db_ms'],
@@ -79,6 +79,7 @@ function jhd_profile_boot(): void {
             $state['queries'],
             jhd_profile_duplicate_queries(),
             $state['connects'],
+            session_status() === PHP_SESSION_ACTIVE ? 'on' : 'off',
             (int)round(memory_get_peak_usage(true) / 1024)
         ), false);
     });
