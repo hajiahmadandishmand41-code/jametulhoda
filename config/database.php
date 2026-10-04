@@ -476,9 +476,35 @@ function newDatabaseConnection(): PDO {
     if ($pass === '') {
         $pass = env_value('DATABASE_PASSWORD', env_value('POSTGRES_PASSWORD'));
     }
+
+    // The Supabase Vercel integration also exposes the canonical PostgreSQL
+    // connection as a sensitive POSTGRES_URL. Never use its host as the
+    // production endpoint; DATABASE_URL remains authoritative for host/port/db.
+    // We only borrow the password when the integration URL identifies the same
+    // PostgreSQL user and database as DATABASE_URL.
+    if ($pass === '') {
+        $integrationUrls = [
+            env_value('POSTGRES_URL'),
+            env_value('POSTGRES_PRISMA_URL'),
+            env_value('POSTGRES_URL_NON_POOLING'),
+        ];
+        foreach ($integrationUrls as $integrationUrl) {
+            if (trim($integrationUrl) === '') continue;
+            $integration = parse_url($integrationUrl);
+            if (!$integration) continue;
+            $integrationUser = rawurldecode((string)($integration['user'] ?? ''));
+            $integrationDb = rawurldecode(ltrim((string)($integration['path'] ?? ''), '/'));
+            $integrationPass = rawurldecode((string)($integration['pass'] ?? ''));
+            if ($integrationUser === $user && $integrationDb === $name && $integrationPass !== '') {
+                $pass = $integrationPass;
+                break;
+            }
+        }
+    }
+
     if ($pass === '') {
         throw new DatabaseUnavailableException(
-            'DATABASE_URL has no password and no DATABASE_PASSWORD/POSTGRES_PASSWORD secret is configured.'
+            'DATABASE_URL has no password and no DATABASE_PASSWORD/POSTGRES_PASSWORD or matching Vercel POSTGRES_URL secret is configured.'
         );
     }
 
