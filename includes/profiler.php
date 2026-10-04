@@ -22,10 +22,22 @@ if (!defined('JHD_REQUEST_START')) {
     define('JHD_REQUEST_START', (float)($_SERVER['REQUEST_TIME_FLOAT'] ?? microtime(true)));
 }
 
+/**
+ * Profiling is ON by default.
+ *
+ * The `Server-Timing` header it produces is how this deployment proves where a
+ * request spent its time — PHP vs. database connect vs. database queries, plus
+ * the query count and the serving region. That is operational telemetry, not a
+ * secret: it exposes no SQL, no values, no credentials and no user data.
+ * Set JHD_PROFILE=0 to switch it off completely.
+ *
+ * The verbose per-request query log is separate and stays opt-in
+ * (JHD_PROFILE_LOG=1).
+ */
 function jhd_profile_enabled(): bool {
     static $on = null;
     if ($on !== null) return $on;
-    return $on = (env_value('JHD_PROFILE') === '1');
+    return $on = (env_value('JHD_PROFILE', '1') !== '0');
 }
 
 /** Mutable counters for the current request. */
@@ -71,6 +83,11 @@ function jhd_profile_boot(): void {
         $state =& jhd_profile_state();
         $total = (microtime(true) - JHD_REQUEST_START) * 1000;
         $db = $state['db_ms'] + $state['connect_ms'];
+        // Which edge region served this request? Together with dbconnect;dur
+        // this is what separates a slow application from a slow network path
+        // between the function and the database.
+        $region = preg_replace('/[^a-zA-Z0-9_-]/', '', (string)env_value('VERCEL_REGION'));
+        $regionPart = $region !== '' ? ', region;desc="' . $region . '"' : '';
         header(sprintf(
             'Server-Timing: total;dur=%.1f, php;dur=%.1f, db;dur=%.1f, dbconnect;dur=%.1f, q;desc="%d", qdup;desc="%d", conn;desc="%d", sess;desc="%s", mem;desc="%d"',
             $total,
@@ -82,7 +99,7 @@ function jhd_profile_boot(): void {
             $state['connects'],
             session_status() === PHP_SESSION_ACTIVE ? 'on' : 'off',
             (int)round(memory_get_peak_usage(true) / 1024)
-        ), false);
+        ) . $regionPart, false);
         // Duplicate statements are the cheapest big win there is, so name them
         // in the log (SQL text only — never bound values).
         if (env_value('JHD_PROFILE_LOG') === '1') {
