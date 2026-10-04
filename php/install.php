@@ -19,17 +19,13 @@ require_once __DIR__ . '/../config/database.php';
 $localPath = __DIR__ . '/../config/local.php';
 $lockPath  = __DIR__ . '/../config/install.lock';
 $isVercelRuntime = env_value('VERCEL') !== '';
+$installerEnabled = env_value('INSTALLER_ENABLED') === '1';
 
 /*
- * This browser installer is intentionally disabled in Vercel Production.
- * Production credentials and schema are managed by Vercel Environment
- * Variables + database migrations, never by a public installation form.
+ * Vercel Production installer is a one-time bootstrap tool only.
+ * It requires an explicit platform switch and locks automatically after the
+ * persistent installation marker exists. It never writes credentials to disk.
  */
-if ($isVercelRuntime && APP_ENV === 'production') {
-    http_response_code(404);
-    header('Cache-Control: no-store');
-    exit;
-}
 
 /*
  * Vercel Runtime filesystem is ephemeral/read-only for application state.
@@ -52,6 +48,20 @@ if (!$alreadyInstalled && $isVercelRuntime) {
         // The installer must remain reachable when the database has not yet
         // been configured. The POST path will report the real connection error.
     }
+}
+    }
+}
+
+/*
+ * In Vercel Production the installer is never generally public. It can be
+ * opened only for a deliberate one-time bootstrap by setting INSTALLER_ENABLED=1.
+ * Once installation_completed=1 exists, it remains locked even if the switch
+ * is accidentally left enabled.
+ */
+if ($isVercelRuntime && APP_ENV === 'production' && (!$installerEnabled || $alreadyInstalled)) {
+    http_response_code(404);
+    header('Cache-Control: no-store');
+    exit;
 }
 
 if (!$alreadyInstalled) {
@@ -257,7 +267,7 @@ if (!$alreadyInstalled && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $step('بررسی ۲۲ جدول پروژه', true, 'همه جداول مورد نیاز از قبل وجود دارند و دوباره ساخته نمی‌شوند.');
 
         $databaseUrl = $driver === 'pgsql'
-            ? installerPostgresUrl($host, $port, $name, $user, $pass)
+            ? ($isVercelRuntime ? $runtimeUrl : installerPostgresUrl($host, $port, $name, $user, $pass))
             : '';
 
         $localConfig = [
