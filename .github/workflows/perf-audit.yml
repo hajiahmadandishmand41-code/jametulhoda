@@ -145,6 +145,24 @@ jobs:
           REQUEST_TIMEOUT_MS: '30000'
         run: node tests/perf-measure.mjs 2>&1 | tee local-report.txt
 
+      - name: Restore pre-optimisation baseline and re-profile
+        id: baseline
+        continue-on-error: true
+        env:
+          DATABASE_URL: 'postgresql://jhdtest:jhdtest@127.0.0.1:5432/jhdtest?sslmode=disable'
+          APP_ENV: development
+          JHD_PROFILE: '1'
+          JHD_PROFILE_LOG: '1'
+          JHD_PRETTY_URLS: 'true'
+        run: |
+          pkill -f 'php -S 127.0.0.1:8099' || true
+          tests/perf-baseline-restore.sh ${{ vars.PERF_BASELINE_SHA || 'c3a45c36f477a29e678436d73d7ca216c05f8d79' }}
+          nohup php -S 127.0.0.1:8099 router.php > php-baseline.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:8099/ && break; sleep 1; done
+          TEST_BASE_URL=http://127.0.0.1:8099 LABEL=local-baseline SAMPLES=5 THROTTLE_MS=0 \
+            REQUEST_TIMEOUT_MS=30000 node tests/perf-measure.mjs 2>&1 | tee local-baseline.txt
+          git checkout -- . || true
+
       - name: Publish local profile
         if: always()
         env:
@@ -155,9 +173,16 @@ jobs:
             echo '```text'
             tail -n 200 local-report.txt 2>/dev/null || echo "no output"
             echo '```'
-            echo "### PHP server log (tail)"
+            echo "### AFTER — per-request profile (unique)"
             echo '```text'
-            grep -o 'JHD_PROFILE .*' php-server.log 2>/dev/null | sort -u | head -n 30 || true
+            grep -o 'JHD_PROFILE .*' php-server.log 2>/dev/null | awk '{print $2, $3, $4, $5, $6, $7}' | sort -u | head -n 30 || true
+            echo '```'
+            echo "### BEFORE — pre-optimisation baseline (same instrument)"
+            echo '```text'
+            grep -E '^  /' local-baseline.txt 2>/dev/null | head -n 30 || echo "baseline step did not run"
+            echo '```'
+            echo '```text'
+            grep -o 'JHD_PROFILE .*' php-baseline.log 2>/dev/null | awk '{print $2, $3, $4, $5, $6, $7}' | sort -u | head -n 30 || true
             echo '```'
           } > local-comment.md
           gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$(cat local-comment.md)" >/dev/null
