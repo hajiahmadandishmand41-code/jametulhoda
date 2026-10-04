@@ -220,6 +220,44 @@ function syncPrimaryMediaFile(string $refType, int $refId, string $kind, string 
     $db->prepare('INSERT INTO media_files (ref_type,ref_id,kind,file_path,title,sort_order,created_at) VALUES (?,?,?,?,?,-1000000,NOW())')->execute([$refType,$refId,$kind,$path,mb_substr($title,0,280)]);
 }
 
+/** Adopt browser-direct uploads that already exist in the Supabase staging area. */
+function handleDirectMediaUploads(string $refType, int $refId, array $paths, string $kind, array $context = []): array {
+    ensureMediaTable();
+    if ($refId < 1 || !in_array($refType, ['post','lesson','book'], true) || !in_array($kind, ['audio','video','document'], true)) {
+        throw new InvalidArgumentException('Invalid direct media upload target.');
+    }
+    $result = ['provided'=>count($paths),'uploaded'=>0,'errors'=>[],'stored'=>[]];
+    if (!$paths) return $result;
+    $folderEntity = $refType === 'post' ? ((string)($context['post_type'] ?? 'post')) : $refType;
+    $folder = contentStorageFolder($folderEntity, $refId, $context);
+    foreach ($paths as $path) {
+        if (!is_string($path) || $path === '') continue;
+        $url = adoptDirectUpload($path, $kind === 'document' ? 'pdf' : $kind, $folder);
+        if ($url === '') {
+            // A direct Word attachment can arrive here through the document input;
+            // infer it from the staging extension when the requested kind is document.
+            $ext = strtolower(pathinfo(storageKey($path), PATHINFO_EXTENSION));
+            if ($kind === 'document' && in_array($ext,['doc','docx'],true)) {
+                $url = adoptDirectUpload($path, 'word', $folder);
+            }
+        }
+        if ($url === '') { $result['errors'][]='یکی از فایل‌های مستقیم در Storage قابل ثبت نبود.'; continue; }
+        $title = basename(parse_url($url, PHP_URL_PATH) ?: $url);
+        try {
+            $stmt = getDB()->prepare('INSERT INTO media_files (ref_type,ref_id,kind,file_path,title,sort_order,created_at) VALUES (?,?,?,?,?,?,NOW()) RETURNING id');
+            $stmt->execute([$refType,$refId,$kind,$url,$title,0]);
+            $mediaId=(int)$stmt->fetchColumn(); $stmt->closeCursor();
+            if ($mediaId<1) throw new RuntimeException('Media row id was not created.');
+            $result['uploaded']++;
+            $result['stored'][]=['ref_type'=>$refType,'ref_id'=>$refId,'kind'=>$kind,'path'=>$url];
+        } catch (Throwable $e) {
+            scheduleFileDeletion($url);
+            $result['errors'][]='ثبت متادیتای یکی از فایل‌های مستقیم انجام نشد.';
+        }
+    }
+    return $result;
+}
+
 function deleteMediaFile(int $mediaId, string $refType, int $refId): bool {
     if ($mediaId < 1 || $refId < 1 || !in_array($refType, ['post', 'lesson', 'book'], true)) return false;
     try {
