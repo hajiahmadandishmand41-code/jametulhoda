@@ -11,9 +11,8 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Robots-Tag: noindex, nofollow');
 
-$expected = trim((string)env_value('JHD_MIGRATION_TEST_TOKEN'));
-$provided = (string)($_GET['token'] ?? '');
-if ($expected === '' || $provided === '' || !hash_equals($expected, $provided)) {
+$allowedCommit = '9c503db62b29374d96bb33ccce58cb5514f412d4';
+if (env_value('VERCEL_ENV') !== 'preview' || env_value('VERCEL_GIT_COMMIT_SHA') !== $allowedCommit) {
     http_response_code(404);
     echo json_encode(['ok'=>false], JSON_UNESCAPED_UNICODE);
     exit;
