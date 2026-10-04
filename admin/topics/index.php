@@ -75,7 +75,10 @@ if($_SERVER['REQUEST_METHOD']==='POST' && !isset($_POST['delete'])){
                 if($editId){
                     $cover=(string)($oldTopic['cover_image'] ?? '');
                     if(!empty($_POST['remove_cover']) && $cover){ scheduleFileDeletion($cover); $cover=''; }
-                    if(!empty($_FILES['cover_image']['name'])){
+                    $directCover = jhdDirectUploadPath('cover_image');
+                    if($directCover!==''){
+                        $up=adoptDirectUpload($directCover,'image',contentStorageFolder('topic',$editId));
+                    } elseif(!empty($_FILES['cover_image']['name'])){
                         $up=uploadContentImage($_FILES['cover_image'],'topic',$editId);
                         if(!$up) $error='خطا در آپلود کاور. فرمت‌های مجاز: JPG، PNG، GIF، WebP';
                         else { if($cover) scheduleFileDeletion($cover); $cover=$up; }
@@ -94,7 +97,10 @@ if($_SERVER['REQUEST_METHOD']==='POST' && !isset($_POST['delete'])){
                         $insert->execute([$parent_id,$name,$slug,$desc ?: null,$intro ?: null,$sort,$is_active,$is_featured]);
                         $topicId=(int)$insert->fetchColumn(); $insert->closeCursor();
                         if($topicId<1) throw new RuntimeException('شناسه موضوع ایجاد نشد.');
-                        if(!empty($_FILES['cover_image']['name'])){
+                        $directCover = jhdDirectUploadPath('cover_image');
+                        if($directCover!==''){
+                            $cover=adoptDirectUpload($directCover,'image',contentStorageFolder('topic',$topicId));
+                        } elseif(!empty($_FILES['cover_image']['name'])){
                             $cover=uploadContentImage($_FILES['cover_image'],'topic',$topicId);
                             if(!$cover) throw new RuntimeException('خطا در آپلود کاور. فرمت‌های مجاز: JPG، PNG، GIF، WebP');
                             $db->prepare('UPDATE topics SET cover_image=? WHERE id=?')->execute([$cover,$topicId]);
