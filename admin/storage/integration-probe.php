@@ -154,7 +154,9 @@ try {
     $pass('Delete + orphan cleanup path', 'metadata and object both removed');
 } catch (Throwable $e) {
     error_log('temporary Supabase integration probe failed: ' . get_class($e));
-    $fail('integration exception', 'see deployment runtime logs');
+    $safeMessage = preg_replace('/postgres(?:ql)?:\\/\\/[^\\s]+/i', 'postgresql://[redacted]', (string)$e->getMessage()) ?? '';
+    $safeMessage = preg_replace('/(password|passwd|pwd)=([^&\\s]+)/i', '$1=[redacted]', $safeMessage) ?? $safeMessage;
+    $fail('integration exception', get_class($e) . ($safeMessage !== '' ? ': ' . substr($safeMessage, 0, 220) : ''));
     if ($finalUrl !== '') {
         try { deleteStoredFile($finalUrl); } catch (Throwable) {}
     } elseif ($key !== '') {
