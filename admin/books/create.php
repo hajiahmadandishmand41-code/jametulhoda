@@ -40,15 +40,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($bookId < 1) throw new RuntimeException('شناسه کتاب ایجاد نشد.');
 
             $cover = ''; $pdf = ''; $word = '';
-            if (!empty($_FILES['cover_image']['name'])) {
+            $directCover = jhdDirectUploadPath('cover_image');
+            if ($directCover !== '') {
+                $cover = adoptDirectUpload($directCover, 'image', contentStorageFolder('book', $bookId));
+                if (!$cover) throw new RuntimeException('تصویر جلد مستقیم معتبر نیست یا ثبت نشد.' . storageFailureHint());
+            } elseif (!empty($_FILES['cover_image']['name'])) {
                 $cover = uploadContentImage($_FILES['cover_image'], 'book', $bookId);
                 if (!$cover) throw new RuntimeException('تصویر جلد معتبر نیست یا آپلود نشد.' . storageFailureHint());
             }
-            if (!empty($_FILES['pdf_file']['name'])) {
+            $directPdf = jhdDirectUploadPath('pdf_file');
+            if ($directPdf !== '') {
+                $pdf = adoptDirectUpload($directPdf, 'pdf', contentStorageFolder('book', $bookId));
+                if (!$pdf) throw new RuntimeException('فایل PDF مستقیم معتبر نیست یا ثبت نشد.' . storageFailureHint());
+            } elseif (!empty($_FILES['pdf_file']['name'])) {
                 $pdf = uploadContentDocument($_FILES['pdf_file'], 'book', $bookId, 'pdf');
                 if (!$pdf) throw new RuntimeException('فایل PDF معتبر نیست یا آپلود نشد.' . storageFailureHint());
             }
-            if (!empty($_FILES['word_file']['name'])) {
+            $directWord = jhdDirectUploadPath('word_file');
+            if ($directWord !== '') {
+                $word = adoptDirectUpload($directWord, 'word', contentStorageFolder('book', $bookId));
+                if (!$word) throw new RuntimeException('فایل Word مستقیم معتبر نیست یا ثبت نشد.' . storageFailureHint());
+            } elseif (!empty($_FILES['word_file']['name'])) {
                 $word = uploadContentDocument($_FILES['word_file'], 'book', $bookId, 'word');
                 if (!$word) throw new RuntimeException('فایل Word معتبر نیست یا آپلود نشد.' . storageFailureHint());
             }
