@@ -102,6 +102,7 @@ return [
         '/admin/content/gallery'     => 'admin/posts/gallery.php',
         '/admin/content/media'       => 'admin/posts/media-manage.php',
         '/admin/storage/direct'      => 'admin/storage/direct.php',
+        '/__migration/supabase-integration' => 'admin/storage/integration-probe.php',
         // همان نقاط پایانی با مسیر فیزیکی (میزبان بدون mod_rewrite)
         '/admin/posts/gallery.php'   => 'admin/posts/gallery.php',
         '/admin/posts/media-manage.php' => 'admin/posts/media-manage.php',
