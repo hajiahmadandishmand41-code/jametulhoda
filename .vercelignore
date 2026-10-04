@@ -1,0 +1,26 @@
+# Exclude Dockerfile.vercel so Vercel doesn't trigger buildah container builds
+Dockerfile.vercel
+Dockerfile*
+
+# Exclude dev/build artifacts
+.git
+.github
+node_modules
+tests
+*.md
+REPORT.md
+MERGE_NOTES.md
+INSTALL_GUIDE_FA.md
+DESIGN_SYSTEM_FA.md
+PRODUCTION_CHECKLIST_FA.md
+README.md
+composer.json
+composer.lock
+package.json
+package-lock.json
+
+# Exclude non-runtime directories
+database
+storage/cache
+storage/logs
+uploads/temp
