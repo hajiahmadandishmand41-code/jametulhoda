@@ -88,7 +88,7 @@ jobs:
       - name: Profile routes
         env:
           TEST_BASE_URL: 'http://127.0.0.1:8099'
-          LABEL: 'local-${{ inputs.label || 'push' }}'
+          LABEL: "local-${{ inputs.label && inputs.label || 'push' }}"
           SAMPLES: '5'
           THROTTLE_MS: '0'
         run: node tests/perf-measure.mjs
