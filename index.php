@@ -145,7 +145,7 @@ if ($jhdPublicDbReady) {
     usort($past, static fn(array $a, array $b): int => strcmp((string)($b['published_at'] ?? $b['created_at'] ?? ''), (string)($a['published_at'] ?? $a['created_at'] ?? '')));
     $latestEvents = array_slice(array_merge($upcoming, $past), 0, 5);
 
-    $latestBooks = getBooks(['limit' => 5]);
+    $latestBooks = getBooks(['featured' => 1, 'limit' => 5]);
 
     $latestLessons = [];
     try {
@@ -153,8 +153,8 @@ if ($jhdPublicDbReady) {
             SELECT l.*, c.title AS collection_title, c.slug AS collection_slug
             FROM lessons l
             LEFT JOIN lesson_collections c ON c.id = l.collection_id
-            WHERE l.status = 'published'
-            ORDER BY l.is_featured DESC, l.sort_order ASC, l.id DESC
+            WHERE l.status = 'published' AND l.is_featured = 1
+            ORDER BY l.sort_order ASC, l.id DESC
             LIMIT 6
         ");
         $stmt->execute();

@@ -50,7 +50,7 @@ $restore(); putenv('UPLOAD_STORAGE=s3'); putenv('VERCEL=1');
 verifyStorage(storageDriver() === 's3', 'explicit UPLOAD_STORAGE=s3 wins');
 
 $restore(); putenv('UPLOAD_STORAGE=local'); putenv('VERCEL=1'); putenv('BLOB_READ_WRITE_TOKEN');
-verifyStorage(storageDriver() === 'local', 'no Blob token means no automatic Blob backend');
+verifyStorage(storageDriver() === 'vercel-unconfigured', 'Vercel without Blob credentials is never reported as local');
 
 $restore(); putenv('UPLOAD_STORAGE=local'); putenv('VERCEL=1'); putenv('BLOB_READ_WRITE_TOKEN=token');
 verifyStorage(storageDriver() === 'vercel-blob', 'Blob token on Vercel selects the blob backend');
@@ -70,7 +70,7 @@ verifyStorage($status['ok'] !== false || !str_contains(implode(' ', $status['pro
 
 $restore(); putenv('UPLOAD_STORAGE=local'); putenv('VERCEL=1');
 putenv('VERCEL_OIDC_TOKEN=oidc-token'); putenv('BLOB_STORE_ID');
-verifyStorage(storageDriver() === 'local', 'an OIDC token without a store id cannot be used');
+verifyStorage(storageDriver() === 'vercel-unconfigured', 'an OIDC token without a store id cannot be used');
 $status = storageConfigurationStatus();
 verifyStorage(str_contains(implode(' ', $status['problems']), 'BLOB_STORE_ID'), 'the missing BLOB_STORE_ID is named for the operator');
 

@@ -77,6 +77,21 @@ function previewImg(input, previewId) {
         reader.readAsDataURL(input.files[0]);
     }
 }
+
+// Enforce file size limit matching server runtime ceiling
+document.querySelectorAll('input[type="file"]').forEach(function (input) {
+    input.addEventListener('change', function () {
+        var onVercel = <?= json_encode(env_value('VERCEL') !== '') ?>;
+        var limit = onVercel ? 4 * 1024 * 1024 : 200 * 1024 * 1024;
+        for (var i = 0; i < (this.files || []).length; i++) {
+            if (this.files[i].size > limit) {
+                alert('فایل «' + this.files[i].name + '» بزرگتر از سقف مجاز سرور (' + (onVercel ? '۴ مگابایت در محیط سرورلس' : 'سقف مجاز') + ') است و رد خواهد شد.');
+                this.value = '';
+                return;
+            }
+        }
+    });
+});
 </script>
 </body>
 </html>
