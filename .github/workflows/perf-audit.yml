@@ -216,6 +216,11 @@ jobs:
           REQUEST_TIMEOUT_MS: '30000'
         run: node tests/perf-measure.mjs 2>&1 | tee local-report.txt
 
+      - name: Auth / session regression smoke test
+        id: authsmoke
+        continue-on-error: true
+        run: node tests/auth-session-smoke.mjs 2>&1 | tee auth-smoke.txt
+
       - name: Restore pre-optimisation baseline and re-profile
         id: baseline
         continue-on-error: true
@@ -245,6 +250,10 @@ jobs:
             echo "## Local PHP profile (PostgreSQL service, JHD_PROFILE=1)"
             echo '```text'
             tail -n 200 local-report.txt 2>/dev/null || echo "no output"
+            echo '```'
+            echo "### Auth / session regression smoke test"
+            echo '```text'
+            cat auth-smoke.txt 2>/dev/null || echo "did not run"
             echo '```'
             echo "### AFTER — per-request profile (unique)"
             echo '```text'
