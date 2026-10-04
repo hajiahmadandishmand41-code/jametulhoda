@@ -94,7 +94,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $context = ['post_type' => $post_type];
                 $featImg = '';
                 $featVid = '';
-                if ((($_FILES['featured_image']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE)) {
+                $directFeatured = jhdDirectUploadPath('featured_image');
+                if ($directFeatured !== '') {
+                    $featImg = adoptDirectUpload($directFeatured, 'image', contentStorageFolder($post_type, $postId));
+                    if (!$featImg) throw new RuntimeException('تصویر شاخص مستقیم در Storage ثبت نشد.' . storageFailureHint());
+                } elseif ((($_FILES['featured_image']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE)) {
                     if (($_FILES['featured_image']['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
                         throw new RuntimeException(jhd_upload_error_message((int)$_FILES['featured_image']['error']));
                     }
@@ -133,6 +137,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 setPostTopics($postId, $topicIds, $primaryTopicId > 0 ? $primaryTopicId : null);
 
                 $imageErrors = [];
+                foreach (jhdDirectUploadPaths('images') as $directPath) {
+                    $imgPath = adoptDirectUpload($directPath, 'image', contentStorageFolder($post_type, $postId));
+                    if (!$imgPath) { $imageErrors[] = 'یکی از تصاویر مستقیم گالری در Storage ثبت نشد.'; continue; }
+                    $imgId = addPostImageUnique($postId, $imgPath, '', !empty($_POST['gallery_featured']));
+                    if (!$imgId) { scheduleFileDeletion($imgPath); $imageErrors[] = 'ثبت یکی از تصاویر گالری انجام نشد.'; }
+                }
                 if (!empty($_FILES['images']['name'][0])) {
                     foreach ($_FILES['images']['name'] as $k => $name) {
                         if ($name === '' || !isset($_FILES['images']['tmp_name'][$k])) continue;
