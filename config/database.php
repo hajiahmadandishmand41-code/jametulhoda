@@ -286,22 +286,27 @@ class DatabaseUnavailableException extends PDOException {}
  *   Local development → sqlite when DB_DRIVER=sqlite (refused in production).
  */
 function postgresDatabaseUrl(): string {
-    // Vercel Storage / Neon exposes the connection under STORAGE_* and POSTGRES_* names.
-    // Prefer the direct/unpooled URL for PHP serverless requests, while retaining support
-    // for DATABASE_URL and the Prisma-compatible aliases used by older links.
-    foreach ([
-        'STORAGE_POSTGRES_URL_NON_POOLING', 'STORAGE_DATABASE_URL_UNPOOLED',
-        'POSTGRES_URL_NON_POOLING', 'DATABASE_URL_UNPOOLED',
-        'STORAGE_POSTGRES_URL', 'STORAGE_POSTGRES_PRISMA_URL', 'STORAGE_DATABASE_URL',
-        'POSTGRES_URL', 'POSTGRES_PRISMA_URL', 'DATABASE_URL'
-    ] as $key) {
+    // Production/Vercel uses exactly one canonical secret: DATABASE_URL.
+    // Neon/Vercel Postgres aliases remain supported only outside Vercel so an
+    // existing development/staging setup is not broken by this migration.
+    $onVercel = env_value('VERCEL') !== '';
+    $keys = $onVercel
+        ? ['DATABASE_URL']
+        : [
+            'DATABASE_URL', 'DATABASE_URL_UNPOOLED',
+            'STORAGE_POSTGRES_URL_NON_POOLING', 'STORAGE_DATABASE_URL_UNPOOLED',
+            'POSTGRES_URL_NON_POOLING', 'STORAGE_POSTGRES_URL',
+            'STORAGE_POSTGRES_PRISMA_URL', 'STORAGE_DATABASE_URL',
+            'POSTGRES_URL', 'POSTGRES_PRISMA_URL'
+        ];
+    foreach ($keys as $key) {
         $value = trim(env_value($key));
         if ($value !== '') return $value;
     }
 
-    // Last-resort construction from the platform-provided components. This
-    // keeps the app connected when a deployment has component variables but
-    // does not expose a complete URL to the PHP runtime.
+    if ($onVercel) return '';
+
+    // Non-Vercel development/legacy fallback from component variables.
     $host = trim(env_value('STORAGE_PGHOST_UNPOOLED', env_value('STORAGE_PGHOST', env_value('POSTGRES_HOST', env_value('PGHOST')))));
     $user = trim(env_value('STORAGE_PGUSER', env_value('POSTGRES_USER', env_value('PGUSER'))));
     $password = env_value('STORAGE_PGPASSWORD', env_value('POSTGRES_PASSWORD', env_value('PGPASSWORD')));
@@ -408,7 +413,7 @@ function newDatabaseConnection(): PDO {
         // MySQL host of another deployment).
         throw new DatabaseUnavailableException(
             env_value('VERCEL') !== ''
-                ? 'DATABASE_URL is not set on Vercel: set DATABASE_URL to the PostgreSQL connection string (Supabase or Neon).'
+                ? 'DATABASE_URL is not set on Vercel: configure the Supabase PostgreSQL connection string in the Production environment.'
                 : 'DATABASE_URL is not set.'
         );
     }
