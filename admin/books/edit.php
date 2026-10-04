@@ -25,9 +25,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!empty($_POST['remove_cover']) && $cover) { scheduleFileDeletion($cover); $cover=''; }
                 if (!empty($_POST['remove_pdf']) && $pdf) { scheduleFileDeletion($pdf); $pdf=''; }
                 if (!empty($_POST['remove_word']) && $word) { scheduleFileDeletion($word); $word=''; }
-                if (!empty($_FILES['cover_image']['name'])) { $new=uploadContentImage($_FILES['cover_image'],'book',$id); if (!$new) throw new RuntimeException('تصویر جلد معتبر نیست.'); if ($cover) scheduleFileDeletion($cover); $cover=$new; }
-                if (!empty($_FILES['pdf_file']['name'])) { $new=uploadContentDocument($_FILES['pdf_file'],'book',$id,'pdf'); if (!$new) throw new RuntimeException('فایل PDF معتبر نیست.'); if ($pdf) scheduleFileDeletion($pdf); $pdf=$new; }
-                if (!empty($_FILES['word_file']['name'])) { $new=uploadContentDocument($_FILES['word_file'],'book',$id,'word'); if (!$new) throw new RuntimeException('فایل Word معتبر نیست.'); if ($word) scheduleFileDeletion($word); $word=$new; }
+                $directCover=jhdDirectUploadPath('cover_image');
+                if ($directCover!=='') { $new=adoptDirectUpload($directCover,'image',contentStorageFolder('book',$id)); if (!$new) throw new RuntimeException('تصویر جلد مستقیم معتبر نیست.'); if ($cover) scheduleFileDeletion($cover); $cover=$new; }
+                elseif (!empty($_FILES['cover_image']['name'])) { $new=uploadContentImage($_FILES['cover_image'],'book',$id); if (!$new) throw new RuntimeException('تصویر جلد معتبر نیست.'); if ($cover) scheduleFileDeletion($cover); $cover=$new; }
+                $directPdf=jhdDirectUploadPath('pdf_file');
+                if ($directPdf!=='') { $new=adoptDirectUpload($directPdf,'pdf',contentStorageFolder('book',$id)); if (!$new) throw new RuntimeException('فایل PDF مستقیم معتبر نیست.'); if ($pdf) scheduleFileDeletion($pdf); $pdf=$new; }
+                elseif (!empty($_FILES['pdf_file']['name'])) { $new=uploadContentDocument($_FILES['pdf_file'],'book',$id,'pdf'); if (!$new) throw new RuntimeException('فایل PDF معتبر نیست.'); if ($pdf) scheduleFileDeletion($pdf); $pdf=$new; }
+                $directWord=jhdDirectUploadPath('word_file');
+                if ($directWord!=='') { $new=adoptDirectUpload($directWord,'word',contentStorageFolder('book',$id)); if (!$new) throw new RuntimeException('فایل Word مستقیم معتبر نیست.'); if ($word) scheduleFileDeletion($word); $word=$new; }
+                elseif (!empty($_FILES['word_file']['name'])) { $new=uploadContentDocument($_FILES['word_file'],'book',$id,'word'); if (!$new) throw new RuntimeException('فایل Word معتبر نیست.'); if ($word) scheduleFileDeletion($word); $word=$new; }
                 requireMediaUploads(handleMediaUploads('book', $id, $_FILES['attachment_files'] ?? [], 'document'));
                 $status = in_array($_POST['status'] ?? '', ['published','draft'], true) ? $_POST['status'] : 'draft';
                 $pages = max(0, (int)($_POST['pages'] ?? 0));
