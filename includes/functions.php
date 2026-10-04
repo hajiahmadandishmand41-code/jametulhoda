@@ -1144,6 +1144,7 @@ function getTopics(array $opts = []): array {
         $stmt = $db->prepare($sql);
         $stmt->execute($params);
         $rows = $stmt->fetchAll();
+        jhd_prime_topic_cache($rows);
         if (is_string($memoKey)) $memo[$memoKey] = $rows;
         return $rows;
     } catch (PDOException $e) { return []; }
@@ -1199,8 +1200,42 @@ function getTopicBySlug(string $slug): ?array {
     } catch (PDOException $e) { return null; }
 }
 
+/**
+ * Request-scoped identity map for topic rows.
+ *
+ * Measured reason: topicUrl() builds the /topics/parent/child path through
+ * getTopicBreadcrumbs(), which walks the parent chain one getTopicById() query
+ * at a time — for every topic link on the page, and the navigation tree is
+ * rendered twice (desktop menu + mobile drawer). The profiler logged
+ * `85x SELECT * FROM topics WHERE id=?` on the homepage and `72x` on every
+ * other page. The rows are tiny and already fetched by getTopics(), so they
+ * are cached here and primed in bulk below.
+ *
+ * @return array<int,array|null>
+ */
+function &jhd_topic_row_cache(): array {
+    static $cache = [];
+    return $cache;
+}
+
+/** Remember topic rows we already hold (called with every getTopics() result). */
+function jhd_prime_topic_cache(array $rows): void {
+    $cache =& jhd_topic_row_cache();
+    foreach ($rows as $row) {
+        if (!is_array($row)) continue;
+        $id = (int)($row['id'] ?? 0);
+        if ($id > 0 && !array_key_exists($id, $cache)) $cache[$id] = $row;
+    }
+}
+
 function getTopicById(int $id): ?array {
-    try { $db=getDB(); $stmt=$db->prepare("SELECT * FROM topics WHERE id=?"); $stmt->execute([$id]); $row=$stmt->fetch(); return $row ?: null; } catch(PDOException $e){ return null; }
+    if ($id < 1) return null;
+    $cache =& jhd_topic_row_cache();
+    if (array_key_exists($id, $cache)) return $cache[$id];
+    try {
+        $db=getDB(); $stmt=$db->prepare("SELECT * FROM topics WHERE id=?"); $stmt->execute([$id]); $row=$stmt->fetch();
+        return $cache[$id] = ($row ?: null);
+    } catch(PDOException $e){ return $cache[$id] = null; }
 }
 
 function getTopicTree(array $opts = []): array {
@@ -1233,6 +1268,8 @@ function getTopicChildren(int $parentId): array {
 }
 
 function getTopicBreadcrumbs(int $topicId): array {
+    static $memo = [];
+    if (array_key_exists($topicId, $memo)) return $memo[$topicId];
     $crumbs=[]; $current=getTopicById($topicId);
     $guard=0;
     while($current && $guard<10){
@@ -1241,7 +1278,7 @@ function getTopicBreadcrumbs(int $topicId): array {
         $current=getTopicById((int)$current['parent_id']);
         $guard++;
     }
-    return $crumbs;
+    return $memo[$topicId] = $crumbs;
 }
 
 function getTopicsForPost(int $postId): array {
