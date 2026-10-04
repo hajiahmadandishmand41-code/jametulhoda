@@ -91,7 +91,7 @@ jobs:
   profile:
     name: Local PHP bootstrap profile (PostgreSQL)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:16
@@ -104,6 +104,8 @@ jobs:
           --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
@@ -148,6 +150,7 @@ jobs:
       - name: Restore pre-optimisation baseline and re-profile
         id: baseline
         continue-on-error: true
+        # Output is echoed into the published comment; failures are visible there.
         env:
           DATABASE_URL: 'postgresql://jhdtest:jhdtest@127.0.0.1:5432/jhdtest?sslmode=disable'
           APP_ENV: development
@@ -156,7 +159,8 @@ jobs:
           JHD_PRETTY_URLS: 'true'
         run: |
           pkill -f 'php -S 127.0.0.1:8099' || true
-          tests/perf-baseline-restore.sh ${{ vars.PERF_BASELINE_SHA || 'c3a45c36f477a29e678436d73d7ca216c05f8d79' }}
+          git log --oneline -1 ${{ vars.PERF_BASELINE_SHA || 'c3a45c36f477a29e678436d73d7ca216c05f8d79' }}
+          bash tests/perf-baseline-restore.sh ${{ vars.PERF_BASELINE_SHA || 'c3a45c36f477a29e678436d73d7ca216c05f8d79' }} 2>&1 | tee baseline-restore.log
           nohup php -S 127.0.0.1:8099 router.php > php-baseline.log 2>&1 &
           for i in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:8099/ && break; sleep 1; done
           TEST_BASE_URL=http://127.0.0.1:8099 LABEL=local-baseline SAMPLES=5 THROTTLE_MS=0 \
@@ -179,7 +183,7 @@ jobs:
             echo '```'
             echo "### BEFORE — pre-optimisation baseline (same instrument)"
             echo '```text'
-            grep -E '^  /' local-baseline.txt 2>/dev/null | head -n 30 || echo "baseline step did not run"
+            grep -E '^  /' local-baseline.txt 2>/dev/null | head -n 30 || tail -n 25 baseline-restore.log 2>/dev/null || echo "baseline step did not run"
             echo '```'
             echo '```text'
             grep -o 'JHD_PROFILE .*' php-baseline.log 2>/dev/null | awk '{print $2, $3, $4, $5, $6, $7}' | sort -u | head -n 30 || true
