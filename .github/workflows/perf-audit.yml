@@ -35,6 +35,39 @@ jobs:
         with:
           node-version: 22
 
+      # The Vercel Git integration publishes a Preview deployment for this very
+      # commit. Measuring it is the only honest "after" number: same platform,
+      # same Supabase, new code.
+      - name: Resolve the Preview deployment for this commit
+        id: preview
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          url=""
+          for attempt in $(seq 1 30); do
+            for dep in $(gh api "repos/${GITHUB_REPOSITORY}/deployments?sha=${GITHUB_SHA}" --jq '.[].id' 2>/dev/null); do
+              u=$(gh api "repos/${GITHUB_REPOSITORY}/deployments/${dep}/statuses" --jq '[.[]|select(.state=="success")][0].environment_url // empty' 2>/dev/null)
+              if [ -n "$u" ]; then url="$u"; break; fi
+            done
+            [ -n "$url" ] && break
+            sleep 20
+          done
+          echo "preview_url=$url" >> "$GITHUB_OUTPUT"
+          echo "Preview URL: ${url:-none}"
+
+      - name: Measure the Preview deployment (new code)
+        if: steps.preview.outputs.preview_url != ''
+        continue-on-error: true
+        env:
+          TEST_BASE_URL: ${{ steps.preview.outputs.preview_url }}
+          LABEL: preview
+          SAMPLES: '6'
+          THROTTLE_MS: '300'
+          REQUEST_TIMEOUT_MS: '120000'
+          ONLY_PATHS: '/,/news,/topics,/books,/login'
+          SKIP_ASSETS: '1'
+        run: node tests/perf-measure.mjs 2>&1 | tee preview-report.txt
+
       - name: Homepage cold/warm burst
         id: home
         continue-on-error: true
@@ -71,6 +104,11 @@ jobs:
             echo "### Homepage burst"
             echo '```text'
             tail -n 60 home-report.txt 2>/dev/null || echo "no output"
+            echo '```'
+            echo "### Preview deployment of this commit (new code, real Vercel + Supabase)"
+            echo "url: ${{ steps.preview.outputs.preview_url }}"
+            echo '```text'
+            tail -n 60 preview-report.txt 2>/dev/null || echo "no preview measured"
             echo '```'
             echo "### Route + asset sweep"
             echo '```text'
