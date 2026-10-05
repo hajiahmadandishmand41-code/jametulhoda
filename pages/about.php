@@ -94,6 +94,12 @@ $aboutInstagram = safeExternalUrl(getSetting('social_instagram'));
             <div class="col-lg-8">
                 <article class="jhd-prose" aria-labelledby="about-title">
                     <h2 id="about-title" class="about-card-title"><i class="bi bi-building ms-2" aria-hidden="true"></i>معرفی مدرسه علمیه جامعه‌الهدی در کابل</h2>
+                    <?php
+                    $aboutLong = trim((string)getSetting('about_long', ''));
+                    if ($aboutLong !== ''):
+                    ?>
+                    <div class="about-long-text mb-4"><?= nl2br(sanitize($aboutLong)) ?></div>
+                    <?php endif; ?>
                     <p>مدرسه علمیه جامعه‌الهدی در کابل، یک مرکز آموزشی و علمی در حوزه علوم اسلامی است که محتوای این وب‌سایت برای معرفی فعالیت‌های آموزشی، پژوهشی، فرهنگی و تربیتی آن و دسترسی آسان‌تر به محتوای مرتبط سامان یافته است.</p>
                     <p>جامعه‌الهدی در کنار آموزش دینی و علوم اسلامی، به مطالعه، پژوهش و عرضه محتوای علمی توجه دارد و می‌کوشد محیطی منظم و مناسب برای یادگیری، اندیشه‌ورزی و رشد علمی و اخلاقی طلاب و علاقه‌مندان فراهم کند.</p>
 
