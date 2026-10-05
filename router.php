@@ -338,7 +338,7 @@ if (preg_match('~^/assets/[a-zA-Z0-9_./-]+\.(css|js|mjs|svg|png|jpe?g|webp|gif|w
     if (is_file($file) && !is_link($file)) jhdServeStatic($file);
 }
 if ($path === '/favicon.ico') {
-    $file = __DIR__ . '/assets/img/favicon.svg';
+    $file = __DIR__ . '/assets/img/logo.png';
     if (is_file($file)) jhdServeStatic($file);
 }
 if (UPLOAD_STORAGE === 'local' && preg_match('~^/uploads/(?:[a-zA-Z0-9_-]+/)+[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|gif|webp|mp3|ogg|wav|m4a|mp4|webm|mov|mkv|pdf|doc|docx)$~D', $path)) {
