@@ -1832,32 +1832,73 @@ function canonicalUrl(string $path): string {
     return absolute_url($path);
 }
 function breadcrumbsJsonLd(array $crumbs): string {
-    $list=[]; $pos=1;
-    foreach($crumbs as $c){
-        $list[]=['@type'=>'ListItem','position'=>$pos++,'name'=>$c['name'],'item'=>$c['url'] ?? null];
+    $list = [];
+    $pos = 1;
+    foreach ($crumbs as $c) {
+        $itemUrl = null;
+        if (isset($c['url']) && is_string($c['url']) && $c['url'] !== '') {
+            $itemUrl = preg_match('~^https?://~i', $c['url'])
+                ? $c['url']
+                : jhd_absolute_url($c['url']);
+        }
+        $list[] = [
+            '@type' => 'ListItem',
+            'position' => $pos++,
+            'name' => (string)($c['name'] ?? ''),
+            'item' => $itemUrl,
+        ];
     }
-    return json_encode(['@context'=>'https://schema.org','@type'=>'BreadcrumbList','itemListElement'=>$list], JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT);
+    return json_encode(
+        ['@context' => 'https://schema.org', '@type' => 'BreadcrumbList', 'itemListElement' => $list],
+        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+    );
 }
 function articleJsonLd(array $post): string {
-    if(!SITE_URL) return '';
+    if (!SITE_URL) return '';
     $canonical = canonicalUrl(postUrl($post));
     $organization = getSetting('site_name', SITE_NAME);
     if ($organization === 'مدرسه علمیه جامعه‌الهدی') $organization = SITE_NAME;
     $author = !empty($post['author_name'])
         ? ['@type' => 'Person', 'name' => $post['author_name']]
         : ['@type' => 'Organization', 'name' => $organization];
-    $data=['@context'=>'https://schema.org','@type'=>'Article','headline'=>$post['title'],'mainEntityOfPage'=>['@type'=>'WebPage','@id'=>$canonical],'url'=>$canonical,'datePublished'=>$post['published_at'] ?? $post['created_at'],'dateModified'=>$post['updated_at'] ?? $post['published_at'],'author'=>$author,'publisher'=>['@type'=>'Organization','name'=>$organization,'logo'=>['@type'=>'ImageObject','url'=>canonicalUrl('assets/img/logo.png')]]];
-    if(!empty($post['featured_image'])) $data['image']=imgUrl($post['featured_image']);
-    if(!empty($post['summary'])) $data['description']=excerpt($post['summary'],160);
-    return json_encode($data, JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT);
+    $descriptionSource = (string)($post['summary'] ?? '');
+    if ($descriptionSource === '') $descriptionSource = strip_tags((string)($post['content'] ?? ''));
+    $data = [
+        '@context' => 'https://schema.org',
+        '@type' => 'Article',
+        'headline' => (string)$post['title'],
+        'description' => excerpt($descriptionSource, 160),
+        'mainEntityOfPage' => ['@type' => 'WebPage', '@id' => $canonical],
+        'url' => $canonical,
+        'inLanguage' => 'fa-AF',
+        'datePublished' => $post['published_at'] ?? $post['created_at'] ?? null,
+        'dateModified' => $post['updated_at'] ?? $post['published_at'] ?? $post['created_at'] ?? null,
+        'author' => $author,
+        'publisher' => [
+            '@type' => 'Organization',
+            'name' => $organization,
+            'logo' => ['@type' => 'ImageObject', 'url' => canonicalUrl('assets/img/logo.png')],
+        ],
+    ];
+    $imagePath = (string)($post['featured_image'] ?? '');
+    $data['image'] = $imagePath !== ''
+        ? [jhd_absolute_url(imgUrl($imagePath))]
+        : [canonicalUrl('assets/img/logo.png')];
+    return json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 }
 function bookJsonLd(array $book): string {
-    if(!SITE_URL) return '';
-    $data=['@context'=>'https://schema.org','@type'=>'Book','name'=>$book['title']];
-    if(!empty($book['author'])) $data['author']=['@type'=>'Person','name'=>$book['author']];
-    if(!empty($book['description'])) $data['description']=excerpt($book['description'],200);
-    if(!empty($book['cover_image'])) $data['image']=imgUrl($book['cover_image']);
-    return json_encode($data, JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT);
+    if (!SITE_URL) return '';
+    $data = [
+        '@context' => 'https://schema.org',
+        '@type' => 'Book',
+        'name' => (string)$book['title'],
+        'url' => canonicalUrl(bookUrl($book)),
+    ];
+    if (!empty($book['author'])) $data['author'] = ['@type' => 'Person', 'name' => $book['author']];
+    if (!empty($book['description'])) $data['description'] = excerpt($book['description'], 200);
+    if (!empty($book['cover_image'])) $data['image'] = [jhd_absolute_url(imgUrl($book['cover_image']))];
+    else $data['image'] = [canonicalUrl('assets/img/logo.png')];
+    return json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 }
 
 // ─── Safe rich text ───────────────────────────────────────────────────────────

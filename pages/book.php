@@ -40,7 +40,7 @@ $pageTitle = $book['title'];
 $canonicalOverride = bookUrl($book);
 $pageDesc  = excerpt($book['description'] ?? $book['toc'] ?? '', 160);
 $canonicalUrl = bookUrl($book);
-$ogImage   = !empty($book['cover_image']) ? imgUrl($book['cover_image']) : null;
+$ogImage   = !empty($book['cover_image']) ? jhd_absolute_url(imgUrl($book['cover_image'])) : canonicalUrl('assets/img/logo.png');
 $ogType    = 'book';
 $breadcrumbs = [
   ['name'=>'صفحه اصلی','url'=>siteUrl()],
@@ -57,7 +57,7 @@ $bookJsonLd = json_encode([
   '@type'=>'Book',
   'name'=>$book['title'],
   'description'=>excerpt($book['description'] ?? '', 200),
-  'image'=>$ogImage ? siteUrl(ltrim($ogImage,'/')) : null,
+  'image'=>$ogImage,
   'author'=>!empty($book['author']) ? ['@type'=>'Person','name'=>$book['author']] : null,
   'translator'=>!empty($book['translator']) ? ['@type'=>'Person','name'=>$book['translator']] : null,
   'publisher'=>!empty($book['publisher']) ? $book['publisher'] : 'جامعه‌الهدی',
