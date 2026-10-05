@@ -252,7 +252,7 @@ if ($jhdEntityPath === '/' || $jhdEntityPath === '/about') {
 <?php if (!empty($articleJsonLd)): ?><script type="application/ld+json"><?= $articleJsonLd ?></script><?php endif; ?>
 <?php if (!empty($bookJsonLd)): ?><script type="application/ld+json"><?= $bookJsonLd ?></script><?php endif; ?>
 <?php if (!empty($mediaJsonLd)): ?><script type="application/ld+json"><?= $mediaJsonLd ?></script><?php endif; ?>
-<link rel="icon" href="<?= asset('img/favicon.svg') ?>" type="image/svg+xml">
+<link rel="icon" href="/assets/img/logo.png" type="image/png" sizes="512x512">
 <script src="<?= asset('js/theme.js') ?>"></script>
 <link rel="preload" href="<?= asset('fonts/Vazirmatn-Regular.woff2') ?>" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="<?= asset('fonts/Amiri-Bold.woff2') ?>" as="font" type="font/woff2" crossorigin>
