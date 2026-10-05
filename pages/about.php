@@ -91,53 +91,49 @@ $aboutInstagram = safeExternalUrl(getSetting('social_instagram'));
         <script type="application/ld+json"><?= json_encode($organizationJsonLd, JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?></script>
         <script type="application/ld+json"><?= json_encode($aboutPageJsonLd, JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?></script>
         <div class="row g-4 align-items-start">
-            <div class="col-lg-7">
-                <div class="jhd-prose">
-                    <h2 class="about-card-title"><i class="bi bi-star" aria-hidden="true"></i>معرفی مدرسه</h2>
-                    <p><?= sanitize(getSetting('about_short', 'مدرسه علمیه جامعه‌الهدی یکی از مراکز علوم دینی در افغانستان است.')) ?></p>
-                    <p>مدرسه علمیه جامعه‌الهدی در کابل، یک مجموعه علمی، آموزشی و پژوهشی در حوزه علوم اسلامی است که فعالیت خود را بر آموزش معارف اسلامی، تربیت طلاب، پژوهش دینی و ترویج فرهنگ قرآنی و اهل‌بیت (ع) متمرکز کرده است.</p>
-                    <p>در ساختار محتوایی و آموزشی معرفی‌شده برای مدرسه، آموزش علوم اسلامی در کنار پژوهش، برنامه‌های فرهنگی و دسترسی به محتوای علمی و آموزشی دنبال می‌شود. این پایگاه نیز برای گردآوری و عرضه اخبار، مقالات، پژوهش‌ها، گزارش‌ها، کتاب‌ها، دروس و موضوعات مرتبط با جامعه‌الهدی ایجاد شده است.</p>
+            <div class="col-lg-8">
+                <article class="jhd-prose" aria-labelledby="about-title">
+                    <h2 id="about-title" class="about-card-title"><i class="bi bi-building ms-2" aria-hidden="true"></i>معرفی مدرسه علمیه جامعه‌الهدی در کابل</h2>
+                    <p>مدرسه علمیه جامعه‌الهدی در کابل، یک مرکز آموزشی و علمی در حوزه علوم اسلامی است که محتوای این وب‌سایت برای معرفی فعالیت‌های آموزشی، پژوهشی، فرهنگی و تربیتی آن و دسترسی آسان‌تر به محتوای مرتبط سامان یافته است.</p>
+                    <p>جامعه‌الهدی در کنار آموزش دینی و علوم اسلامی، به مطالعه، پژوهش و عرضه محتوای علمی توجه دارد و می‌کوشد محیطی منظم و مناسب برای یادگیری، اندیشه‌ورزی و رشد علمی و اخلاقی طلاب و علاقه‌مندان فراهم کند.</p>
 
-                    <h2 class="about-card-title mt-4"><i class="bi bi-star" aria-hidden="true"></i>اهداف و مأموریت</h2>
-                    <ul class="about-list">
-                        <li>تربیت طلاب متعهد و آگاه به علوم اسلامی</li>
-                        <li>ترویج فرهنگ قرآنی و ارزش‌های اهل بیت (ع)</li>
-                        <li>ایجاد بستر مناسب برای تحقیق و پژوهش دینی</li>
-                        <li>برگزاری برنامه‌های فرهنگی و مذهبی</li>
-                        <li>تقویت هویت اسلامی در جامعه</li>
-                    </ul>
+                    <h2 class="about-card-title mt-4"><i class="bi bi-book ms-2" aria-hidden="true"></i>آموزش علوم دینی و اسلامی</h2>
+                    <p>آموزش علوم اسلامی از محورهای اصلی محتوای مدرسه است. در بخش‌های آموزشی و علمی سایت، موضوعاتی مانند فقه و اصول، تفسیر قرآن، حدیث‌شناسی، کلام و فلسفه، ادبیات عرب و تاریخ اسلام بازتاب یافته است. هدف از ارائه این محتوا، فراهم‌کردن زمینه‌ای برای مطالعه منظم و تقویت فهم علمی و دینی است.</p>
 
-                    <h2 class="about-card-title mt-4"><i class="bi bi-star" aria-hidden="true"></i>حوزه‌های آموزشی و علمی</h2>
-                    <div class="row g-3">
-                        <?php
-                        $subjects = [
-                            ['فقه و اصول','bi bi-book','text-primary'],
-                            ['تفسیر قرآن','bi bi-journal-text','text-success'],
-                            ['حدیث شناسی','bi bi-chat-quote','text-info'],
-                            ['کلام و فلسفه','bi bi-lightbulb','text-warning'],
-                            ['ادبیات عرب','bi bi-translate','text-danger'],
-                            ['تاریخ اسلام','bi bi-clock-history','text-secondary'],
-                        ];
-                        foreach ($subjects as [$name, $icon, $color]):
-                        ?>
-                        <div class="col-6 col-md-4">
-                            <div class="subject-box">
-                                <i class="<?= $icon ?> <?= $color ?> mb-2 d-block" style="font-size:1.25rem;color:var(--jhd-gold)"></i>
-                                <span><?= $name ?></span>
-                            </div>
-                        </div>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
+                    <h2 class="about-card-title mt-4"><i class="bi bi-lightbulb ms-2" aria-hidden="true"></i>رشد علمی و فکری</h2>
+                    <p>یادگیری تنها به دریافت مطالب محدود نمی‌شود؛ مطالعه دقیق، پرسش‌گری، تحلیل و توجه به منابع علمی نیز بخشی از مسیر رشد فکری است. جامعه‌الهدی از طریق درس‌ها، کتاب‌ها، مقالات، پژوهش‌ها و موضوعات آموزشی، بستری برای پیگیری این مسیر فراهم می‌کند.</p>
+
+                    <h2 class="about-card-title mt-4"><i class="bi bi-journal-text ms-2" aria-hidden="true"></i>پژوهش و تولید محتوای علمی</h2>
+                    <p>پژوهش، مطالعه و تولید محتوای علمی از بخش‌های مهم فعالیت محتوایی جامعه‌الهدی است. این وب‌سایت امکان عرضه و دسترسی به مقاله‌ها، پژوهش‌ها، گزارش‌ها، کتاب‌ها، درس‌ها و دیگر مطالب آموزشی مرتبط را فراهم می‌کند تا محتوای علمی با نظم بهتر در اختیار مخاطبان قرار گیرد.</p>
+
+                    <h2 class="about-card-title mt-4"><i class="bi bi-people ms-2" aria-hidden="true"></i>فعالیت‌های فرهنگی و تربیتی</h2>
+                    <p>در کنار آموزش و پژوهش، فعالیت‌های فرهنگی و تربیتی نیز در معرفی جامعه‌الهدی جایگاه دارد. توجه به اخلاق، مسئولیت‌پذیری، نظم، هویت دینی و حضور آگاهانه در جامعه، زمینه‌ای برای رشد متوازن علمی، اخلاقی و اجتماعی نسل جوان فراهم می‌کند.</p>
+
+                    <h2 class="about-card-title mt-4"><i class="bi bi-collection ms-2" aria-hidden="true"></i>کتاب، درس و محتوای آموزشی</h2>
+                    <p>بخش‌های مختلف سایت برای دسترسی ساختاریافته به کتاب‌ها، درس‌ها، مقاله‌ها، گزارش‌ها، پژوهش‌ها، اخبار و دیگر محتوای آموزشی و علمی طراحی شده‌اند. این ساختار به مخاطبان کمک می‌کند مطالب مورد نیاز خود را بر اساس موضوع و نوع محتوا آسان‌تر پیدا و مطالعه کنند.</p>
+
+                    <h2 class="about-card-title mt-4"><i class="bi bi-phone ms-2" aria-hidden="true"></i>آموزش و دسترسی دیجیتال</h2>
+                    <p>فناوری و انتشار دیجیتال، امکان دسترسی آسان‌تر به محتوای آموزشی و علمی را فراهم می‌کند. وب‌سایت جامعه‌الهدی با ارائه محتوای متنی و رسانه‌ای، زمینه دسترسی مخاطبان به مطالب آموزشی، پژوهشی و فرهنگی را در بستر وب فراهم ساخته است.</p>
+
+                    <h2 class="about-card-title mt-4"><i class="bi bi-mortarboard ms-2" aria-hidden="true"></i>محیطی برای یادگیری و رشد</h2>
+                    <p>جامعه‌الهدی تلاش می‌کند آموزش، مطالعه، پژوهش و فعالیت‌های فرهنگی و تربیتی را در یک مسیر منظم کنار هم قرار دهد؛ مسیری که در آن رشد علمی با پرورش اخلاق، مسئولیت‌پذیری و آمادگی برای نقش‌آفرینی سازنده در جامعه همراه باشد.</p>
+                </article>
             </div>
-            <div class="col-lg-5">
+            <div class="col-lg-4">
                 <div class="about-sidebar">
                     <div class="about-info-card mb-4">
-                        <h5 class="about-card-title"><i class="bi bi-person-fill ms-2 text-gold"></i>مؤسس مدرسه</h5>
-                        <p class="mb-0">آیت‌الله محمدحسین حلیمی</p>
+                        <h2 class="about-card-title"><i class="bi bi-diagram-3 ms-2 text-gold" aria-hidden="true"></i>محورهای فعالیت</h2>
+                        <ul class="about-list mb-0">
+                            <li>آموزش علوم دینی و اسلامی</li>
+                            <li>مطالعه و پژوهش</li>
+                            <li>تولید و عرضه محتوای علمی</li>
+                            <li>فعالیت‌های فرهنگی و تربیتی</li>
+                            <li>کتاب، درس، مقاله و گزارش</li>
+                            <li>دسترسی دیجیتال به محتوای آموزشی</li>
+                        </ul>
                     </div>
                     <div class="contact-info-card">
-                        <h5 class="about-card-title"><i class="bi bi-geo-alt-fill ms-2 text-gold"></i>اطلاعات تماس</h5>
+                        <h2 class="about-card-title"><i class="bi bi-geo-alt-fill ms-2 text-gold" aria-hidden="true"></i>اطلاعات تماس</h2>
                         <ul class="contact-info-list">
                             <li><i class="bi bi-geo-alt text-primary"></i><span><?= sanitize(getSetting('address', SITE_ADDRESS)) ?></span></li>
                             <li><i class="bi bi-telephone text-primary"></i><?php if ($aboutPhoneHref !== ''): ?><a href="tel:<?= sanitize($aboutPhoneHref) ?>" dir="ltr"><?= sanitize($aboutPhone) ?></a><?php else: ?><span><?= sanitize($aboutPhone) ?></span><?php endif; ?></li>
