@@ -43,7 +43,6 @@ const STATIC_ASSETS = [
   '/assets/fonts/Vazirmatn-Regular.woff2',
   '/assets/fonts/Amiri-Bold.woff2',
   '/assets/img/logo.png',
-  '/assets/img/favicon.svg',
   '/favicon.ico',
 ];
 
