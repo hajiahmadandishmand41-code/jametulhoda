@@ -21,7 +21,7 @@ if ($jhdPublicDbReady) {
     if ($siteName === 'مدرسه علمیه جامعه‌الهدی') $siteName = SITE_NAME;
     $siteSlogan    = getSetting('site_slogan', SITE_SLOGAN);
     if ($siteSlogan === 'علم، معرفت و تهذیب در پرتو قرآن و عترت') $siteSlogan = SITE_SLOGAN;
-    $siteLogo      = getSetting('site_logo', 'assets/img/logo.png');
+    $siteLogo      = 'assets/img/logo.png';
     $aboutShort    = getSetting('about_short', 'مدرسه علمیه جامعة‌الهدی یکی از مراکز علوم و معارف اسلامی در کابل، افغانستان است.');
     $socialTelegram = getSetting('social_telegram');
     $socialYoutube  = getSetting('social_youtube');
