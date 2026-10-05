@@ -1850,10 +1850,11 @@ html[data-theme="dark"] .play-btn-circle { color: #0d241b; }
   direction: ltr;
   max-width: 100%;
 }
-.footer-social { display: flex; gap: .45rem; }
+.footer-social { display: flex; gap: .55rem; }
 .social-link {
-  width: 32px; height: 32px;
+  width: 36px; height: 36px;
   display: grid; place-items: center;
+  font-size: 1.08rem;
   border: 1px solid rgba(232, 239, 233, .35);
   border-radius: 50%;
   color: var(--jhd-footer-ink);
