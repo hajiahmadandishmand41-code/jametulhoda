@@ -252,7 +252,18 @@ if ($jhdEntityPath === '/' || $jhdEntityPath === '/about') {
 <?php if (!empty($articleJsonLd)): ?><script type="application/ld+json"><?= $articleJsonLd ?></script><?php endif; ?>
 <?php if (!empty($bookJsonLd)): ?><script type="application/ld+json"><?= $bookJsonLd ?></script><?php endif; ?>
 <?php if (!empty($mediaJsonLd)): ?><script type="application/ld+json"><?= $mediaJsonLd ?></script><?php endif; ?>
-<link rel="icon" href="/assets/img/logo.png" type="image/png" sizes="512x512">
+<?php
+$faviconPath = (string)$siteLogo;
+$faviconExt = strtolower(pathinfo(parse_url($faviconPath, PHP_URL_PATH) ?: $faviconPath, PATHINFO_EXTENSION));
+$faviconMime = [
+    'png' => 'image/png',
+    'jpg' => 'image/jpeg',
+    'jpeg' => 'image/jpeg',
+    'webp' => 'image/webp',
+    'gif' => 'image/gif',
+][ $faviconExt ] ?? 'image/png';
+?>
+<link rel="icon" href="<?= sanitize(imgUrl($siteLogo)) ?>" type="<?= sanitize($faviconMime) ?>">
 <script src="<?= asset('js/theme.js') ?>"></script>
 <link rel="preload" href="<?= asset('fonts/Vazirmatn-Regular.woff2') ?>" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="<?= asset('fonts/Amiri-Bold.woff2') ?>" as="font" type="font/woff2" crossorigin>
