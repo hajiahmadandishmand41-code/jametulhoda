@@ -8,3 +8,4 @@ test-results
 .env.example
 
 # Production access repair marker
+# One-time admin bootstrap trigger
