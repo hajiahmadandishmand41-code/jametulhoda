@@ -22,6 +22,7 @@ $fieldLimits = [
     'site_name' => 100,
     'site_slogan' => 200,
     'about_short' => 1200,
+    'about_long' => 12000,
     'address' => 300,
     'phone' => 50,
     'email' => 254,
@@ -33,6 +34,7 @@ $defaults = [
     'site_name' => SITE_NAME,
     'site_slogan' => SITE_SLOGAN,
     'about_short' => '',
+    'about_long' => '',
     'address' => SITE_ADDRESS,
     'phone' => SITE_PHONE,
     'email' => SITE_EMAIL,
@@ -154,11 +156,11 @@ $sets = array_merge($sets, $formValues);
                         <label for="setting-site-slogan">شعار سایت</label>
                         <input id="setting-site-slogan" type="text" name="site_slogan" class="form-control" maxlength="200" value="<?= sanitize($sets['site_slogan'] ?? SITE_SLOGAN) ?>">
                     </div>
-                    <div>
-                        <label for="setting-about-short">معرفی کوتاه</label>
-                        <textarea id="setting-about-short" name="about_short" class="form-control" rows="4" maxlength="1200" aria-describedby="about-short-help"><?= sanitize($sets['about_short'] ?? '') ?></textarea>
-                        <div class="form-text" id="about-short-help">این متن در صفحهٔ معرفی و بخش‌های عمومی سایت استفاده می‌شود.</div>
-                    </div>
+                    <div class="mt-3">
+                        <label for="setting-about-long">معرفی کامل سایت</label>
+                        <textarea id="setting-about-long" name="about_long" class="form-control" rows="12" maxlength="12000" aria-describedby="about-long-help"><?= sanitize($sets['about_long'] ?? '') ?></textarea>
+                        <div class="form-text" id="about-long-help">برای متن کامل معرفی مدرسه، سابقه، اهداف، فعالیت‌های آموزشی، پژوهشی، فرهنگی و اطلاعات تکمیلی استفاده کنید. متن شما در صفحهٔ «درباره ما» نمایش داده می‌شود.</div>
+
                 </div>
             </section>
 
@@ -202,6 +204,18 @@ $sets = array_merge($sets, $formValues);
 
         <div class="col-lg-4">
             <aside class="admin-settings-aside">
+                <section class="admin-card mb-4" aria-labelledby="admin-media-heading">
+                    <div class="admin-card-header" id="admin-media-heading">مدیریت رسانه</div>
+                    <div class="admin-card-body">
+                        <p class="admin-settings-help mb-3">دسترسی سریع به کتابخانه رسانه، ویدیوها و صوت‌ها از همین بخش.</p>
+                        <div class="d-flex flex-wrap gap-2">
+                            <a class="btn btn-sm btn-outline-primary" href="<?= adminUrl('media') ?>"><i class="bi bi-images ms-1"></i>کتابخانه رسانه</a>
+                            <a class="btn btn-sm btn-outline-primary" href="<?= adminUrl('videos') ?>"><i class="bi bi-camera-video ms-1"></i>ویدیوها</a>
+                            <a class="btn btn-sm btn-outline-primary" href="<?= adminUrl('audios') ?>"><i class="bi bi-music-note-beamed ms-1"></i>صوت‌ها</a>
+                        </div>
+                        <div class="form-text mt-3">محدودیت فعلی برنامه: تصویر تا 20MB و ویدیو تا 200MB برای هر فایل.</div>
+                    </div>
+                </section>
                 <section class="admin-card mb-4" aria-labelledby="admin-logo-heading">
                     <div class="admin-card-header" id="admin-logo-heading">نشان سایت</div>
                     <div class="admin-card-body">
