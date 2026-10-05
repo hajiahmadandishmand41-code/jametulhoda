@@ -92,7 +92,7 @@ if ($jhdPublicDbReady) {
     if ($siteName === 'مدرسه علمیه جامعه‌الهدی') $siteName = SITE_NAME;
     $siteSlogan = getSetting('site_slogan', SITE_SLOGAN);
     if ($siteSlogan === 'علم، معرفت و تهذیب در پرتو قرآن و عترت') $siteSlogan = SITE_SLOGAN;
-    $siteLogo = getSetting('site_logo', 'assets/img/logo.png');
+    // Public branding is fixed to the real repository logo for every public page.\n    $siteLogo = 'assets/img/logo.png';
     $isAdminLoggedIn = isLoggedIn();
     $isMemberLoggedIn = isMemberLoggedIn();
     $navTopicTree = getTopicTree();
@@ -177,7 +177,7 @@ $isActiveNav = function (string $route) use ($currentPath): bool {
 if ($jhdPublicDbReady && session_status() === PHP_SESSION_ACTIVE): ?><meta name="csrf-token" content="<?= sanitize(generateCsrfToken()) ?>"><?php endif; ?>
 <title><?= sanitize($metaTitle) ?></title>
 <meta name="description" content="<?= sanitize($metaDesc) ?>">
-<?php if ($noindexSeo): ?><meta name="robots" content="noindex, follow"><?php endif; ?>
+<?php if ($noindexSeo): ?><meta name="robots" content="noindex, follow"><?php else: ?><meta name="robots" content="index, follow"><?php endif; ?>
 <?php if ($canonical): ?>
 <link rel="canonical" href="<?= sanitize($canonical) ?>">
 <meta property="og:url" content="<?= sanitize($canonical) ?>">
@@ -189,14 +189,15 @@ if ($jhdPublicDbReady && session_status() === PHP_SESSION_ACTIVE): ?><meta name=
 <meta property="og:site_name" content="<?= sanitize($siteName) ?>">
 <?php if (!empty($post['published_at'])): ?><meta property="article:published_time" content="<?= sanitize($post['published_at']) ?>"><?php endif; ?>
 <?php if (!empty($post['author_name'])): ?><meta property="article:author" content="<?= sanitize($post['author_name']) ?>"><?php endif; ?>
-<?php if (!empty($post['featured_image']) || !empty($book['cover_image']) || !empty($lesson['featured_image'])):
-    $ogImg = imgUrl($post['featured_image'] ?? $book['cover_image'] ?? $lesson['featured_image'] ?? '');
-    if ($ogImg): ?><meta property="og:image" content="<?= sanitize($ogImg) ?>"><?php endif;
-endif; ?>
+<?php
+$ogImg = canonicalUrl('assets/img/logo.png');
+?>
+<meta property="og:image" content="<?= sanitize($ogImg) ?>">
+<meta property="og:image:type" content="image/png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="<?= sanitize($metaTitle) ?>">
 <meta name="twitter:description" content="<?= sanitize($metaDesc) ?>">
-<?php if (!empty($ogImg)): ?><meta name="twitter:image" content="<?= sanitize($ogImg) ?>"><?php endif; ?>
+<meta name="twitter:image" content="<?= sanitize($ogImg) ?>">
 <?php if (SITE_URL): ?>
 <?php
 $jhdEntityPath = current_path();
@@ -252,18 +253,9 @@ if ($jhdEntityPath === '/' || $jhdEntityPath === '/about') {
 <?php if (!empty($articleJsonLd)): ?><script type="application/ld+json"><?= $articleJsonLd ?></script><?php endif; ?>
 <?php if (!empty($bookJsonLd)): ?><script type="application/ld+json"><?= $bookJsonLd ?></script><?php endif; ?>
 <?php if (!empty($mediaJsonLd)): ?><script type="application/ld+json"><?= $mediaJsonLd ?></script><?php endif; ?>
-<?php
-$faviconPath = (string)$siteLogo;
-$faviconExt = strtolower(pathinfo(parse_url($faviconPath, PHP_URL_PATH) ?: $faviconPath, PATHINFO_EXTENSION));
-$faviconMime = [
-    'png' => 'image/png',
-    'jpg' => 'image/jpeg',
-    'jpeg' => 'image/jpeg',
-    'webp' => 'image/webp',
-    'gif' => 'image/gif',
-][ $faviconExt ] ?? 'image/png';
-?>
-<link rel="icon" href="<?= sanitize(imgUrl($siteLogo)) ?>" type="<?= sanitize($faviconMime) ?>">
+<link rel="icon" href="<?= sanitize(canonicalUrl('favicon.ico')) ?>" type="image/png">
+<link rel="shortcut icon" href="<?= sanitize(canonicalUrl('favicon.ico')) ?>" type="image/png">
+<link rel="apple-touch-icon" href="<?= sanitize(canonicalUrl('assets/img/logo.png')) ?>" type="image/png">
 <script src="<?= asset('js/theme.js') ?>"></script>
 <link rel="preload" href="<?= asset('fonts/Vazirmatn-Regular.woff2') ?>" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="<?= asset('fonts/Amiri-Bold.woff2') ?>" as="font" type="font/woff2" crossorigin>
