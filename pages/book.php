@@ -46,39 +46,30 @@ jhd_redirect_to_canonical(bookUrl($book), $bookCanonicalPath);
 $pageTitle = $book['title'];
 $canonicalOverride = bookUrl($book);
 $pageDesc  = excerpt($book['description'] ?? $book['toc'] ?? '', 160);
-$canonicalUrl = bookUrl($book);
-$ogImage   = !empty($book['cover_image']) ? jhd_absolute_url(imgUrl($book['cover_image'])) : canonicalUrl('assets/img/logo.png');
-$ogType    = 'book';
+
+/*
+ * NB: the local variable used to be called `$canonicalUrl`, which shadowed the
+ * canonicalUrl() *function* — so the breadcrumb items below were emitted as
+ * relative paths instead of absolute URLs. Renamed, and the JSON-LD now comes
+ * from the shared helpers so it matches every other page.
+ */
+$bookCanonical = bookUrl($book);
+$ogImage = !empty($book['cover_image']) ? jhd_absolute_url(imgUrl($book['cover_image'])) : canonicalUrl(SITE_LOGO_PATH);
+$ogImageAlt = (string)$book['title'];
+
 $breadcrumbs = [
-  ['name'=>'صفحه اصلی','url'=>siteUrl()],
-  ['name'=>'کتابخانه','url'=>siteUrl('books')],
-  ['name'=>$book['title'],'url'=>$canonicalUrl],
+  ['name' => 'صفحه اصلی', 'url' => SITE_URL ? rtrim(SITE_URL, '/') . '/' : siteUrl()],
+  ['name' => 'کتابخانه', 'url' => siteUrl('books')],
+  ['name' => $book['title'], 'url' => $bookCanonical],
 ];
-$breadcrumbsJsonLd = json_encode([
-  '@context'=>'https://schema.org',
-  '@type'=>'BreadcrumbList',
-  'itemListElement'=>array_map(function($cr,$i){ return ['@type'=>'ListItem','position'=>$i+1,'name'=>$cr['name'],'item'=>$cr['url']]; }, $breadcrumbs, array_keys($breadcrumbs))
-], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
-$bookJsonLd = json_encode([
-  '@context'=>'https://schema.org',
-  '@type'=>'Book',
-  'name'=>$book['title'],
-  'description'=>excerpt($book['description'] ?? '', 200),
-  'image'=>$ogImage,
-  'author'=>!empty($book['author']) ? ['@type'=>'Person','name'=>$book['author']] : null,
-  'translator'=>!empty($book['translator']) ? ['@type'=>'Person','name'=>$book['translator']] : null,
-    'datePublished'=>$book['publish_year'] ?? null,
-  'numberOfPages'=>$book['pages'] ?? null,
-  'url'=>$canonicalUrl,
-], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+$breadcrumbsJsonLd = breadcrumbsJsonLd($breadcrumbs);
+$bookJsonLd = bookJsonLd($book);
 
 $topics = getTopicsForBook((int)$book['id']);
 $attachments = getMediaFor('book', (int)$book['id'], 'document');
 $related = getRelatedBooks((int)$book['id'], 6);
 require __DIR__.'/../includes/header.php';
 ?>
-<script type="application/ld+json"><?= $breadcrumbsJsonLd ?></script>
-<script type="application/ld+json"><?= $bookJsonLd ?></script>
 
 <div class="breadcrumb-bar"><div class="container">
 <nav aria-label="breadcrumb"><ol class="breadcrumb mb-0">

@@ -157,6 +157,8 @@ const PREFIX_LABEL = [
   ['/books/', 'book'],
   ['/topics/', 'topic'],
   ['/category/', 'category'],
+  ['/video/', 'video'],
+  ['/audio/', 'audio'],
 ];
 const seenTypes = new Set();
 const contentSamples = new Map();

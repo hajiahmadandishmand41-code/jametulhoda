@@ -72,11 +72,14 @@ $addUrl = static function (string $relative, ?string $lastmod = null) use (&$ent
     if (!$sitemapAllowed($loc)) return;
 
     // Normalise: one trailing-slash-free path, no fragment, no query string.
+    // The port is preserved — dropping it would rewrite a non-default-port
+    // origin (a local or dev instance) into a different host entirely.
     $parts = parse_url($loc);
     if (!is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) return;
     $path = rtrim((string)($parts['path'] ?? '/'), '/');
     if ($path === '') $path = '/';
-    $loc = $parts['scheme'] . '://' . $parts['host'] . $path;
+    $port = isset($parts['port']) ? ':' . $parts['port'] : '';
+    $loc = $parts['scheme'] . '://' . $parts['host'] . $port . $path;
 
     if (isset($seen[$loc])) return;
     $seen[$loc] = true;

@@ -50,6 +50,15 @@ $pageDesc = !empty($post['summary']) ? excerpt($post['summary'], 160) : excerpt(
 // /speeches/<slug>, ?p=…) forwards here.
 jhd_redirect_to_canonical(speechUrl($post), jhd_route_path('speech', ['slug' => (string)$post['slug']]));
 $canonicalOverride = speechUrl($post);
+
+// Breadcrumb trail: صفحه اصلی › سخنرانی‌ها › این سخنرانی. The visible trail and
+// the BreadcrumbList below are built from the same array, so they cannot drift.
+$speechCrumbs = [
+    ['name' => 'صفحه اصلی', 'url' => SITE_URL ? rtrim(SITE_URL, '/') . '/' : url()],
+    ['name' => 'سخنرانی‌ها', 'url' => url('speeches')],
+    ['name' => (string)$post['title'], 'url' => canonicalUrl(speechUrl($post))],
+];
+$breadcrumbsJsonLd = breadcrumbsJsonLd($speechCrumbs);
 require_once __DIR__ . '/../includes/header.php';
 ?>
 <div class="breadcrumb-bar"><div class="container"><nav><ol class="breadcrumb mb-0">

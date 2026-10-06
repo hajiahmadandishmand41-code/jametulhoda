@@ -47,6 +47,13 @@ $pageDesc = trim((string)($cat['description'] ?? '')) !== ''
     : 'مطالب دسته‌بندی ' . $cat['name'] . ' در مدرسه جامعه‌الهدی — مقالات، اخبار، پژوهش‌ها و گزارش‌های مرتبط.';
 $canonicalOverride = categoryUrl($cat);
 
+// Breadcrumb trail: صفحه اصلی › این دسته‌بندی
+$categoryCrumbs = [
+    ['name' => 'صفحه اصلی', 'url' => SITE_URL ? rtrim(SITE_URL, '/') . '/' : url()],
+    ['name' => (string)$cat['name'], 'url' => canonicalUrl(categoryUrl($cat))],
+];
+$breadcrumbsJsonLd = breadcrumbsJsonLd($categoryCrumbs);
+
 require_once __DIR__ . '/../includes/header.php';
 ?>
 <div class="breadcrumb-bar"><div class="container"><nav><ol class="breadcrumb mb-0">
