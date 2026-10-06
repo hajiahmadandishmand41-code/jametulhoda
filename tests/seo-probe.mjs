@@ -238,6 +238,31 @@ for (const [label, samplePath] of contentSamples) {
 }
 
 // 5. Canonical consolidation of legacy spellings ------------------------------
+// Requirement: the sitemap must contain only real, indexable, self-canonical
+// public URLs. Sampling one URL per type cannot prove that, so sweep all of
+// them. A URL that 301s anywhere but itself is a duplicate/legacy alias and
+// must not be in the sitemap.
+console.log('\n--- Every sitemap URL ---');
+for (const loc of locs) {
+  const r = await get(loc);
+  if (r.status !== 200) {
+    record(`sitemap URL ${loc.replace(BASE, '') || '/'} → 200`, false, String(r.status));
+    continue;
+  }
+  const c = canonical(r.text);
+  record(
+    `sitemap URL ${loc.replace(BASE, '') || '/'} is self-canonical`,
+    c === loc,
+    c || '(no canonical)'
+  );
+  const rb = metaContent(r.text, 'name', 'robots') || '';
+  record(
+    `sitemap URL ${loc.replace(BASE, '') || '/'} is indexable`,
+    /index/i.test(rb) && !/noindex/i.test(rb),
+    rb || '(none)'
+  );
+}
+
 console.log('\n--- Legacy / duplicate spellings ---');
 const legacyPairs = [];
 if (contentSamples.has('news')) legacyPairs.push(['/post/' + contentSamples.get('news').split('/').pop(), contentSamples.get('news')]);
