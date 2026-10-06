@@ -21,6 +21,11 @@ on:
   push:
     branches: ['**']
   pull_request:
+  # Vercel reports every deployment through the GitHub Deployments API, so a
+  # successful Production deployment is the exact moment the live probe should
+  # run. Probing on push alone races the deployment and measures the previous
+  # build; this measures the build that actually went live.
+  deployment_status:
   workflow_dispatch:
     inputs:
       target:
@@ -123,7 +128,12 @@ jobs:
 
   live:
     name: Live deployment
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || github.ref == 'refs/heads/main'
+      || (github.event_name == 'deployment_status'
+          && github.event.deployment_status.state == 'success'
+          && github.event.deployment_status.environment == 'Production')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -133,10 +143,23 @@ jobs:
         with:
           node-version: 22
 
+      # A Production deployment is always probed at its stable production
+      # alias; a manual run may point the probe anywhere.
+      - name: Resolve the target URL
+        id: target
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "url=${{ inputs.target }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "deployment_status" ] && [ "${{ github.event.deployment_status.environment }}" = "Production" ]; then
+            echo "url=https://jametulhoda.vercel.app" >> "$GITHUB_OUTPUT"
+          else
+            echo "url=https://jametulhoda.vercel.app" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run the SEO probe against the deployment
         id: live
         env:
-          TEST_BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.target || 'https://jametulhoda.vercel.app' }}
+          TEST_BASE_URL: ${{ steps.target.outputs.url }}
           SEO_PROBE_TIMEOUT_MS: '90000'
         run: node tests/seo-probe.mjs 2>&1 | tee seo-probe-report.txt
 
@@ -156,7 +179,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           {
-            echo "### SEO / URL / branding probe — ${{ github.event_name == 'workflow_dispatch' && inputs.target || 'https://jametulhoda.vercel.app' }}"
+            echo "### SEO / URL / branding probe — ${{ steps.target.outputs.url }}"
             echo
             echo "- commit: \`${GITHUB_SHA}\`"
             echo "- conclusion: ${{ steps.live.outcome }}"
