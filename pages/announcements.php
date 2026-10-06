@@ -1,6 +1,6 @@
 <?php
 $pageTitle = 'اطلاعیه‌ها و اعلانات';
-$pageDesc = 'اطلاعیه‌های رسمی، برنامه‌های آموزشی و خبرهای ثبت‌شدهٔ جامعة‌الهدی را در این بخش دنبال کنید.';
+$pageDesc = 'اطلاعیه‌های رسمی، برنامه‌های آموزشی و خبرهای ثبت‌شدهٔ مدرسه مدرسه جامعه‌الهدی را در این بخش دنبال کنید.';
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';

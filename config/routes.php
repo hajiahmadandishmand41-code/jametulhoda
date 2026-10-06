@@ -176,8 +176,14 @@ return [
         ['~^/books?/([^/]+)/?$~uD',                                        'pages/book.php',            ['slug' => 1]],
 
         // ─── انواع مطالب با پیشوند نوع (مفرد و جمع) ────────────────────
-        // typed post URLs: news, article(s), research(es), report(s), event(s), announcement(s), program(s)
-        ['~^/(article|articles|news|research|researches|report|reports|event|events|announcement|announcements|program|programs)/([^/]+)/?$~uD', 'pages/post.php', ['expected_type' => 1, 'slug' => 2]],
+        // Typed post URLs. Every published post_type owns a prefix here so each
+        // piece of content has a direct, independent URL:
+        //   news, article(s), research(es), report(s), event(s),
+        //   announcement(s), program(s), religious(-activities), qa, speech(es)
+        // The singular/plural and legacy spellings resolve too, but
+        // jhd_redirect_to_canonical() sends them on to the one canonical path,
+        // so they never compete with it as a duplicate URL.
+        ['~^/(article|articles|news|research|researches|report|reports|event|events|announcement|announcements|program|programs|religious|religious-activities|qa|speeches)/([^/]+)/?$~uD', 'pages/post.php', ['expected_type' => 1, 'slug' => 2]],
 
         // ─── رسانه (شناسه عددی ویدیو / صوت / مدیا) ─────────────────────
         ['~^/(video|audio|media)/(\d+)/?$~D',                              'pages/media.php',           ['kind' => 1, 'id' => 2]],

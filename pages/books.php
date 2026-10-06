@@ -3,7 +3,7 @@
  * books.php — کتابخانه دیجیتال (مرجع کتب حوزوی و پژوهشی)
  */
 $pageTitle = 'کتابخانه دیجیتال';
-$pageDesc = 'کتابخانه دیجیتال مدرسه علمیه جامعه‌الهدی — کتب علمی، حوزوی و پژوهشی با دسترسی آزاد، معرفی و دانلود فایل‌های PDF و Word.';
+$pageDesc = 'کتابخانه دیجیتال مدرسه مدرسه جامعه‌الهدی — کتب علمی، حوزوی و پژوهشی با دسترسی آزاد، معرفی و دانلود فایل‌های PDF و Word.';
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';

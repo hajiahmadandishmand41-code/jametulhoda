@@ -1,6 +1,6 @@
 <?php
 $pageTitle = 'فعالیت‌های مذهبی';
-$pageDesc = 'گزارش فعالیت‌ها، مراسم و برنامه‌های مذهبی ثبت‌شدهٔ جامعة‌الهدی.';
+$pageDesc = 'گزارش فعالیت‌ها، مراسم و برنامه‌های مذهبی ثبت‌شدهٔ مدرسه مدرسه جامعه‌الهدی.';
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';

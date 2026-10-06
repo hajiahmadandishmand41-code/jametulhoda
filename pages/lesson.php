@@ -26,9 +26,14 @@ if(!$lesson){
     echo '<div class="container py-5 text-center"><h1>درس یافت نشد</h1><a href="'.siteUrl('lessons').'" class="btn btn-primary mt-3">بازگشت</a></div>';
     require_once __DIR__.'/../includes/footer.php'; exit;
 }
+// One lesson = one URL: /lessons/<slug>, the same path the sitemap and every
+// lesson card publish.
+jhd_redirect_to_canonical(lessonUrl($lesson), jhd_route_path('lesson', ['slug' => (string)$lesson['slug']]));
+
 $pageTitle=$lesson['title'];
 $canonicalOverride=lessonUrl($lesson);
 $pageDesc=$lesson['summary'] ? excerpt($lesson['summary'],160) : excerpt(strip_tags($lesson['content'] ?? ''),160);
+$lessonJsonLd = lessonJsonLd($lesson);
 
 $audioUrl = $lesson['audio_file'] ? imgUrl((string)$lesson['audio_file']) : '';
 $videoUrl = $lesson['video_file'] ? imgUrl((string)$lesson['video_file']) : '';

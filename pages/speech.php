@@ -15,7 +15,7 @@ $post = $slug ? getPostBySlug($slug) : null;
 if (!$post || $post['post_type'] !== 'speech') {
     http_response_code(404);
     $pageTitle = 'سخنرانی یافت نشد';
-    $pageDesc = 'سخنرانی درخواستی در آرشیو جامعة‌الهدی در دسترس نیست.';
+    $pageDesc = 'سخنرانی درخواستی در آرشیو مدرسه مدرسه جامعه‌الهدی در دسترس نیست.';
     require_once __DIR__ . '/../includes/header.php';
     echo '<div class="container py-5 text-center"><h2>سخنرانی مورد نظر یافت نشد</h2><a href="' . siteUrl('speeches') . '" class="btn btn-primary mt-3">بازگشت به سخنرانی‌ها</a></div>';
     require_once __DIR__ . '/../includes/footer.php';
@@ -46,7 +46,19 @@ $nextRow = $next->fetch();
 
 $pageTitle = $post['title'];
 $pageDesc = !empty($post['summary']) ? excerpt($post['summary'], 160) : excerpt(strip_tags($post['content'] ?? ''), 160);
+// One speech = one URL: /speech/<slug>. Anything else (/post/<slug>,
+// /speeches/<slug>, ?p=…) forwards here.
+jhd_redirect_to_canonical(speechUrl($post), jhd_route_path('speech', ['slug' => (string)$post['slug']]));
 $canonicalOverride = speechUrl($post);
+
+// Breadcrumb trail: صفحه اصلی › سخنرانی‌ها › این سخنرانی. The visible trail and
+// the BreadcrumbList below are built from the same array, so they cannot drift.
+$speechCrumbs = [
+    ['name' => 'صفحه اصلی', 'url' => SITE_URL ? rtrim(SITE_URL, '/') . '/' : url()],
+    ['name' => 'سخنرانی‌ها', 'url' => url('speeches')],
+    ['name' => (string)$post['title'], 'url' => canonicalUrl(speechUrl($post))],
+];
+$breadcrumbsJsonLd = breadcrumbsJsonLd($speechCrumbs);
 require_once __DIR__ . '/../includes/header.php';
 ?>
 <div class="breadcrumb-bar"><div class="container"><nav><ol class="breadcrumb mb-0">

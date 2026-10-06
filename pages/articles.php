@@ -3,7 +3,7 @@
  * articles.php — فهرست و آرشیو مقالات علمی و یادداشت‌های پژوهشی
  */
 $pageTitle = 'مقالات علمی';
-$pageDesc = 'مجموعه مقالات علمی، کلامی، فقهی و معرفتی اساتید و پژوهشگران مدرسه علمیه جامعه‌الهدی.';
+$pageDesc = 'مجموعه مقالات علمی، کلامی، فقهی و معرفتی اساتید و پژوهشگران مدرسه مدرسه جامعه‌الهدی.';
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';

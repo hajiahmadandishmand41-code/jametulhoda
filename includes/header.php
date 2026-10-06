@@ -88,28 +88,51 @@ $jhdDbNotice = $jhdPublicDbReady ? '' : jhd_db_notice();
 
 if ($jhdPublicDbReady) {
     startPublicSession();
-    $siteName = getSetting('site_name', SITE_NAME);
-    if ($siteName === 'مدرسه علمیه جامعه‌الهدی') $siteName = SITE_NAME;
-    $siteSlogan = getSetting('site_slogan', SITE_SLOGAN);
-    if ($siteSlogan === 'علم، معرفت و تهذیب در پرتو قرآن و عترت') $siteSlogan = SITE_SLOGAN;
-    // Public branding is fixed to the real repository logo for every public page.\n    $siteLogo = 'assets/img/logo.png';
     $isAdminLoggedIn = isLoggedIn();
     $isMemberLoggedIn = isMemberLoggedIn();
     $navTopicTree = getTopicTree();
 } else {
-    $siteName = SITE_NAME;
-    $siteSlogan = SITE_SLOGAN;
-    $siteLogo = 'assets/img/logo.png';
     $isAdminLoggedIn = false;
     $isMemberLoggedIn = false;
     $navTopicTree = [];
 }
-if ($siteLogo === 'assets/img/logo.png') $siteLogo = 'assets/img/logo.png';
+
+/*
+ * Public branding is fixed in code, on every public page, in both the
+ * database-ready and the degraded path.
+ *
+ * The stored `site_name` setting used to win here. Its value is a *variant* of
+ * the brand, so the same request rendered one name in the <title>, another in
+ * og:site_name and a third in the Organization JSON-LD — exactly the mixed
+ * identity that keeps a brand from consolidating. The brand is now a single
+ * constant, the same way the public logo is.
+ *
+ * (Previously the `$siteLogo` assignment below was swallowed by a literal `\n`
+ * inside a `//` comment, so on a database-ready page the variable was never
+ * defined and the header rendered no logo at all. Both branches now set it.)
+ */
+$siteName   = SITE_NAME;
+$siteSlogan = SITE_SLOGAN;
+$siteLogo   = SITE_LOGO_PATH;
 
 $currentPath = current_path();
 $isLoggedIn = $isAdminLoggedIn; // backward compatible for existing templates
 
-$metaTitle = !empty($pageTitle) ? $pageTitle . ' | ' . $siteName : $siteName . ' | ' . $siteSlogan;
+/*
+ * Title.
+ *
+ * The brand is the site's identity, so it is the suffix of every page title
+ * and the leading token of the homepage title. A page may set
+ * `$metaTitleOverride` when it needs the full string (the homepage, where the
+ * brand must come first rather than last).
+ */
+if (!empty($metaTitleOverride)) {
+    $metaTitle = $metaTitleOverride;
+} elseif (!empty($pageTitle)) {
+    $metaTitle = $pageTitle . ' | ' . $siteName;
+} else {
+    $metaTitle = $siteName . ' | ' . $siteSlogan;
+}
 $metaDesc = $pageDesc ?? $siteSlogan;
 if (mb_strlen($metaDesc, 'UTF-8') > 160) {
     $metaDesc = mb_substr($metaDesc, 0, 157, 'UTF-8') . '...';
@@ -187,75 +210,65 @@ if ($jhdPublicDbReady && session_status() === PHP_SESSION_ACTIVE): ?><meta name=
 <meta property="og:title" content="<?= sanitize($metaTitle) ?>">
 <meta property="og:description" content="<?= sanitize($metaDesc) ?>">
 <meta property="og:site_name" content="<?= sanitize($siteName) ?>">
-<?php if (!empty($post['published_at'])): ?><meta property="article:published_time" content="<?= sanitize($post['published_at']) ?>"><?php endif; ?>
-<?php if (!empty($post['author_name'])): ?><meta property="article:author" content="<?= sanitize($post['author_name']) ?>"><?php endif; ?>
+<?php if (!empty($post['published_at'])): ?><meta property="article:published_time" content="<?= sanitize((string)$post['published_at']) ?>"><?php endif; ?>
+<?php if (!empty($post['updated_at'])): ?><meta property="article:modified_time" content="<?= sanitize((string)$post['updated_at']) ?>"><?php endif; ?>
+<?php if (!empty($post['author_name'])): ?><meta property="article:author" content="<?= sanitize((string)$post['author_name']) ?>"><?php endif; ?>
+<?php if (!empty($post['cat_name'])): ?><meta property="article:section" content="<?= sanitize((string)$post['cat_name']) ?>"><?php endif; ?>
 <?php
-$ogImg = canonicalUrl('assets/img/logo.png');
+/*
+ * Social preview image.
+ *
+ * A page may pass its own image (a book cover, a post's featured image); the
+ * real school logo is the default, so every page always carries a valid
+ * absolute image rather than an empty or placeholder one.
+ */
+$ogImg = !empty($ogImage) && is_string($ogImage) ? $ogImage : canonicalUrl(SITE_LOGO_PATH);
+$ogImgAlt = !empty($ogImageAlt) && is_string($ogImageAlt) ? $ogImageAlt : $siteName;
+$ogImgType = $ogImg === canonicalUrl(SITE_LOGO_PATH)
+    ? 'image/png'
+    : (preg_match('~\.jpe?g($|\?)~i', $ogImg) ? 'image/jpeg' : 'image/png');
 ?>
 <meta property="og:image" content="<?= sanitize($ogImg) ?>">
-<meta property="og:image:type" content="image/png">
+<meta property="og:image:secure_url" content="<?= sanitize($ogImg) ?>">
+<meta property="og:image:type" content="<?= sanitize($ogImgType) ?>">
+<meta property="og:image:alt" content="<?= sanitize($ogImgAlt) ?>">
+<?php if ($ogImg === canonicalUrl(SITE_LOGO_PATH)): ?>
+<meta property="og:image:width" content="<?= (int)SITE_LOGO_WIDTH ?>">
+<meta property="og:image:height" content="<?= (int)SITE_LOGO_HEIGHT ?>">
+<?php endif; ?>
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="<?= sanitize($metaTitle) ?>">
 <meta name="twitter:description" content="<?= sanitize($metaDesc) ?>">
 <meta name="twitter:image" content="<?= sanitize($ogImg) ?>">
+<meta name="twitter:image:alt" content="<?= sanitize($ogImgAlt) ?>">
 <?php if (SITE_URL): ?>
 <?php
-$jhdEntityPath = current_path();
-if ($jhdEntityPath === '/' || $jhdEntityPath === '/about') {
-    $jhdOrgSameAs = [];
-    foreach ([
-        safeExternalUrl(getSetting('social_telegram')),
-        safeExternalUrl(getSetting('social_youtube')),
-        safeExternalUrl(getSetting('social_instagram')),
-    ] as $jhdSameAsUrl) {
-        if ($jhdSameAsUrl !== '') $jhdOrgSameAs[] = $jhdSameAsUrl;
-    }
-
-    $jhdOrganizationJsonLd = [
-        '@context' => 'https://schema.org',
-        '@type' => 'EducationalOrganization',
-        '@id' => rtrim(SITE_URL, '/') . '/#organization',
-        'name' => 'مدرسه علمیه جامعه‌الهدی',
-        'alternateName' => ['جامعة‌الهدی', 'مدرسه علمیه جامعه‌الهدی'],
-        'url' => rtrim(SITE_URL, '/') . '/',
-        'logo' => canonicalUrl('assets/img/logo.png'),
-        'description' => 'مرکز علمی، آموزشی و پژوهشی علوم اسلامی در کابل، افغانستان؛ با تمرکز بر آموزش علوم اسلامی، تربیت طلاب، پژوهش دینی و ترویج فرهنگ قرآنی و اهل‌بیت (ع).',
-        'areaServed' => ['@type' => 'Country', 'name' => 'Afghanistan'],
-        'address' => [
-            '@type' => 'PostalAddress',
-            'addressLocality' => 'کابل',
-            'addressCountry' => 'AF',
-        ],
-        'founder' => [
-            '@type' => 'Person',
-            'name' => 'آیت‌الله محمدحسین حلیمی',
-        ],
-        'knowsAbout' => [
-            'فقه و اصول',
-            'تفسیر قرآن',
-            'حدیث شناسی',
-            'کلام و فلسفه',
-            'ادبیات عرب',
-            'تاریخ اسلام',
-        ],
-    ];
-    $jhdOrgEmail = getSetting('email', SITE_EMAIL);
-    $jhdOrgPhone = getSetting('phone', SITE_PHONE);
-    if (filter_var($jhdOrgEmail, FILTER_VALIDATE_EMAIL)) $jhdOrganizationJsonLd['email'] = 'mailto:' . $jhdOrgEmail;
-    if ($jhdOrgPhone !== '') $jhdOrganizationJsonLd['telephone'] = $jhdOrgPhone;
-    if ($jhdOrgSameAs) $jhdOrganizationJsonLd['sameAs'] = $jhdOrgSameAs;
+/*
+ * Site identity graph.
+ *
+ * Organization + WebSite are emitted on every indexable page with stable @ids.
+ * Publishing one identical entity everywhere (instead of re-describing it per
+ * page) is what lets a crawler attribute every page of this site to a single
+ * organisation with one name, one URL and one logo.
+ */
+$jsonLdFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
+if (!$noindexSeo) {
+    echo '<script type="application/ld+json">' . json_encode(organizationJsonLd(), $jsonLdFlags) . '</script>';
+    echo '<script type="application/ld+json">' . json_encode(websiteJsonLd(), $jsonLdFlags) . '</script>';
 }
 ?>
-<?php if (!empty($jhdOrganizationJsonLd)): ?><script type="application/ld+json"><?= json_encode($jhdOrganizationJsonLd, JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?></script><?php endif; ?>
-<script type="application/ld+json"><?= json_encode(['@context'=>'https://schema.org','@type'=>'WebSite','name'=>$siteName,'url'=>SITE_URL,'potentialAction'=>['@type'=>'SearchAction','target'=> rtrim(SITE_URL,'/').'/search?q={search_term_string}','query-input'=>'required name=search_term_string']], JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?></script>
 <?php endif; ?>
 <?php if (!empty($breadcrumbsJsonLd)): ?><script type="application/ld+json"><?= $breadcrumbsJsonLd ?></script><?php endif; ?>
 <?php if (!empty($articleJsonLd)): ?><script type="application/ld+json"><?= $articleJsonLd ?></script><?php endif; ?>
+<?php if (!empty($qaJsonLd)): ?><script type="application/ld+json"><?= $qaJsonLd ?></script><?php endif; ?>
 <?php if (!empty($bookJsonLd)): ?><script type="application/ld+json"><?= $bookJsonLd ?></script><?php endif; ?>
+<?php if (!empty($lessonJsonLd)): ?><script type="application/ld+json"><?= $lessonJsonLd ?></script><?php endif; ?>
 <?php if (!empty($mediaJsonLd)): ?><script type="application/ld+json"><?= $mediaJsonLd ?></script><?php endif; ?>
-<link rel="icon" href="<?= sanitize(canonicalUrl('favicon.ico')) ?>" type="image/png">
+<link rel="icon" href="<?= sanitize(canonicalUrl('favicon.ico')) ?>" type="image/png" sizes="<?= (int)SITE_LOGO_WIDTH ?>x<?= (int)SITE_LOGO_HEIGHT ?>">
+<link rel="icon" href="<?= sanitize(canonicalUrl(SITE_LOGO_PATH)) ?>" type="image/png" sizes="<?= (int)SITE_LOGO_WIDTH ?>x<?= (int)SITE_LOGO_HEIGHT ?>">
 <link rel="shortcut icon" href="<?= sanitize(canonicalUrl('favicon.ico')) ?>" type="image/png">
-<link rel="apple-touch-icon" href="<?= sanitize(canonicalUrl('assets/img/logo.png')) ?>" type="image/png">
+<link rel="apple-touch-icon" href="<?= sanitize(canonicalUrl(SITE_LOGO_PATH)) ?>" type="image/png">
+<meta name="msapplication-TileImage" content="<?= sanitize(canonicalUrl(SITE_LOGO_PATH)) ?>">
 <script src="<?= asset('js/theme.js') ?>"></script>
 <link rel="preload" href="<?= asset('fonts/Vazirmatn-Regular.woff2') ?>" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="<?= asset('fonts/Amiri-Bold.woff2') ?>" as="font" type="font/woff2" crossorigin>

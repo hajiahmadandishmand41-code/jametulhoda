@@ -337,7 +337,17 @@ if (preg_match('~^/assets/[a-zA-Z0-9_./-]+\.(css|js|mjs|svg|png|jpe?g|webp|gif|w
     $file = __DIR__ . $assetPath;
     if (is_file($file) && !is_link($file)) jhdServeStatic($file);
 }
-if ($path === '/favicon.ico') {
+/*
+ * /favicon.ico IS the real school logo.
+ *
+ * The one logo file in this project is assets/img/logo.png. Browsers and
+ * crawlers request /favicon.ico by convention, so that path streams the exact
+ * same bytes — same file, same ETag (mtime+size), declared as image/png.
+ * There is no separate .ico and no placeholder: `favicon.ico` and `logo.png`
+ * are byte-identical, which is what lets a search engine treat them as one
+ * image for the brand.
+ */
+if ($path === '/favicon.ico' || $path === '/favicon.png') {
     $file = __DIR__ . '/assets/img/logo.png';
     if (is_file($file)) jhdServeStatic($file);
 }

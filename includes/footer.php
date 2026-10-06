@@ -15,13 +15,15 @@ $jhdPublicDbReady = array_key_exists('JHD_PUBLIC_DB_READY', $GLOBALS)
     ? (bool)$GLOBALS['JHD_PUBLIC_DB_READY']
     : true;
 
+// Public branding is fixed in code so the footer, the header, the <title> and
+// the structured data all carry the identical brand. The stored `site_name`
+// setting is a variant and was making each of those disagree.
+$siteName   = SITE_NAME;
+$siteSlogan = SITE_SLOGAN;
+$siteLogo   = SITE_LOGO_PATH;
+
 if ($jhdPublicDbReady) {
     $footerTopics  = getTopics(['limit' => 8]);
-    $siteName      = getSetting('site_name', SITE_NAME);
-    if ($siteName === 'مدرسه علمیه جامعه‌الهدی') $siteName = SITE_NAME;
-    $siteSlogan    = getSetting('site_slogan', SITE_SLOGAN);
-    if ($siteSlogan === 'علم، معرفت و تهذیب در پرتو قرآن و عترت') $siteSlogan = SITE_SLOGAN;
-    $siteLogo      = 'assets/img/logo.png';
     $aboutShort    = getSetting('about_short', 'مدرسه علمیه جامعة‌الهدی یکی از مراکز علوم و معارف اسلامی در کابل، افغانستان است.');
     $socialTelegram = getSetting('social_telegram');
     $socialYoutube  = getSetting('social_youtube');
@@ -31,9 +33,6 @@ if ($jhdPublicDbReady) {
     $siteEmail     = getSetting('email', SITE_EMAIL);
 } else {
     $footerTopics   = [];
-    $siteName       = SITE_NAME;
-    $siteSlogan     = SITE_SLOGAN;
-    $siteLogo       = 'assets/img/logo.png';
     $aboutShort     = 'مدرسه علمیه جامعة‌الهدی یکی از مراکز علوم و معارف اسلامی در کابل، افغانستان است.';
     $socialTelegram = '';
     $socialYoutube  = '';
@@ -42,7 +41,6 @@ if ($jhdPublicDbReady) {
     $sitePhone      = SITE_PHONE;
     $siteEmail      = SITE_EMAIL;
 }
-if ($siteLogo === 'assets/img/logo.png') $siteLogo = 'assets/img/logo.png';
 ?>
 <footer class="main-footer" role="contentinfo">
     <div class="footer-top">

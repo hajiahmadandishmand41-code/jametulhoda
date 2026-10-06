@@ -1,6 +1,6 @@
 <?php
 $pageTitle = 'برنامه‌های آموزشی';
-$pageDesc = 'برنامه‌ها و دوره‌های آموزشی منتشرشدهٔ جامعة‌الهدی در حوزه علوم اسلامی و آموزش حوزوی.';
+$pageDesc = 'برنامه‌ها و دوره‌های آموزشی منتشرشدهٔ مدرسه مدرسه جامعه‌الهدی در حوزه علوم اسلامی و آموزش حوزوی.';
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';

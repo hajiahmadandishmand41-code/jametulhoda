@@ -27,7 +27,7 @@ const publicPaths=['/','/index.php',
  '/category?slug=fiqh-osul','/category.php?slug=fiqh-osul','/topic','/reports.php','/qa.php',
  '/media-library','/media-library.php','/audio','/video','/files','/library',
  '/sitemap.xml','/sitemap.php','/robots.txt','/robots.php',
- '/assets/css/design-system.css','/assets/img/logo.jpg','/assets/images/logo.jpg','/assets/img/placeholder.svg',
+ '/assets/css/design-system.css','/assets/img/logo.png','/assets/images/logo.png','/favicon.ico',
  '/php/install','/php/install.php','/php/install/'];
 for(const path of publicPaths){const r=await api.get(path);check('GET '+path,r.status()===200||r.status()===302,String(r.status()));}
 // Query parameters are scalar by contract; malformed bracket arrays must be a

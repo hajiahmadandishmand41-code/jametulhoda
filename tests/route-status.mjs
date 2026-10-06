@@ -286,8 +286,8 @@ for (const [base, page2marker] of [
 
 // ─── 9. Static assets + uploads ──────────────────────────────────────────
 for (const path of [
-  '/assets/css/design-system.css', '/assets/js/main.js', '/assets/js/gallery.js', '/assets/img/logo.jpg',
-  '/assets/img/placeholder.svg', '/assets/vendor/plyr.css',
+  '/assets/css/design-system.css', '/assets/js/main.js', '/assets/js/gallery.js', '/assets/img/logo.png',
+  '/favicon.ico', '/assets/vendor/plyr.css',
   '/assets/fonts/Vazirmatn-Regular.woff2',
   '/uploads/images/seed-cover.png', '/uploads/audios/seed-audio.mp3',
   '/uploads/videos/seed-video.mp4', '/uploads/documents/seed-doc.pdf',

@@ -40,8 +40,40 @@ define('BASE_DIR', dirname(__DIR__));
 define('STORAGE_DIR', BASE_DIR . '/storage');
 
 // Site
-define('SITE_NAME',   'جامعة‌الهدی');
+/**
+ * Brand identity — one official name, used verbatim everywhere.
+ *
+ * `SITE_NAME` is the school's primary brand: it is the first and strongest
+ * identity signal, and it must appear unchanged in the page <title>, in
+ * og:site_name and in the Organization / WebSite structured data. Nothing may
+ * substitute a variant (the Arabic spelling, a longer legal name or a slogan)
+ * for it in those positions.
+ *
+ * `SITE_ALT_NAMES` lists only names that are genuinely used for the school on
+ * this very site; they are published as Organization.alternateName so search
+ * engines can reconcile the variants with the primary brand instead of seeing
+ * them as competing identities.
+ *
+ * The public site no longer reads these from the database settings: the stored
+ * `site_name` was a variant, which produced a different brand string in the
+ * title, in og:site_name and in structured data. Branding is fixed in code —
+ * exactly like the public logo — so every public surface agrees.
+ */
+define('SITE_NAME',   'مدرسه جامعه‌الهدی');
 define('SITE_SLOGAN', 'مرکز علمی، آموزشی و پژوهشی در پرتو قرآن و عترت');
+define('SITE_ALT_NAMES', ['جامعة‌الهدی', 'مدرسه علمیه جامعه‌الهدی']);
+/** Short official description reused by Organization and the homepage. */
+define('SITE_DESCRIPTION', 'مدرسه علمی، آموزشی و پژوهشی علوم اسلامی در کابل، افغانستان؛ با تمرکز بر آموزش علوم اسلامی، تربیت طلاب، پژوهش دینی و ترویج فرهنگ قرآنی و اهل‌بیت (ع).');
+/** Real, deployed logo. The only logo file referenced by public code. */
+define('SITE_LOGO_PATH', 'assets/img/logo.png');
+/** Intrinsic pixel size of logo.png, published with the social/OG image tags. */
+define('SITE_LOGO_WIDTH',  702);
+define('SITE_LOGO_HEIGHT', 723);
+/**
+ * Founder, published as Organization.founder. Kept here in one place so the
+ * homepage, the about page and every other page emit the identical value.
+ */
+define('SITE_FOUNDER', 'آیت‌الله محمدحسین حلیمی');
 // Default canonical origin follows the domain supplied for this installation;
 // custom domains must override SITE_URL in the environment/local config.
 define('SITE_URL',    env_value('SITE_URL', env_value('VERCEL') ? 'https://jametulhoda.vercel.app' : 'https://jametulhoda.gt.tc'));

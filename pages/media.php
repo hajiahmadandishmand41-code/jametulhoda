@@ -64,6 +64,8 @@ $isAudio = $kind === 'audio';
 $mediaTitle = $media['title'] ?: $parent['title'];
 $pageTitle = $mediaTitle;
 $pageDesc = excerpt(($isAudio ? 'صوت: ' : 'ویدیو: ') . $parent['title'], 160);
+// One media item = one URL: /video/<id> or /audio/<id>.
+jhd_redirect_to_canonical(mediaUrl($kind, (int)$media['id']), jhd_route_path($kind, ['id' => (int)$media['id']]));
 $canonicalOverride = mediaUrl($kind, (int)$media['id']);
 $fileUrl = siteUrl(ltrim($media['file_path'], '/'));
 $poster = !empty($parent['featured_image']) ? imgUrl($parent['featured_image']) : '';
