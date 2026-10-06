@@ -49,9 +49,13 @@ $sitemapDeny = '~^/(?:' . implode('|', [
     'api(?:/|$)',
 ]) . '~i';
 
-/** Reject any URL that is not a plain public page of this origin. */
+/**
+ * Reject any URL that is not a plain public page of this origin.
+ * http:// is accepted because a local/dev origin uses it; production always
+ * configures SITE_URL as https, so a published sitemap is https throughout.
+ */
 $sitemapAllowed = static function (string $url) use ($origin, $sitemapDeny): bool {
-    if (!preg_match('~^https://~i', $url)) return false;
+    if (!preg_match('~^https?://~i', $url)) return false;
     $path = parse_url($url, PHP_URL_PATH);
     if (!is_string($path) || $path === '') return false;
     if (!str_starts_with($url, $origin . '/') && $url !== $origin . '/') return false;
