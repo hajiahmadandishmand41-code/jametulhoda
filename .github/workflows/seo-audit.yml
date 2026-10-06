@@ -29,7 +29,10 @@ on:
         default: 'https://jametulhoda.vercel.app'
 
 permissions:
-  contents: read
+  # contents:write is only used to publish the probe report as a commit
+  # comment, because the Actions log archive and the artifact store are not
+  # reachable from every environment.
+  contents: write
 
 jobs:
   local:
