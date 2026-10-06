@@ -103,11 +103,18 @@ record(`${LOGO_PATH} dimensions`, logoW > 0 && logoH > 0, `${logoW}×${logoH}`);
 
 const favicon = await get('/favicon.ico');
 record('GET /favicon.ico → 200', favicon.status === 200, `${favicon.status} ${favicon.headers.get('content-type')}`);
-record(
-  '/favicon.ico is byte-identical to logo.png',
-  favicon.bytes.length > 0 && sha256(favicon.bytes) === sha256(logo.bytes),
-  `favicon ${sha256(favicon.bytes).slice(0, 16)}… vs logo ${sha256(logo.bytes).slice(0, 16)}… (${favicon.bytes.length} bytes)`
-);
+// favicon.ico must be a genuine ICO container (signature 00 00 01 00), NOT a
+// byte-identical copy of logo.png. The branding photo (702×723, not square)
+// cannot be used as a favicon: Google's favicon parser requires a square image
+// and falls back to a generic globe icon for rectangular inputs.
+const isIco = favicon.bytes.length >= 4
+  && favicon.bytes[0] === 0 && favicon.bytes[1] === 0
+  && favicon.bytes[2] === 1 && favicon.bytes[3] === 0;
+record('/favicon.ico is a genuine ICO file (square, multi-size)', isIco,
+  `${favicon.bytes.length} bytes, content-type ${favicon.headers.get('content-type')}`);
+record('/favicon.ico is NOT byte-identical to logo.png',
+  favicon.bytes.length > 0 && sha256(favicon.bytes) !== sha256(logo.bytes),
+  'separate dedicated icon for the favicon pipeline');
 
 // No placeholder / alternate logo may be referenced by public HTML.
 const bannedRefs = home.text.match(/(favicon\.svg|placeholder\.svg|logo\.jpg)/gi) || [];
@@ -139,8 +146,15 @@ const ogImage = metaContent(home.text, 'property', 'og:image');
 record('og:image is the absolute real logo', ogImage === abs(LOGO_PATH), ogImage);
 const twImage = metaContent(home.text, 'name', 'twitter:image');
 record('twitter:image is the absolute real logo', twImage === abs(LOGO_PATH), twImage);
-record('apple-touch-icon is the real logo', /rel=["']apple-touch-icon["'][^>]*href=["'][^"']*logo\.png/.test(home.text), (home.text.match(/<link[^>]+apple-touch-icon[^>]*>/i) || [''])[0]);
-record('icon link points at /favicon.ico', /rel=["'](shortcut )?icon["'][^>]*href=["'][^"']*favicon\.ico/.test(home.text), (home.text.match(/<link[^>]+rel=["']icon["'][^>]*>/i) || [''])[0]);
+record('apple-touch-icon points at a square PNG favicon (not the non-square logo)',
+  /rel=["']apple-touch-icon["'][^>]*href=["'][^"']*favicon-192\.png/.test(home.text),
+  (home.text.match(/<link[^>]+apple-touch-icon[^>]*>/i) || [''])[0]);
+record('primary icon link points at /favicon.ico',
+  /rel=["']icon["'][^>]*href=["'][^"']*favicon\.ico/.test(home.text),
+  (home.text.match(/<link[^>]+rel=["']icon["'][^>]*>/i) || [''])[0]);
+record('PNG icon link is square and sized',
+  /rel=["']icon["'][^>]*href=["'][^"']*favicon-48\.png["'][^>]*sizes=["']48x48/.test(home.text),
+  (home.text.match(/<link[^>]+rel=["']icon["'][^>]*sizes=/i) || [''])[0]);
 
 // 4. Content coverage: one canonical URL per published content type -----------
 // Every content type must have an index that resolves, is indexable and

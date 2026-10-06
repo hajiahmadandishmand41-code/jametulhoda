@@ -264,11 +264,35 @@ if (!$noindexSeo) {
 <?php if (!empty($bookJsonLd)): ?><script type="application/ld+json"><?= $bookJsonLd ?></script><?php endif; ?>
 <?php if (!empty($lessonJsonLd)): ?><script type="application/ld+json"><?= $lessonJsonLd ?></script><?php endif; ?>
 <?php if (!empty($mediaJsonLd)): ?><script type="application/ld+json"><?= $mediaJsonLd ?></script><?php endif; ?>
-<link rel="icon" href="<?= sanitize(canonicalUrl('favicon.ico')) ?>" type="image/png" sizes="<?= (int)SITE_LOGO_WIDTH ?>x<?= (int)SITE_LOGO_HEIGHT ?>">
-<link rel="icon" href="<?= sanitize(canonicalUrl(SITE_LOGO_PATH)) ?>" type="image/png" sizes="<?= (int)SITE_LOGO_WIDTH ?>x<?= (int)SITE_LOGO_HEIGHT ?>">
-<link rel="shortcut icon" href="<?= sanitize(canonicalUrl('favicon.ico')) ?>" type="image/png">
-<link rel="apple-touch-icon" href="<?= sanitize(canonicalUrl(SITE_LOGO_PATH)) ?>" type="image/png">
-<meta name="msapplication-TileImage" content="<?= sanitize(canonicalUrl(SITE_LOGO_PATH)) ?>">
+<?php
+/*
+ * Favicon / icon set.
+ *
+ * Three separate assets cover the three roles Google and browsers actually
+ * use:
+ *
+ *   1. /favicon.ico                    → the legacy, universal fallback.
+ *                                        Served by router.php as image/x-icon
+ *                                        (ICO container with 16, 32, 48 px).
+ *   2. favicon-48.png                  → the smallest PNG size Google's
+ *                                        favicon pipeline accepts (>= 48 px).
+ *                                        Explicitly typed and sized so the
+ *                                        parser never has to guess.
+ *   3. favicon-192.png                 → Android / PWA / Apple touch icon.
+ *                                        Large enough that downscaling by the
+ *                                        device yields a crisp result.
+ *
+ * The school's branding photo (logo.png, 702×723) is used only as og:image
+ * and the social preview. It is NOT square, so it cannot be a favicon —
+ * Google's favicon parser requires a square image and falls back to a
+ * generic globe icon when it receives a rectangular one.
+ */
+?>
+<link rel="icon" href="<?= sanitize(canonicalUrl('favicon.ico')) ?>" type="image/x-icon">
+<link rel="icon" href="<?= sanitize(canonicalUrl('assets/img/favicon-48.png')) ?>" type="image/png" sizes="48x48">
+<link rel="icon" href="<?= sanitize(canonicalUrl('assets/img/favicon-192.png')) ?>" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="<?= sanitize(canonicalUrl('assets/img/favicon-192.png')) ?>" type="image/png" sizes="192x192">
+<link rel="shortcut icon" href="<?= sanitize(canonicalUrl('favicon.ico')) ?>" type="image/x-icon">
 <script src="<?= asset('js/theme.js') ?>"></script>
 <link rel="preload" href="<?= asset('fonts/Vazirmatn-Regular.woff2') ?>" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="<?= asset('fonts/Amiri-Bold.woff2') ?>" as="font" type="font/woff2" crossorigin>

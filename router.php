@@ -338,17 +338,25 @@ if (preg_match('~^/assets/[a-zA-Z0-9_./-]+\.(css|js|mjs|svg|png|jpe?g|webp|gif|w
     if (is_file($file) && !is_link($file)) jhdServeStatic($file);
 }
 /*
- * /favicon.ico IS the real school logo.
+ * Favicon.
  *
- * The one logo file in this project is assets/img/logo.png. Browsers and
- * crawlers request /favicon.ico by convention, so that path streams the exact
- * same bytes — same file, same ETag (mtime+size), declared as image/png.
- * There is no separate .ico and no placeholder: `favicon.ico` and `logo.png`
- * are byte-identical, which is what lets a search engine treat them as one
- * image for the brand.
+ * /favicon.ico is the real, dedicated icon (ICO container with 16/32/48
+ * bitmap sizes, square aspect). The school's branding image is
+ * assets/img/logo.png (702×723, not square) and is used only as the social /
+ * og:image. Serving the non-square logo as the favicon confused Google's
+ * favicon parser — it requires a square image and falls back to a generic
+ * globe when it cannot extract one.
+ *
+ * /favicon.png is an alias for the 48×48 square PNG (assets/img/favicon-48.png)
+ * so any code or cached bookmark that requested favicon.png still gets a
+ * valid, square icon.
  */
-if ($path === '/favicon.ico' || $path === '/favicon.png') {
-    $file = __DIR__ . '/assets/img/logo.png';
+if ($path === '/favicon.ico') {
+    $file = __DIR__ . '/favicon.ico';
+    if (is_file($file)) jhdServeStatic($file);
+}
+if ($path === '/favicon.png') {
+    $file = __DIR__ . '/assets/img/favicon-48.png';
     if (is_file($file)) jhdServeStatic($file);
 }
 if (UPLOAD_STORAGE === 'local' && preg_match('~^/uploads/(?:[a-zA-Z0-9_-]+/)+[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|gif|webp|mp3|ogg|wav|m4a|mp4|webm|mov|mkv|pdf|doc|docx)$~D', $path)) {
