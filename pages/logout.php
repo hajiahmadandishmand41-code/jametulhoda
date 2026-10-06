@@ -28,7 +28,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 
 $pageTitle = 'خروج از حساب';
-$pageDesc = 'خروج از حساب کاربری جامعة‌الهدی.';
+$pageDesc = 'خروج از حساب کاربری مدرسه مدرسه جامعه‌الهدی.';
 $canonicalOverride = logoutUrl();
 $noindexSeo = true;
 require_once $jhdLogoutRoot . '/includes/header.php';
@@ -44,7 +44,7 @@ require_once $jhdLogoutRoot . '/includes/header.php';
                 <button type="submit" class="jhd-button jhd-button-block"><i class="bi bi-box-arrow-right ms-2"></i>خروج</button>
                 <a class="jhd-button jhd-button-ghost jhd-button-block" href="<?= $wasStaff ? adminUrl('dashboard') : url() ?>">انصراف</a>
             </form>
-            <p class="jhd-login-foot">جامعه‌الهدی | مرکز علمی، آموزشی و پژوهشی</p>
+            <p class="jhd-login-foot">مدرسه جامعه‌الهدی | مرکز علمی، آموزشی و پژوهشی</p>
         </div>
     </div>
 </section>

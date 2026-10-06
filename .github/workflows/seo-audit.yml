@@ -1,0 +1,125 @@
+name: SEO / URL / branding audit
+
+# Verifies, against a real HTTP server, the things this project promises about
+# SEO, URLs and branding:
+#   • every published content type has one canonical direct URL
+#   • legacy/duplicate spellings forward to that canonical URL
+#   • the sitemap only lists real public URLs and picks up new content
+#   • the brand name, the logo and the structured data agree everywhere
+#   • /favicon.ico and /assets/img/logo.png are the same file
+#
+# Two jobs:
+#   local  — a throwaway SQLite instance seeded with every content type, served
+#            through router.php exactly like production. Runs on every push.
+#   live   — the same probe against a real deployment. Started manually with a
+#            target URL, and automatically against Production on main.
+#
+# The probe asserts nothing about ranking and nothing about how a search engine
+# chooses to display a logo; it only checks that the technical signals exist.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Base URL to audit'
+        required: true
+        default: 'https://jametulhoda.vercel.app'
+
+permissions:
+  contents: read
+
+jobs:
+  local:
+    name: Seeded local instance
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: gd, curl, zip, mbstring, dom, fileinfo, pdo_sqlite, sqlite3
+          coverage: none
+
+      - name: Build the throwaway SQLite database
+        env:
+          APP_ENV: development
+          DB_DRIVER: sqlite
+          SQLITE_PATH: /tmp/jametulhoda-seo.sqlite
+          SESSION_DRIVER: files
+          UPLOAD_STORAGE: local
+        run: |
+          rm -f /tmp/jametulhoda-seo.sqlite
+          php bin/dev-db.php
+          php tests/fixtures/attach-demo-media.php /tmp/jametulhoda-seo.sqlite
+
+      - name: Serve the site through router.php
+        env:
+          # `local` keeps robots.txt permissive; SQLite is refused in production.
+          APP_ENV: local
+          DB_DRIVER: sqlite
+          SQLITE_PATH: /tmp/jametulhoda-seo.sqlite
+          SESSION_DRIVER: files
+          UPLOAD_STORAGE: local
+          # Production publishes clean URLs, so the probe must exercise those.
+          JHD_PRETTY_URLS: 'true'
+          SITE_URL: http://127.0.0.1:8080
+        run: |
+          php -S 127.0.0.1:8080 router.php > /tmp/php-server.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null http://127.0.0.1:8080/; then echo "server up"; break; fi
+            sleep 1
+          done
+
+      - name: Run the SEO probe
+        id: probe
+        env:
+          TEST_BASE_URL: http://127.0.0.1:8080
+        run: node tests/seo-probe.mjs 2>&1 | tee seo-probe-report.txt
+
+      - name: Show the PHP server log on failure
+        if: failure()
+        run: tail -n 60 /tmp/php-server.log || true
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: seo-probe-local
+          path: seo-probe-report.txt
+          if-no-files-found: ignore
+
+  live:
+    name: Live deployment
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run the SEO probe against the deployment
+        env:
+          TEST_BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.target || 'https://jametulhoda.vercel.app' }}
+          SEO_PROBE_TIMEOUT_MS: '90000'
+        run: node tests/seo-probe.mjs 2>&1 | tee seo-probe-report.txt
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: seo-probe-live
+          path: seo-probe-report.txt
+          if-no-files-found: ignore

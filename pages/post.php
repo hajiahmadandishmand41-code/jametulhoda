@@ -23,7 +23,10 @@ $normalizedExpected = match ($expectedType) {
     'researches', 'research' => 'research',
     'reports', 'report' => 'report',
     'announcements', 'announcement' => 'announcement',
-    'programs', 'program', 'events', 'event', 'religious' => 'program',
+    'programs', 'program' => 'program',
+    'religious', 'religious-activities' => 'religious',
+    'events', 'event' => 'event',
+    'qa' => 'qa',
     'speeches', 'speech' => 'speech',
     default => $expectedType,
 };
@@ -41,8 +44,11 @@ try {
     error_log('post lookup failed: ' . $e->getMessage());
 }
 
-// Event types alias check
-$isEventMatch = in_array($normalizedExpected, ['program', 'event'], true) && in_array($post['post_type'] ?? '', ['program', 'religious', 'announcement'], true);
+// `/event/<slug>` is the legacy shared namespace for everything event-shaped
+// (programs, religious activities and announcements each own a prefix now).
+// It keeps resolving for old links, then forwards to the canonical URL.
+$isEventMatch = $normalizedExpected === 'event'
+    && in_array($post['post_type'] ?? '', ['event', 'program', 'religious', 'announcement'], true);
 
 if (!$post || ($normalizedExpected !== '' && ($post['post_type'] ?? '') !== $normalizedExpected && !$isEventMatch)) {
     http_response_code(404);
@@ -54,9 +60,17 @@ if (!$post || ($normalizedExpected !== '' && ($post['post_type'] ?? '') !== $nor
     exit;
 }
 
-if (($post['post_type'] ?? '') === 'speech') {
-    redirect(speechUrl($post));
-}
+/*
+ * One content item = one URL.
+ *
+ * The post resolved successfully, so the request may still have arrived
+ * through a legacy spelling (/post/x, /article/x, /event/x, ?p=…). Send a
+ * permanent redirect to the canonical URL that postUrl() generates, so the
+ * canonical <link>, the sitemap, the breadcrumb and every card on the site all
+ * agree on a single address. `/speech/<slug>` is served by pages/speech.php,
+ * so a speech reached here is redirected there as well.
+ */
+jhd_redirect_to_canonical(postUrl($post), jhd_post_canonical_path($post));
 
 require_once __DIR__ . '/../includes/post-gallery.php';
 
@@ -125,15 +139,19 @@ $pageDesc = $post['summary'] ? excerpt($post['summary'], 160) : excerpt(strip_ta
 $breadcrumbs = [
     ['name' => 'صفحه اصلی', 'url' => SITE_URL ? rtrim(SITE_URL, '/') . '/' : url()],
 ];
+// Breadcrumbs name the section that owns this content, and that section URL is
+// the same one the sitemap and the navigation use.
 $typeMap = [
-    'news'         => ['label' => 'اخبار',         'url' => url('news')],
-    'article'      => ['label' => 'مقالات',       'url' => url('articles')],
-    'research'     => ['label' => 'پژوهش‌ها',      'url' => url('research')],
-    'report'       => ['label' => 'گزارش‌ها',      'url' => url('reports')],
-    'announcement' => ['label' => 'اطلاعیه‌ها',    'url' => url('announcements')],
-    'program'      => ['label' => 'رویدادها',      'url' => url('events')],
-    'religious'    => ['label' => 'فعالیت مذهبی',  'url' => url('events')],
-    'qa'           => ['label' => 'پرسش و پاسخ',   'url' => url('qa')],
+    'news'         => ['label' => 'اخبار',            'url' => url('news')],
+    'article'      => ['label' => 'مقالات',           'url' => url('articles')],
+    'research'     => ['label' => 'پژوهش‌ها',          'url' => url('research')],
+    'report'       => ['label' => 'گزارش‌ها',          'url' => url('reports')],
+    'announcement' => ['label' => 'اطلاعیه‌ها',        'url' => url('announcements')],
+    'program'      => ['label' => 'برنامه‌های آموزشی', 'url' => url('programs')],
+    'religious'    => ['label' => 'فعالیت‌های مذهبی',  'url' => url('religious-activities')],
+    'event'        => ['label' => 'رویدادها',          'url' => url('events')],
+    'speech'       => ['label' => 'سخنرانی‌ها',        'url' => url('speeches')],
+    'qa'           => ['label' => 'پرسش و پاسخ',       'url' => url('qa')],
 ];
 if (isset($typeMap[$post['post_type']])) {
     $breadcrumbs[] = ['name' => $typeMap[$post['post_type']]['label'], 'url' => $typeMap[$post['post_type']]['url']];
@@ -146,7 +164,18 @@ if ($primaryTopic) {
 $canonicalOverride = postUrl($post);
 $breadcrumbs[] = ['name' => $post['title'], 'url' => canonicalUrl(postUrl($post))];
 $breadcrumbsJsonLd = breadcrumbsJsonLd($breadcrumbs);
-$articleJsonLd = articleJsonLd($post);
+// Structured data matches the content type: a question page is a QAPage, a
+// news item a NewsArticle, a research piece a ScholarlyArticle, …
+if (($post['post_type'] ?? '') === 'qa') {
+    $qaJsonLd = qaJsonLd($post);
+} else {
+    $articleJsonLd = articleJsonLd($post);
+}
+// Give social previews the post's own image when it has one.
+if (!empty($featuredImagePaths[0])) {
+    $ogImage = jhd_absolute_url(imgUrl((string)$featuredImagePaths[0]));
+    $ogImageAlt = (string)$post['title'];
+}
 
 require_once __DIR__ . '/../includes/header.php';
 ?>

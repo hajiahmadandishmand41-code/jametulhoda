@@ -21,6 +21,17 @@ if (!$topic || !(int)$topic['is_active']) {
     exit;
 }
 
+/*
+ * One topic = one URL: /topics/<parent>/<child> — the hierarchical path that
+ * the sitemap, the breadcrumbs and every topic card publish. The flat
+ * /topic/<slug> spelling stays reachable and forwards here, so a topic is
+ * never indexed under two addresses.
+ */
+jhd_redirect_to_canonical(
+    url('topic', ['slug' => jhd_topic_slug_path($topic)]),
+    jhd_route_path('topic', ['slug' => jhd_topic_slug_path($topic)])
+);
+
 /** Build a URL which keeps the hierarchical topic slug in both URL modes. */
 function topicHubUrl(array $topic, string $section = 'all', array $extra = []): string {
     $query = array_filter(

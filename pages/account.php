@@ -19,7 +19,7 @@ $user = currentUser();
 $isStaff = jhd_role_is_staff($user['role']);
 
 $pageTitle = 'حساب کاربری';
-$pageDesc = 'مدیریت حساب کاربری در جامعة‌الهدی.';
+$pageDesc = 'مدیریت حساب کاربری در مدرسه مدرسه جامعه‌الهدی.';
 $canonicalOverride = accountUrl();
 $noindexSeo = true;
 require_once __DIR__ . '/../includes/header.php';

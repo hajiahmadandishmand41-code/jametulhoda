@@ -10,7 +10,7 @@ startPublicSession();
 
 $kind = ($_GET['kind'] ?? 'video') === 'audio' ? 'audio' : 'video';
 $pageTitle = $kind === 'audio' ? 'کتابخانه صوتی و سخنرانی‌ها' : 'نگارخانه ویدیویی';
-$pageDesc = $kind === 'audio' ? 'سخنرانی‌ها، صوت جلسات علمی، ادعیه و زیارات مدرسه علمیه جامعه‌الهدی' : 'ویدیوها، نشست‌های تخصصی و کلیپ‌های تصویری مدرسه علمیه جامعه‌الهدی';
+$pageDesc = $kind === 'audio' ? 'سخنرانی‌ها، صوت جلسات علمی، ادعیه و زیارات مدرسه مدرسه جامعه‌الهدی' : 'ویدیوها، نشست‌های تخصصی و کلیپ‌های تصویری مدرسه مدرسه جامعه‌الهدی';
 $mediaPath = current_path();
 if (in_array($mediaPath, ['/audio', '/audios'], true) || ($mediaPath === '/media' && isset($_GET['kind']) && $kind === 'audio')) {
     $canonicalOverride = url('audios');

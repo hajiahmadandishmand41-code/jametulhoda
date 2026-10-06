@@ -67,7 +67,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 
 $pageTitle = 'ورود به حساب کاربری';
-$pageDesc = 'ورود اعضا، مدیران و مدیر ارشد جامعة‌الهدی از یک صفحهٔ واحد و امن.';
+$pageDesc = 'ورود اعضا، مدیران و مدیر ارشد مدرسه مدرسه جامعه‌الهدی از یک صفحهٔ واحد و امن.';
 $canonicalOverride = loginUrl();
 $noindexSeo = true;
 require_once $jhdLoginRoot . '/includes/header.php';
@@ -76,7 +76,7 @@ require_once $jhdLoginRoot . '/includes/header.php';
     <div class="container">
         <div class="jhd-auth-card jhd-login-card">
             <div class="jhd-login-head">
-                <img src="<?= imgUrl(getSetting('site_logo', 'assets/img/logo.png')) ?>" width="64" height="64" alt="<?= sanitize($siteName) ?>" class="jhd-login-logo">
+                <img src="<?= imgUrl(SITE_LOGO_PATH) ?>" width="64" height="64" alt="<?= sanitize($siteName) ?>" class="jhd-login-logo">
                 <p class="jhd-kicker">حساب کاربری</p>
                 <h1>ورود به حساب کاربری</h1>
                 <p class="jhd-auth-lead">با ایمیل، شمارهٔ تلفن یا نام کاربری خود وارد شوید. مدیریت محتوا و پنل مدیران نیز از همین صفحه انجام می‌شود.</p>
@@ -135,7 +135,7 @@ require_once $jhdLoginRoot . '/includes/header.php';
                 <a href="<?= registerUrl() ?>">ثبت‌نام</a>
             </div>
 
-            <p class="jhd-login-foot">جامعه‌الهدی | مرکز علمی، آموزشی و پژوهشی</p>
+            <p class="jhd-login-foot">مدرسه جامعه‌الهدی | مرکز علمی، آموزشی و پژوهشی</p>
         </div>
     </div>
 </section>

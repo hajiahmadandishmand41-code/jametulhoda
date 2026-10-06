@@ -4,52 +4,95 @@
  *
  * Rules:
  * - Only public, indexable URLs are included.
- * - URLs are generated through the same route helpers used by the site,
- *   so canonical/sitemap links stay aligned.
- * - Search, authentication, admin, installer and other private URLs stay out.
- * - Published content is discovered directly from the database.
- * - Topic paths preserve parent/child hierarchy.
+ * - Every content URL is produced by the SAME helper that renders the link on
+ *   the page (postUrl / lessonUrl / bookUrl / topicUrl / categoryUrl /
+ *   mediaUrl). The sitemap therefore can never drift from the canonical.
+ * - Published content is discovered straight from the database, so anything
+ *   published from the admin panel appears here automatically.
+ * - Drafts, private areas (admin, login, register, account, profile, search,
+ *   installer, migration, storage endpoints) and duplicate/legacy spellings
+ *   are excluded by an explicit guard — not by hoping they are not generated.
+ * - Topic paths preserve the parent/child hierarchy.
  */
 require_once __DIR__ . '/includes/functions.php';
 
-$base = SITE_URL && filter_var(SITE_URL, FILTER_VALIDATE_URL)
+$origin = SITE_URL && filter_var(SITE_URL, FILTER_VALIDATE_URL)
     ? rtrim(SITE_URL, '/')
     : 'https://jametulhoda.vercel.app';
 
 header('Content-Type: application/xml; charset=utf-8');
 header('Cache-Control: public, max-age=900, stale-while-revalidate=3600');
 
+/**
+ * Path prefixes that must never appear in a public sitemap.
+ * Matched against the path portion (without query string) of every candidate.
+ */
+$sitemapDeny = '~^/(?:' . implode('|', [
+    'admin(?:/|$)',
+    'login(?:/|$)',
+    'logout(?:/|$)',
+    'register(?:/|$)',
+    'account(?:/|$)',
+    'profile(?:/|$)',
+    'password-change(?:/|$)',
+    'search(?:/|$)',
+    'install(?:/|$)',
+    'php/(?:install|migrate)(?:/|$)',
+    'migrate(?:/|$)',
+    'config(?:/|$)',
+    'includes(?:/|$)',
+    'database(?:/|$)',
+    'bin(?:/|$)',
+    'storage(?:/|$)',
+    'tests(?:/|$)',
+    'uploads(?:/|$)',
+    'api(?:/|$)',
+]) . '~i';
+
+/** Reject any URL that is not a plain public page of this origin. */
+$sitemapAllowed = static function (string $url) use ($origin, $sitemapDeny): bool {
+    if (!preg_match('~^https://~i', $url)) return false;
+    $path = parse_url($url, PHP_URL_PATH);
+    if (!is_string($path) || $path === '') return false;
+    if (!str_starts_with($url, $origin . '/') && $url !== $origin . '/') return false;
+    if (preg_match($sitemapDeny, $path)) return false;
+    return true;
+};
+
 $entries = [];
 $seen = [];
 
-/**
- * Add one URL after generating its exact public form.
- * $params are passed to the central url() helper.
- */
-$add = static function (
-    string $route,
-    array $params = [],
-    ?string $lastmod = null
-) use (&$entries, &$seen): void {
-    $relative = $route === 'home' ? url() : url($route, $params);
+/** Add an already-generated URL (the same string a page would render). */
+$addUrl = static function (string $relative, ?string $lastmod = null) use (&$entries, &$seen, $sitemapAllowed): void {
     $loc = jhd_absolute_url($relative);
+    if (!$sitemapAllowed($loc)) return;
 
-    if ($loc === '' || isset($seen[$loc])) return;
+    // Normalise: one trailing-slash-free path, no fragment, no query string.
+    $parts = parse_url($loc);
+    if (!is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) return;
+    $path = rtrim((string)($parts['path'] ?? '/'), '/');
+    if ($path === '') $path = '/';
+    $loc = $parts['scheme'] . '://' . $parts['host'] . $path;
+
+    if (isset($seen[$loc])) return;
     $seen[$loc] = true;
 
     $entry = ['loc' => $loc];
     if ($lastmod) {
-        $ts = strtotime($lastmod);
-        if ($ts !== false) {
-            $entry['lastmod'] = gmdate('Y-m-d', $ts);
-        }
+        $ts = strtotime((string)$lastmod);
+        if ($ts !== false) $entry['lastmod'] = gmdate('Y-m-d', $ts);
     }
     $entries[] = $entry;
 };
 
+/** Add a listing/detail route through the central url() helper. */
+$add = static function (string $route, array $params = [], ?string $lastmod = null) use ($addUrl): void {
+    $addUrl($route === 'home' ? url() : url($route, $params), $lastmod);
+};
+
 /**
  * Public landing pages which are real, crawlable parts of the site.
- * Search and account/authentication pages are intentionally excluded.
+ * Search and every authentication page are intentionally absent.
  */
 foreach ([
     'home',
@@ -121,10 +164,11 @@ if ($db !== null) {
     }
 
     // ── Published posts: one canonical detail URL per published post.
+    //     postUrl() owns the type → prefix mapping, so a newly published
+    //     announcement/program/research/… is listed here with no code change.
     try {
         $stmt = $db->query("
-            SELECT slug,
-                   post_type,
+            SELECT id, slug, post_type,
                    COALESCE(updated_at, published_at, created_at) AS lastmod
             FROM posts
             WHERE status = 'published'
@@ -134,16 +178,7 @@ if ($db !== null) {
         ");
 
         foreach ($stmt->fetchAll() as $row) {
-            $route = match ((string)$row['post_type']) {
-                'article' => 'article',
-                'news' => 'news',
-                'research' => 'research',
-                'report' => 'report',
-                'speech' => 'speech',
-                'program', 'religious', 'announcement' => 'event',
-                default => 'post',
-            };
-            $add($route, ['slug' => (string)$row['slug']], $row['lastmod'] ?? null);
+            $addUrl(postUrl($row), $row['lastmod'] ?? null);
         }
     } catch (Throwable $e) {
         error_log('sitemap posts failed: ' . get_class($e));
@@ -152,7 +187,7 @@ if ($db !== null) {
     // ── Published lessons.
     try {
         $stmt = $db->query("
-            SELECT slug, COALESCE(updated_at, created_at) AS lastmod
+            SELECT id, slug, COALESCE(updated_at, created_at) AS lastmod
             FROM lessons
             WHERE status = 'published'
               AND COALESCE(slug, '') <> ''
@@ -160,7 +195,7 @@ if ($db !== null) {
             LIMIT 50000
         ");
         foreach ($stmt->fetchAll() as $row) {
-            $add('lesson', ['slug' => (string)$row['slug']], $row['lastmod'] ?? null);
+            $addUrl(lessonUrl($row), $row['lastmod'] ?? null);
         }
     } catch (Throwable $e) {
         error_log('sitemap lessons failed: ' . get_class($e));
@@ -176,11 +211,7 @@ if ($db !== null) {
             LIMIT 50000
         ");
         foreach ($stmt->fetchAll() as $row) {
-            $slug = trim((string)($row['slug'] ?? ''));
-            $params = $slug !== ''
-                ? ['slug' => $slug]
-                : ['id' => (int)$row['id']];
-            $add('book', $params, $row['lastmod'] ?? null);
+            $addUrl(bookUrl($row), $row['lastmod'] ?? null);
         }
     } catch (Throwable $e) {
         error_log('sitemap books failed: ' . get_class($e));
@@ -196,7 +227,7 @@ if ($db !== null) {
             LIMIT 50000
         ");
         foreach ($stmt->fetchAll() as $row) {
-            $add('category', ['slug' => (string)$row['slug']]);
+            $addUrl(categoryUrl((string)$row['slug']));
         }
     } catch (Throwable $e) {
         error_log('sitemap categories failed: ' . get_class($e));
@@ -219,7 +250,7 @@ if ($db !== null) {
 
         foreach ($stmt->fetchAll() as $row) {
             $kind = $row['kind'] === 'audio' ? 'audio' : 'video';
-            $add($kind, ['id' => (int)$row['id']], $row['created_at'] ?? null);
+            $addUrl(mediaUrl($kind, (int)$row['id']), $row['created_at'] ?? null);
         }
     } catch (Throwable $e) {
         error_log('sitemap media failed: ' . get_class($e));

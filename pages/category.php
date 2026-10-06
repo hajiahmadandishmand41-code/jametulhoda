@@ -37,7 +37,15 @@ $posts  = getPosts(['cat' => $cat['id'], 'limit' => $limit, 'offset' => ($page -
 // category شامل همه نوع‌ها می‌شه (به جز پیش‌نویس) — section فیلتر نمی‌کنه چون دسته‌بندی مستقل از صفحه‌ست
 $total  = countPosts(['cat' => $cat['id']]);
 $pages  = (int)ceil($total / $limit);
+// One category = one URL: /category/<slug>. The legacy ?slug= form keeps
+// resolving and forwards to it.
+jhd_redirect_to_canonical(categoryUrl($cat), jhd_route_path('category', ['slug' => (string)$cat['slug']]));
+
 $pageTitle = $cat['name'];
+$pageDesc = trim((string)($cat['description'] ?? '')) !== ''
+    ? excerpt((string)$cat['description'], 160)
+    : 'مطالب دسته‌بندی ' . $cat['name'] . ' در مدرسه جامعه‌الهدی — مقالات، اخبار، پژوهش‌ها و گزارش‌های مرتبط.';
+$canonicalOverride = categoryUrl($cat);
 
 require_once __DIR__ . '/../includes/header.php';
 ?>

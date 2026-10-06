@@ -45,7 +45,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 
 $pageTitle = 'تغییر رمز عبور';
-$pageDesc = 'تغییر رمز عبور حساب کاربری جامعة‌الهدی.';
+$pageDesc = 'تغییر رمز عبور حساب کاربری مدرسه مدرسه جامعه‌الهدی.';
 $canonicalOverride = url('password-change');
 $noindexSeo = true;
 require_once __DIR__ . '/../includes/header.php';

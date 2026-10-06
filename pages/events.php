@@ -3,7 +3,7 @@
  * events.php — رویدادها، برنامه‌های آموزشی و فعالیت‌های مذهبی جامعه‌الهدی
  */
 $pageTitle = 'رویدادها و برنامه‌ها';
-$pageDesc = 'رویدادها، مناسبت‌های مذهبی، نشست‌های علمی و دوره‌های آموزشی مدرسه علمیه جامعه‌الهدی';
+$pageDesc = 'رویدادها، مناسبت‌های مذهبی، نشست‌های علمی و دوره‌های آموزشی مدرسه مدرسه جامعه‌الهدی';
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';

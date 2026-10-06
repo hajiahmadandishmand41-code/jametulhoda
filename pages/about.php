@@ -2,8 +2,8 @@
 /**
  * about.php — درباره مدرسه
  */
-$pageTitle = 'مدرسه علمیه جامعه‌الهدی در کابل';
-$pageDesc = 'معرفی مدرسه علمیه جامعه‌الهدی در کابل؛ مرکز علمی، آموزشی و پژوهشی علوم اسلامی با تمرکز بر آموزش، پژوهش و معارف قرآن و عترت.';
+$pageTitle = 'درباره مدرسه';
+$pageDesc = 'معرفی مدرسه مدرسه جامعه‌الهدی در کابل؛ مرکز علمی، آموزشی و پژوهشی علوم اسلامی با تمرکز بر آموزش، پژوهش و معارف قرآن و عترت.';
 require_once __DIR__ . '/../includes/header.php';
 
 $aboutPhone = getSetting('phone', SITE_PHONE);
@@ -29,71 +29,35 @@ $aboutInstagram = safeExternalUrl(getSetting('social_instagram'));
         <?= jhd_page_head([
             'eyebrow' => 'آشنایی با مدرسه',
             'icon' => 'bi-info-circle',
-            'title' => 'مدرسه علمیه جامعه‌الهدی در کابل',
+            'title' => 'مدرسه مدرسه جامعه‌الهدی در کابل',
             'lead' => 'مرکز علمی، آموزشی و پژوهشی علوم اسلامی در پرتو قرآن و عترت؛ با محوریت آموزش، پژوهش و ترویج معارف اسلامی.',
         ]) ?>
 
         <?php
-        $organizationName = 'مدرسه علمیه جامعه‌الهدی';
-        $organizationDescription = 'مرکز علمی، آموزشی و پژوهشی علوم اسلامی در کابل، افغانستان؛ با تمرکز بر آموزش علوم اسلامی، تربیت طلاب، پژوهش دینی و ترویج فرهنگ قرآنی و اهل‌بیت (ع).';
-        $organizationSameAs = [];
-        foreach ([
-            safeExternalUrl(getSetting('social_telegram')),
-            safeExternalUrl(getSetting('social_youtube')),
-            safeExternalUrl(getSetting('social_instagram')),
-        ] as $sameAsUrl) {
-            if ($sameAsUrl !== '') $organizationSameAs[] = $sameAsUrl;
-        }
-        $organizationJsonLd = [
-            '@context' => 'https://schema.org',
-            '@type' => 'EducationalOrganization',
-            '@id' => rtrim(SITE_URL, '/') . '/#organization',
-            'name' => $organizationName,
-            'alternateName' => ['جامعة‌الهدی', 'مدرسه علمیه جامعه‌الهدی'],
-            'url' => rtrim(SITE_URL, '/') . '/about',
-            'logo' => canonicalUrl('assets/img/logo.png'),
-            'description' => $organizationDescription,
-            'areaServed' => [
-                '@type' => 'Country',
-                'name' => 'Afghanistan',
-            ],
-            'address' => [
-                '@type' => 'PostalAddress',
-                'addressLocality' => 'کابل',
-                'addressCountry' => 'AF',
-            ],
-            'founder' => [
-                '@type' => 'Person',
-                'name' => 'آیت‌الله محمدحسین حلیمی',
-            ],
-            'knowsAbout' => [
-                'فقه و اصول',
-                'تفسیر قرآن',
-                'حدیث شناسی',
-                'کلام و فلسفه',
-                'ادبیات عرب',
-                'تاریخ اسلام',
-            ],
-        ];
+        /*
+         * The Organization node is emitted by the shared header on every
+         * indexable page, so it is deliberately NOT re-declared here: a second
+         * copy with a slightly different name is exactly what splits a brand
+         * into competing entities. This page only adds what is unique to it.
+         */
         $aboutPageJsonLd = [
             '@context' => 'https://schema.org',
             '@type' => 'AboutPage',
             '@id' => rtrim(SITE_URL, '/') . '/about#webpage',
             'url' => rtrim(SITE_URL, '/') . '/about',
-            'name' => 'مدرسه علمیه جامعه‌الهدی در کابل',
+            'name' => SITE_NAME . ' — درباره مدرسه',
             'description' => $pageDesc,
+            'inLanguage' => 'fa-AF',
+            'isPartOf' => ['@id' => rtrim(SITE_URL, '/') . '/#website'],
+            'about' => ['@id' => rtrim(SITE_URL, '/') . '/#organization'],
             'mainEntity' => ['@id' => rtrim(SITE_URL, '/') . '/#organization'],
         ];
-        if ($aboutEmailHref !== '') $organizationJsonLd['email'] = 'mailto:' . $aboutEmailHref;
-        if ($aboutPhoneHref !== '') $organizationJsonLd['telephone'] = $aboutPhone;
-        if ($organizationSameAs) $organizationJsonLd['sameAs'] = $organizationSameAs;
         ?>
-        <script type="application/ld+json"><?= json_encode($organizationJsonLd, JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?></script>
-        <script type="application/ld+json"><?= json_encode($aboutPageJsonLd, JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?></script>
+        <script type="application/ld+json"><?= json_encode($aboutPageJsonLd, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?></script>
         <div class="row g-4 align-items-start">
             <div class="col-lg-8">
                 <article class="jhd-prose" aria-labelledby="about-title">
-                    <h2 id="about-title" class="about-card-title"><i class="bi bi-building ms-2" aria-hidden="true"></i>معرفی مدرسه علمیه جامعه‌الهدی در کابل</h2>
+                    <h2 id="about-title" class="about-card-title"><i class="bi bi-building ms-2" aria-hidden="true"></i>معرفی مدرسه جامعه‌الهدی در کابل</h2>
                     <?php
                     $aboutLong = trim((string)getSetting('about_long', ''));
                     if ($aboutLong !== ''):

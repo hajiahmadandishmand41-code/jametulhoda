@@ -36,6 +36,13 @@ if(isset($_GET['download'])){
     header('Location: '.storageUrl($key), true, 302); exit;
 }
 
+// One book = one URL. Books published with a slug are always addressed by that
+// slug; the numeric /book/<id> form stays reachable and forwards here.
+$bookCanonicalPath = trim((string)($book['slug'] ?? '')) !== ''
+    ? jhd_route_path('book', ['slug' => (string)$book['slug']])
+    : jhd_route_path('book', ['id' => (int)$book['id']]);
+jhd_redirect_to_canonical(bookUrl($book), $bookCanonicalPath);
+
 $pageTitle = $book['title'];
 $canonicalOverride = bookUrl($book);
 $pageDesc  = excerpt($book['description'] ?? $book['toc'] ?? '', 160);
@@ -60,8 +67,7 @@ $bookJsonLd = json_encode([
   'image'=>$ogImage,
   'author'=>!empty($book['author']) ? ['@type'=>'Person','name'=>$book['author']] : null,
   'translator'=>!empty($book['translator']) ? ['@type'=>'Person','name'=>$book['translator']] : null,
-  'publisher'=>!empty($book['publisher']) ? $book['publisher'] : 'جامعه‌الهدی',
-  'datePublished'=>$book['publish_year'] ?? null,
+    'datePublished'=>$book['publish_year'] ?? null,
   'numberOfPages'=>$book['pages'] ?? null,
   'url'=>$canonicalUrl,
 ], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);

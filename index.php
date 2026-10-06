@@ -12,8 +12,16 @@
  * در نبود دیتابیس هیچ «جعبهٔ خالی» تکراری نمایش داده نمی‌شود؛ یک یادداشت
  * فشرده و صادق کافی است.
  */
-$pageTitle = 'مدرسه علمیه جامعه‌الهدی در کابل';
-$pageDesc = 'مدرسه علمیه جامعه‌الهدی در کابل؛ مرکز علمی، آموزشی و پژوهشی علوم اسلامی با دسترسی به اخبار، مقالات، پژوهش‌ها، گزارش‌ها، کتاب‌ها، دروس و موضوعات مرتبط.';
+/*
+ * Homepage identity.
+ *
+ * The brand leads the homepage title — it is the site's primary identity, so
+ * it comes first rather than being pushed behind a descriptive phrase. The
+ * remainder states plainly what the school is and where it is; nothing else.
+ */
+$metaTitleOverride = 'مدرسه جامعه‌الهدی | مدرسه علوم اسلامی در کابل، افغانستان';
+$pageTitle = 'مدرسه جامعه‌الهدی';
+$pageDesc = 'مدرسه جامعه‌الهدی در کابل، افغانستان؛ مرکز علمی، آموزشی و پژوهشی علوم اسلامی با دسترسی به اخبار، مقالات، پژوهش‌ها، گزارش‌ها، کتاب‌ها، دروس و موضوعات مرتبط.';
 require_once __DIR__ . '/config/config.php';
 
 // Resolve the query route before conditionally loading authentication.

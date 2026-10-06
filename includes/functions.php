@@ -206,7 +206,7 @@ function jhd_routes(): array {
         'programs' => ['file' => 'pages/programs.php', 'p' => 'programs', 'pretty' => 'programs', 'title' => 'برنامه‌ها',   'listing' => true],
         'announcements' => ['file' => 'pages/announcements.php', 'p' => 'announcements', 'pretty' => 'announcements', 'title' => 'اطلاعیه‌ها', 'listing' => true],
         'religious-activities' => ['file' => 'pages/religious-activities.php', 'p' => 'religious-activities', 'pretty' => 'religious-activities', 'title' => 'فعالیت مذهبی', 'listing' => true],
-        'qa'       => ['file' => 'pages/qa.php',     'p' => 'qa',     'pretty' => 'qa',     'title' => 'پرسش و پاسخ', 'listing' => true],
+        'qa'       => ['file' => 'pages/qa.php',     'p' => 'qa',     'pretty' => 'qa',     'title' => 'پرسش و پاسخ', 'listing' => true, 'detail' => ['file' => 'pages/post.php', 'expected_type' => 'qa', 'id_param' => 'slug']],
         'about'    => ['file' => 'pages/about.php',  'p' => 'about',  'pretty' => 'about',  'title' => 'درباره ما',  'listing' => true],
         'contact'  => ['file' => 'pages/contact.php','p' => 'contact','pretty' => 'contact','title' => 'تماس با ما', 'listing' => true],
         'search'   => ['file' => 'pages/search.php', 'p' => 'search', 'pretty' => 'search', 'title' => 'جستجو',      'listing' => true],
@@ -223,6 +223,13 @@ function jhd_routes(): array {
         'article'  => ['file' => 'pages/post.php',   'p' => 'article',  'pretty' => 'articles',  'title' => 'مقاله',   'expected_type' => 'article', 'id_param' => 'slug', 'detail' => true],
         'report'   => ['file' => 'pages/post.php',   'p' => 'report',   'pretty' => 'reports',   'title' => 'گزارش',   'expected_type' => 'report',  'id_param' => 'slug', 'detail' => true],
         'event'    => ['file' => 'pages/post.php',   'p' => 'event',    'pretty' => 'event',    'title' => 'رویداد',   'expected_type' => 'event',   'id_param' => 'slug', 'detail' => true],
+        // Every published post type owns one canonical prefix. Before these
+        // existed, announcements, programs and religious activities all fell
+        // back to the shared /event/<slug> namespace, so the same content was
+        // reachable (and canonically declared) under several prefixes at once.
+        'announcement' => ['file' => 'pages/post.php', 'p' => 'announcement', 'pretty' => 'announcements', 'title' => 'اطلاعیه', 'expected_type' => 'announcement', 'id_param' => 'slug', 'detail' => true],
+        'program'      => ['file' => 'pages/post.php', 'p' => 'program',      'pretty' => 'programs',      'title' => 'برنامه',  'expected_type' => 'program',      'id_param' => 'slug', 'detail' => true],
+        'religious'    => ['file' => 'pages/post.php', 'p' => 'religious',    'pretty' => 'religious-activities', 'title' => 'فعالیت مذهبی', 'expected_type' => 'religious', 'id_param' => 'slug', 'detail' => true],
         'post'     => ['file' => 'pages/post.php',   'p' => 'post',     'pretty' => 'post',     'title' => 'مطلب',    'id_param' => 'slug', 'detail' => true],
         'book'     => ['file' => 'pages/book.php',   'p' => 'book',     'pretty' => 'books',     'title' => 'کتاب',    'id_param' => 'slug_or_id', 'detail' => true],
         'lesson'   => ['file' => 'pages/lesson-route.php', 'p' => 'lesson',   'pretty' => 'lessons',   'title' => 'درس',     'id_param' => 'slug', 'detail' => true],
@@ -689,24 +696,96 @@ function currentUrl(): string {
 // (index.php?p=topic&slug=x) and Pretty mode (/topic/x). Legacy query-style
 // URLs (/post?slug=X, /book?id=N, ...) keep working forever for bookmarks and
 // indexed links, but new links must use these helpers.
-/** Detail URL for a post row (typed: /article/X, /news/X, /research/X, /report/X, /speech/X, /event/X, else /post/X). */
+/**
+ * Canonical content route for a post_type — ONE prefix per published type.
+ *
+ * This map is the single source of truth for content URLs. postUrl(), the
+ * sitemap, breadcrumbs, internal cards and the canonical <link> all go through
+ * it, so a newly published post automatically gets its own stable direct URL
+ * with no manual code change.
+ *
+ *   news /nnews…  → /news/<slug>            article      → /articles/<slug>
+ *   research      → /research/<slug>        report       → /reports/<slug>
+ *   announcement  → /announcements/<slug>   program      → /programs/<slug>
+ *   religious     → /religious-activities/<slug>
+ *   speech        → /speech/<slug>          qa           → /qa/<slug>
+ *   anything else → /post/<slug>
+ *
+ * Legacy spellings (/post/<slug>, /event/<slug>, /article/<slug>, ?p=…) keep
+ * resolving for bookmarks and already-indexed links, but they are never
+ * generated and never declared as canonical: see jhd_redirect_to_canonical().
+ */
+function jhd_post_route(string $postType): string {
+    return match ($postType) {
+        'news'         => 'news',
+        'article'      => 'article',
+        'research'     => 'research',
+        'report'       => 'report',
+        'announcement' => 'announcement',
+        'program'      => 'program',
+        'religious'    => 'religious',
+        'speech'       => 'speech',
+        'qa'           => 'qa',
+        'event'        => 'event',
+        default        => 'post',
+    };
+}
+
+/**
+ * Canonical logical path for a post (e.g. `/articles/x`).
+ *
+ * Deliberately URL-mode independent: it is the pretty-style path in both modes,
+ * so it can be compared with current_path() — which the front controller also
+ * publishes in pretty form — to detect a non-canonical spelling without
+ * breaking Query mode (where url() itself renders `index.php?p=…`).
+ */
+function jhd_post_canonical_path(array|string $post, string $postType = ''): string {
+    if (is_string($post)) return jhd_route_path(jhd_post_route($postType), ['slug' => $post]);
+    $slug = (string)($post['slug'] ?? '');
+    if ($slug === '') return '';
+    return jhd_route_path(jhd_post_route((string)($post['post_type'] ?? '')), ['slug' => $slug]);
+}
+
+/**
+ * Send a permanent redirect when a detail page was reached through a URL that
+ * is not its canonical one (a legacy prefix, a singular/plural alias, a Query
+ * URL while the site publishes Pretty URLs, a numeric id when a slug exists…).
+ *
+ * The request is only ever redirected to the URL that url() itself generates,
+ * so in Query mode nothing changes: the canonical is the `?p=` form and the
+ * request already carries it. Legacy URLs therefore keep working (they land on
+ * the right page) while the canonical, the sitemap and every generated link
+ * agree on exactly one address.
+ */
+function jhd_redirect_to_canonical(string $canonicalUrl, string $canonicalPath): void {
+    if ($canonicalPath === '') return;
+    // Only safe, idempotent requests are ever redirected.
+    if (!in_array(($_SERVER['REQUEST_METHOD'] ?? 'GET'), ['GET', 'HEAD'], true)) return;
+    if (strpbrk($canonicalUrl, "\r\n") !== false) return;
+
+    $requestPath = '/' . trim((string)current_path(), '/');
+    $canonicalPath = '/' . trim($canonicalPath, '/');
+    if ($requestPath === $canonicalPath) return;
+
+    // Keep meaningful query parameters (a book download, a topic section) so
+    // the redirect lands on the same view of the same page.
+    $query = (string)($_SERVER['QUERY_STRING'] ?? '');
+    if ($query !== '') {
+        $canonicalUrl .= (str_contains($canonicalUrl, '?') ? '&' : '?') . $query;
+    }
+    header('Location: ' . $canonicalUrl, true, 301);
+    exit;
+}
+
+/** Detail URL for a post row (typed: /news/X, /articles/X, /research/X, /reports/X, /speech/X, …). */
 function postUrl(array|string $post, string $fallbackType = 'post'): string {
     if (is_string($post)) {
         if ($post === '') return url('articles');
-        return url($fallbackType, ['slug' => $post]);
+        return url(jhd_post_route($fallbackType), ['slug' => $post]);
     }
     $slug = $post['slug'] ?? '';
     if ($slug === '') return url('articles');
-    $prefix = match ($post['post_type'] ?? '') {
-        'article' => 'article',
-        'news' => 'news',
-        'research' => 'research',
-        'report' => 'report',
-        'speech' => 'speech',
-        'program', 'religious', 'announcement' => 'event',
-        default => 'post',
-    };
-    return url($prefix, ['slug' => $slug]);
+    return url(jhd_post_route((string)($post['post_type'] ?? '')), ['slug' => $slug]);
 }
 /** Detail URL for a news row (/news/X). */
 function newsUrl(array|string $post): string {
@@ -1853,52 +1932,212 @@ function breadcrumbsJsonLd(array $crumbs): string {
         JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
     );
 }
+/**
+ * Organization node — the school as a single, consistent entity.
+ *
+ * Emitted with a stable @id so every page can point at the same entity instead
+ * of re-describing it. The `name` is the official brand and nothing else; the
+ * Arabic spelling and the longer legal name are declared as alternateName so
+ * search engines reconcile them with the brand rather than treating them as
+ * separate organisations.
+ *
+ * Only facts that exist on this site are published: the real logo file, the
+ * Kabul address, the contact details that are actually shown in the footer and
+ * the official social profile configured in the settings. Nothing is invented.
+ */
+function organizationJsonLd(): array {
+    $data = [
+        '@context' => 'https://schema.org',
+        '@type' => 'EducationalOrganization',
+        '@id' => rtrim(SITE_URL, '/') . '/#organization',
+        'name' => SITE_NAME,
+        'alternateName' => array_values(array_filter(
+            defined('SITE_ALT_NAMES') ? SITE_ALT_NAMES : [],
+            static fn($n): bool => is_string($n) && $n !== '' && $n !== SITE_NAME
+        )),
+        'url' => rtrim(SITE_URL, '/') . '/',
+        'logo' => [
+            '@type' => 'ImageObject',
+            '@id' => rtrim(SITE_URL, '/') . '/#logo',
+            'url' => canonicalUrl(SITE_LOGO_PATH),
+            'contentUrl' => canonicalUrl(SITE_LOGO_PATH),
+            'caption' => SITE_NAME,
+        ],
+        'description' => SITE_DESCRIPTION,
+        'inLanguage' => 'fa-AF',
+        'areaServed' => ['@type' => 'Country', 'name' => 'Afghanistan'],
+        'address' => [
+            '@type' => 'PostalAddress',
+            'addressLocality' => 'کابل',
+            'addressRegion' => 'کابل',
+            'addressCountry' => 'AF',
+        ],
+        'knowsAbout' => [
+            'فقه و اصول',
+            'تفسیر قرآن',
+            'حدیث شناسی',
+            'کلام و فلسفه',
+            'ادبیات عرب',
+            'تاریخ اسلام',
+        ],
+    ];
+
+    // Contact details come from the settings the site actually renders.
+    if (function_exists('getSetting')) {
+        $email = (string)getSetting('email', SITE_EMAIL);
+        $phone = (string)getSetting('phone', SITE_PHONE);
+        if (filter_var($email, FILTER_VALIDATE_EMAIL)) $data['email'] = 'mailto:' . $email;
+        if ($phone !== '') $data['telephone'] = $phone;
+
+        // sameAs: only the official profiles configured for this school.
+        $sameAs = [];
+        foreach (['social_telegram', 'social_youtube', 'social_instagram'] as $key) {
+            $profile = safeExternalUrl((string)getSetting($key, ''));
+            if ($profile !== '' && !in_array($profile, $sameAs, true)) $sameAs[] = $profile;
+        }
+        if ($sameAs) $data['sameAs'] = $sameAs;
+    }
+
+    $founderName = defined('SITE_FOUNDER') ? SITE_FOUNDER : '';
+    if ($founderName !== '') $data['founder'] = ['@type' => 'Person', 'name' => $founderName];
+
+    return $data;
+}
+
+/** WebSite node wired to the Organization entity above. */
+function websiteJsonLd(): array {
+    return [
+        '@context' => 'https://schema.org',
+        '@type' => 'WebSite',
+        '@id' => rtrim(SITE_URL, '/') . '/#website',
+        'name' => SITE_NAME,
+        'url' => rtrim(SITE_URL, '/') . '/',
+        'inLanguage' => 'fa-AF',
+        'publisher' => ['@id' => rtrim(SITE_URL, '/') . '/#organization'],
+        'potentialAction' => [
+            '@type' => 'SearchAction',
+            'target' => rtrim(SITE_URL, '/') . '/search?q={search_term_string}',
+            'query-input' => 'required name=search_term_string',
+        ],
+    ];
+}
+
+/** schema.org type that best describes a published post. */
+function jhd_post_schema_type(string $postType): string {
+    return match ($postType) {
+        'news'     => 'NewsArticle',
+        'research' => 'ScholarlyArticle',
+        'report'   => 'Report',
+        default    => 'Article',
+    };
+}
+
 function articleJsonLd(array $post): string {
     if (!SITE_URL) return '';
     $canonical = canonicalUrl(postUrl($post));
-    $organization = getSetting('site_name', SITE_NAME);
-    if ($organization === 'مدرسه علمیه جامعه‌الهدی') $organization = SITE_NAME;
     $author = !empty($post['author_name'])
         ? ['@type' => 'Person', 'name' => $post['author_name']]
-        : ['@type' => 'Organization', 'name' => $organization];
+        : ['@id' => rtrim(SITE_URL, '/') . '/#organization'];
     $descriptionSource = (string)($post['summary'] ?? '');
     if ($descriptionSource === '') $descriptionSource = strip_tags((string)($post['content'] ?? ''));
     $data = [
         '@context' => 'https://schema.org',
-        '@type' => 'Article',
+        '@type' => jhd_post_schema_type((string)($post['post_type'] ?? '')),
+        '@id' => $canonical . '#article',
+        'isPartOf' => ['@id' => rtrim(SITE_URL, '/') . '/#website'],
+        'mainEntityOfPage' => ['@type' => 'WebPage', '@id' => $canonical],
         'headline' => (string)$post['title'],
         'description' => excerpt($descriptionSource, 160),
-        'mainEntityOfPage' => ['@type' => 'WebPage', '@id' => $canonical],
         'url' => $canonical,
         'inLanguage' => 'fa-AF',
         'datePublished' => $post['published_at'] ?? $post['created_at'] ?? null,
         'dateModified' => $post['updated_at'] ?? $post['published_at'] ?? $post['created_at'] ?? null,
         'author' => $author,
-        'publisher' => [
-            '@type' => 'Organization',
-            'name' => $organization,
-            'logo' => ['@type' => 'ImageObject', 'url' => canonicalUrl('assets/img/logo.png')],
-        ],
+        // Reference the one Organization node instead of re-declaring the brand.
+        'publisher' => ['@id' => rtrim(SITE_URL, '/') . '/#organization'],
     ];
     $imagePath = (string)($post['featured_image'] ?? '');
     $data['image'] = $imagePath !== ''
         ? [jhd_absolute_url(imgUrl($imagePath))]
-        : [canonicalUrl('assets/img/logo.png')];
+        : [canonicalUrl(SITE_LOGO_PATH)];
+    $category = trim((string)($post['cat_name'] ?? ''));
+    if ($category !== '') $data['articleSection'] = $category;
     return json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+}
+
+/**
+ * QAPage for the question-and-answer archive. The question and its answer are
+ * taken from the stored title and body — nothing is invented.
+ */
+function qaJsonLd(array $post): string {
+    if (!SITE_URL) return '';
+    $canonical = canonicalUrl(postUrl($post));
+    $answer = trim(strip_tags((string)($post['content'] ?? '')));
+    if ($answer === '') $answer = trim((string)($post['summary'] ?? ''));
+    return json_encode([
+        '@context' => 'https://schema.org',
+        '@type' => 'QAPage',
+        '@id' => $canonical . '#qa',
+        'isPartOf' => ['@id' => rtrim(SITE_URL, '/') . '/#website'],
+        'mainEntity' => [
+            '@type' => 'Question',
+            'name' => (string)$post['title'],
+            'answerCount' => 1,
+            'acceptedAnswer' => [
+                '@type' => 'Answer',
+                'text' => excerpt($answer, 500),
+                'url' => $canonical,
+            ],
+        ],
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 }
 function bookJsonLd(array $book): string {
     if (!SITE_URL) return '';
+    $canonical = canonicalUrl(bookUrl($book));
     $data = [
         '@context' => 'https://schema.org',
         '@type' => 'Book',
+        '@id' => $canonical . '#book',
+        'isPartOf' => ['@id' => rtrim(SITE_URL, '/') . '/#website'],
         'name' => (string)$book['title'],
-        'url' => canonicalUrl(bookUrl($book)),
+        'url' => $canonical,
+        'inLanguage' => 'fa',
+        // Reference the one Organization node so the publisher name is never a
+        // second, competing spelling of the brand.
+        'publisher' => ['@id' => rtrim(SITE_URL, '/') . '/#organization'],
     ];
     if (!empty($book['author'])) $data['author'] = ['@type' => 'Person', 'name' => $book['author']];
+    if (!empty($book['translator'])) $data['translator'] = ['@type' => 'Person', 'name' => $book['translator']];
     if (!empty($book['description'])) $data['description'] = excerpt($book['description'], 200);
     if (!empty($book['cover_image'])) $data['image'] = [jhd_absolute_url(imgUrl($book['cover_image']))];
-    else $data['image'] = [canonicalUrl('assets/img/logo.png')];
+    else $data['image'] = [canonicalUrl(SITE_LOGO_PATH)];
+    if (!empty($book['publish_year'])) $data['datePublished'] = (string)$book['publish_year'];
+    if (!empty($book['pages'])) $data['numberOfPages'] = (int)$book['pages'];
     return json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+}
+
+/**
+ * Course node for a published lesson.
+ *
+ * A lesson is taught by the school, so the provider is the same Organization
+ * node as everywhere else; the description comes from the lesson itself.
+ */
+function lessonJsonLd(array $lesson): string {
+    if (!SITE_URL) return '';
+    $canonical = canonicalUrl(lessonUrl($lesson));
+    $summary = trim((string)($lesson['summary'] ?? ''));
+    if ($summary === '') $summary = trim(strip_tags((string)($lesson['content'] ?? '')));
+    return json_encode([
+        '@context' => 'https://schema.org',
+        '@type' => 'Course',
+        '@id' => $canonical . '#course',
+        'isPartOf' => ['@id' => rtrim(SITE_URL, '/') . '/#website'],
+        'name' => (string)$lesson['title'],
+        'description' => excerpt($summary, 200),
+        'url' => $canonical,
+        'inLanguage' => 'fa',
+        'provider' => ['@id' => rtrim(SITE_URL, '/') . '/#organization'],
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 }
 
 // ─── Safe rich text ───────────────────────────────────────────────────────────
