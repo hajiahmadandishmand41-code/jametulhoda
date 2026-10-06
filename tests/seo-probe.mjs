@@ -143,6 +143,42 @@ record('apple-touch-icon is the real logo', /rel=["']apple-touch-icon["'][^>]*hr
 record('icon link points at /favicon.ico', /rel=["'](shortcut )?icon["'][^>]*href=["'][^"']*favicon\.ico/.test(home.text), (home.text.match(/<link[^>]+rel=["']icon["'][^>]*>/i) || [''])[0]);
 
 // 4. Content coverage: one canonical URL per published content type -----------
+// Every content type must have an index that resolves, is indexable and
+// declares its own canonical — including types with no published rows yet,
+// which the sitemap (correctly) cannot cover.
+console.log('\n--- Content type indexes ---');
+for (const [path, label] of [
+  ['/news', 'news'],
+  ['/articles', 'article'],
+  ['/research', 'research'],
+  ['/reports', 'report'],
+  ['/announcements', 'announcement'],
+  ['/programs', 'program'],
+  ['/religious-activities', 'religious activity'],
+  ['/speeches', 'speech'],
+  ['/qa', 'Q&A'],
+  ['/lessons', 'lesson'],
+  ['/books', 'book'],
+  ['/topics', 'topic'],
+  ['/media', 'media'],
+]) {
+  const r = await get(path);
+  record(`${label} index: ${path} → 200`, r.status === 200, String(r.status));
+  if (r.status !== 200) continue;
+  const t = title(r.text);
+  record(`${label} index: unique non-empty title`, t.length > 0, t);
+  record(
+    `${label} index: canonical === requested URL`,
+    canonical(r.text) === BASE + path,
+    canonical(r.text)
+  );
+  record(
+    `${label} index: robots = index, follow`,
+    /index,\s*follow/i.test(metaContent(r.text, 'name', 'robots') || ''),
+    metaContent(r.text, 'name', 'robots') || '(none)'
+  );
+}
+
 console.log('\n--- Content URLs (from the sitemap) ---');
 const PREFIX_LABEL = [
   ['/news/', 'news'],
