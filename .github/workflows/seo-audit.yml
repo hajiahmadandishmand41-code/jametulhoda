@@ -98,6 +98,26 @@ jobs:
           path: seo-probe-report.txt
           if-no-files-found: ignore
 
+      # The Actions log archive and the artifact store are not reachable from
+      # every environment. Publishing the report as a commit comment keeps the
+      # evidence readable through the plain GitHub API.
+      - name: Publish the report
+        if: always() && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "### SEO / URL / branding probe — seeded local instance"
+            echo
+            echo "- commit: \`${GITHUB_SHA}\`"
+            echo "- conclusion: ${{ steps.probe.outcome }}"
+            echo
+            echo '```text'
+            tail -n 200 seo-probe-report.txt 2>/dev/null || echo "no report produced"
+            echo '```'
+          } > seo-comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$(cat seo-comment.md)" >/dev/null
+
   live:
     name: Live deployment
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
@@ -111,6 +131,7 @@ jobs:
           node-version: 22
 
       - name: Run the SEO probe against the deployment
+        id: live
         env:
           TEST_BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.target || 'https://jametulhoda.vercel.app' }}
           SEO_PROBE_TIMEOUT_MS: '90000'
@@ -123,3 +144,22 @@ jobs:
           name: seo-probe-live
           path: seo-probe-report.txt
           if-no-files-found: ignore
+
+      # Same reason as above: the log archive is not reachable everywhere, so
+      # the evidence is published where the GitHub API can read it.
+      - name: Publish the report
+        if: always() && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "### SEO / URL / branding probe — ${{ github.event_name == 'workflow_dispatch' && inputs.target || 'https://jametulhoda.vercel.app' }}"
+            echo
+            echo "- commit: \`${GITHUB_SHA}\`"
+            echo "- conclusion: ${{ steps.live.outcome }}"
+            echo
+            echo '```text'
+            tail -n 200 seo-probe-report.txt 2>/dev/null || echo "no report produced"
+            echo '```'
+          } > seo-comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$(cat seo-comment.md)" >/dev/null
