@@ -158,16 +158,29 @@ if (SITE_URL && !$responseIs404) {
         }
     }
 }
-// Search results and 404s stay out of the index (Query or Pretty spelling).
+// Search, filter and 404 URLs stay out of the index while remaining crawlable.
 $authRoutes = ['login', 'register', 'logout', 'account', 'profile', 'password-change'];
 $routeNameForRobots = isset($_SERVER['JHD_ROUTE_NAME']) ? (string)$_SERVER['JHD_ROUTE_NAME'] : (string)($_GET['p'] ?? '');
 $authNoindex = in_array($routeNameForRobots, $authRoutes, true)
     || preg_match('~^/(login|register|logout|account|profile|password-change)(/|$)~', $currentPath);
+
+// The page parameter alone is intentionally not a noindex signal: real
+// pagination pages can be indexed when they contain content. Search/filter
+// parameters are noindex.
+$seoFilterParams = ['q', 'search', 'topic', 'type', 'section', 'sort', 'year', 'author'];
+$hasSeoFilter = false;
+foreach ($seoFilterParams as $filterKey) {
+    if (array_key_exists($filterKey, $_GET) && is_scalar($_GET[$filterKey]) && trim((string)$_GET[$filterKey]) !== '') {
+        $hasSeoFilter = true;
+        break;
+    }
+}
 $noindexSeo = !empty($noindexSeo)
     || $responseIs404
     || $authNoindex
     || $routeNameForRobots === 'search'
-    || $currentPath === '/search';
+    || $currentPath === '/search'
+    || $hasSeoFilter;
 $ogType = isset($post) || isset($book) || isset($lesson) ? 'article' : 'website';
 
 // Helper for active navigation link
@@ -200,7 +213,7 @@ $isActiveNav = function (string $route) use ($currentPath): bool {
 if ($jhdPublicDbReady && session_status() === PHP_SESSION_ACTIVE): ?><meta name="csrf-token" content="<?= sanitize(generateCsrfToken()) ?>"><?php endif; ?>
 <title><?= sanitize($metaTitle) ?></title>
 <meta name="description" content="<?= sanitize($metaDesc) ?>">
-<?php if ($noindexSeo): ?><meta name="robots" content="noindex, follow"><?php else: ?><meta name="robots" content="index, follow"><?php endif; ?>
+<?php if ($noindexSeo): ?><meta name="robots" content="noindex,follow,max-image-preview:large"><?php else: ?><meta name="robots" content="index,follow,max-image-preview:large"><?php endif; ?>
 <?php if ($canonical): ?>
 <link rel="canonical" href="<?= sanitize($canonical) ?>">
 <meta property="og:url" content="<?= sanitize($canonical) ?>">
@@ -222,12 +235,23 @@ if ($jhdPublicDbReady && session_status() === PHP_SESSION_ACTIVE): ?><meta name=
  * real school logo is the default, so every page always carries a valid
  * absolute image rather than an empty or placeholder one.
  */
-$ogImg = !empty($ogImage) && is_string($ogImage) ? $ogImage : canonicalUrl(SITE_LOGO_PATH);
+<?php
+/*
+ * Social preview image.
+ *
+ * Listing/static pages can use the real school logo. Content detail pages must
+ * never advertise the logo as their own featured image when no real content
+ * image exists; the Article JSON-LD follows the same rule.
+ */
+$isContentDetail = !empty($post) || !empty($book) || !empty($lesson);
+$ogImg = !empty($ogImage) && is_string($ogImage) ? trim($ogImage) : '';
+if ($ogImg === '' && !$isContentDetail) {
+    $ogImg = canonicalUrl(SITE_LOGO_PATH);
+}
 $ogImgAlt = !empty($ogImageAlt) && is_string($ogImageAlt) ? $ogImageAlt : $siteName;
-$ogImgType = $ogImg === canonicalUrl(SITE_LOGO_PATH)
-    ? 'image/png'
-    : (preg_match('~\.jpe?g($|\?)~i', $ogImg) ? 'image/jpeg' : 'image/png');
+$ogImgType = $ogImg !== '' ? imageMimeFromUrl($ogImg) : '';
 ?>
+<?php if ($ogImg !== ''): ?>
 <meta property="og:image" content="<?= sanitize($ogImg) ?>">
 <meta property="og:image:secure_url" content="<?= sanitize($ogImg) ?>">
 <meta property="og:image:type" content="<?= sanitize($ogImgType) ?>">
@@ -236,11 +260,14 @@ $ogImgType = $ogImg === canonicalUrl(SITE_LOGO_PATH)
 <meta property="og:image:width" content="<?= (int)SITE_LOGO_WIDTH ?>">
 <meta property="og:image:height" content="<?= (int)SITE_LOGO_HEIGHT ?>">
 <?php endif; ?>
+<?php endif; ?>
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="<?= sanitize($metaTitle) ?>">
 <meta name="twitter:description" content="<?= sanitize($metaDesc) ?>">
+<?php if ($ogImg !== ''): ?>
 <meta name="twitter:image" content="<?= sanitize($ogImg) ?>">
 <meta name="twitter:image:alt" content="<?= sanitize($ogImgAlt) ?>">
+<?php endif; ?>
 <?php if (SITE_URL): ?>
 <?php
 /*
