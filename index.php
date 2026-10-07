@@ -509,7 +509,7 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
             'link' => 'همه رسانه‌ها',
         ]) ?>
         <?= jhd_grid_open('jhd-card-grid--rail') ?>
-            <?php foreach ($latestVideos as $v): ?><?= renderMediaCard($v, ['url' => !empty($v['post_slug']) ? postUrl($v['post_slug']) : mediaUrl('video', (int)$v['id'])]) ?><?php endforeach; ?>
+            <?php foreach ($latestVideos as $v): ?><?= renderMediaCard($v, ['url' => !empty($v['post_slug']) ? postUrl(['slug' => (string)$v['post_slug'], 'post_type' => (string)($v['post_type'] ?? '')]) : mediaUrl('video', (int)$v['id'])]) ?><?php endforeach; ?>
             <?php foreach ($latestAudios as $a): ?><?= renderAudioRow($a) ?><?php endforeach; ?>
         <?= jhd_grid_close() ?>
     </div>
