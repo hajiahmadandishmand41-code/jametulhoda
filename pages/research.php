@@ -3,7 +3,7 @@
  * research.php — پژوهش‌ها و دستاوردهای علمی مدرسه علمیه جامعه‌الهدی
  */
 $pageTitle = 'پژوهش‌های علمی';
-$pageDesc = 'پژوهش‌های علمی و دینی مدرسه مدرسه جامعه‌الهدی — مطالب تحقیقی با منابع، چکیده و موضوعات مرتبط.';
+$pageDesc = 'پژوهش‌های علمی و دینی مدرسه جامعه‌الهدی — مطالب تحقیقی با منابع، چکیده و موضوعات مرتبط.';
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
@@ -21,6 +21,9 @@ if ($search) $opts['search'] = $search;
 $posts = getPosts($opts);
 $total = countPosts(array_merge(['type' => 'research'], $search ? ['search' => $search] : []));
 $pages = (int)ceil($total / $limit);
+jhd_validate_pagination($page, $total, $limit, 'پژوهش‌ها', url('research'), 'پژوهش');
+$noindexSeo = ($total === 0);
+
 
 $breadcrumbs = [
     ['name' => 'صفحه اصلی', 'url' => url()],
