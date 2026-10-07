@@ -1,6 +1,6 @@
 <?php
 $pageTitle = 'فعالیت‌های مذهبی';
-$pageDesc = 'گزارش فعالیت‌ها، مراسم و برنامه‌های مذهبی ثبت‌شدهٔ مدرسه مدرسه جامعه‌الهدی.';
+$pageDesc = 'گزارش فعالیت‌ها، مراسم و برنامه‌های مذهبی ثبت‌شدهٔ مدرسه جامعه‌الهدی.';
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
@@ -12,6 +12,9 @@ $limit = 12;
 $posts = getPosts(['type' => 'religious', 'limit' => $limit, 'offset' => ($page - 1) * $limit]);
 $total = countPosts(['type' => 'religious']);
 $pages = (int)ceil($total / $limit);
+jhd_validate_pagination($page, $total, $limit, 'فعالیت‌های مذهبی', url('religious-activities'), 'فعالیت‌های مذهبی');
+$noindexSeo = ($total === 0);
+
 
 require_once __DIR__ . '/../includes/header.php';
 ?>
