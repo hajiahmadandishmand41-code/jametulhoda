@@ -67,7 +67,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 
 $pageTitle = 'ورود به حساب کاربری';
-$pageDesc = 'ورود اعضا، مدیران و مدیر ارشد مدرسه مدرسه جامعه‌الهدی از یک صفحهٔ واحد و امن.';
+$pageDesc = 'ورود اعضا، مدیران و مدیر ارشد مدرسه جامعه‌الهدی از یک صفحهٔ واحد و امن.';
 $canonicalOverride = loginUrl();
 $noindexSeo = true;
 require_once $jhdLoginRoot . '/includes/header.php';
