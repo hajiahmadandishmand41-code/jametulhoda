@@ -210,6 +210,7 @@ function jhd_routes(): array {
         'about'    => ['file' => 'pages/about.php',  'p' => 'about',  'pretty' => 'about',  'title' => 'درباره ما',  'listing' => true],
         'contact'  => ['file' => 'pages/contact.php','p' => 'contact','pretty' => 'contact','title' => 'تماس با ما', 'listing' => true],
         'search'   => ['file' => 'pages/search.php', 'p' => 'search', 'pretty' => 'search', 'title' => 'جستجو',      'listing' => true],
+        'read'     => ['file' => 'pages/reader.php', 'p' => 'read', 'pretty' => 'read', 'title' => 'مطالعه سند', 'listing' => true],
 
         // ── Public authentication (never aliases to admin) ───────────────
         'login'            => ['file' => 'pages/login.php',            'p' => 'login',            'pretty' => 'login',            'title' => 'ورود',           'listing' => true],
