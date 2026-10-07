@@ -138,7 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if ($featVid) scheduleFileDeletion($featVid);
                         $featVid = $upV;
                     } else {
-                        $error = 'خطا در آپلود ویدیو شاخص. فرمت‌های مجاز: MP4، WebM، MOV، MKV (حداکثر 200MB)' . storageFailureHint();
+                        $error = 'خطا در آپلود ویدیو شاخص. فرمت‌های مجاز: MP4، WebM، MOV، MKV (حداکثر 150MB)' . storageFailureHint();
                     }
                 }
             }
