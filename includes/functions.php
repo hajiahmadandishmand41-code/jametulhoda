@@ -1697,6 +1697,71 @@ function clearSettingCache(): void {
     unset($GLOBALS['jhd_setting_cache']);
 }
 
+/**
+ * تنظیمات نمایش صفحهٔ اصلی — ذخیره‌شده در settings تا بدون migration جدید
+ * در MySQL و PostgreSQL هر دو قابل مدیریت باشد.
+ */
+function jhd_homepage_settings(): array {
+    $defaults = [
+        'sections' => [
+            'latest' => true,
+            'news' => true,
+            'articles' => true,
+            'reports' => true,
+            'research' => true,
+            'topics' => true,
+            'events' => true,
+            'books' => true,
+            'lessons' => true,
+            'media' => true,
+        ],
+        'hero_post_id' => 0,
+    ];
+    $raw = trim(getSetting('homepage_config', ''));
+    if ($raw === '') return $defaults;
+    $cfg = json_decode($raw, true);
+    if (!is_array($cfg)) return $defaults;
+
+    foreach ($defaults['sections'] as $key => $enabled) {
+        if (array_key_exists($key, $cfg['sections'] ?? [])) {
+            $defaults['sections'][$key] = (bool)$cfg['sections'][$key];
+        }
+    }
+    $defaults['hero_post_id'] = max(0, (int)($cfg['hero_post_id'] ?? 0));
+    return $defaults;
+}
+
+/**
+ * دریافت چند مطلب منتشرشده با شناسهٔ مشخص، با همان شکل داده‌ای getPosts().
+ * ترتیب شناسه‌های ورودی در نتیجه حفظ می‌شود تا انتخاب مدیر در صفحهٔ اصلی
+ * دقیقاً همان ترتیبی را که ثبت شده نشان دهد.
+ */
+function getPostsByIds(array $ids): array {
+    $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn(int $id): bool => $id > 0)));
+    if (!$ids) return [];
+    try {
+        $db = getDB();
+        $marks = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = $db->prepare(
+            "SELECT p.*, c.name AS cat_name, c.slug AS cat_slug,
+                    COALESCE(NULLIF(p.author_name,''), NULLIF(p.speaker,''), u.full_name) AS author_name
+             FROM posts p
+             LEFT JOIN categories c ON c.id = p.category_id
+             LEFT JOIN users u ON u.id = p.author_id
+             WHERE p.status = 'published' AND p.id IN ($marks)"
+        );
+        $stmt->execute($ids);
+        $rows = $stmt->fetchAll();
+        $byId = [];
+        foreach ($rows as $row) $byId[(int)$row['id']] = $row;
+        $ordered = [];
+        foreach ($ids as $id) if (isset($byId[$id])) $ordered[] = $byId[$id];
+        return $ordered;
+    } catch (Throwable) {
+        return [];
+    }
+}
+
 // ─── Banners ──────────────────────────────────────────────────────────────────
 
 function getActiveBanners(int $limit=3): array {
