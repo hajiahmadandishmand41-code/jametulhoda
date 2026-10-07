@@ -178,7 +178,7 @@ if ($jhdPublicDbReady) {
     $latestAudios = [];
     try {
         $stmt = $db->prepare("
-            SELECT m.*, p.title as post_title, p.slug as post_slug
+            SELECT m.*, p.title as post_title, p.slug as post_slug, p.post_type as post_type
             FROM media_files m
             LEFT JOIN posts p ON p.id = m.ref_id AND m.ref_type = 'post'
             WHERE m.kind = 'video' AND (p.status = 'published' OR p.status IS NULL)
@@ -187,7 +187,7 @@ if ($jhdPublicDbReady) {
         $stmt->execute();
         $latestVideos = $stmt->fetchAll();
         $stmt = $db->prepare("
-            SELECT m.*, p.title as post_title, p.slug as post_slug
+            SELECT m.*, p.title as post_title, p.slug as post_slug, p.post_type as post_type
             FROM media_files m
             LEFT JOIN posts p ON p.id = m.ref_id AND m.ref_type = 'post'
             WHERE m.kind = 'audio' AND (p.status = 'published' OR p.status IS NULL)
