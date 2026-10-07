@@ -53,6 +53,8 @@ if ($db !== null) {
     }
 }
 $pages = (int)ceil($total / $limit);
+jhd_validate_pagination($page, $total, $limit, $kind === 'audio' ? 'کتابخانه صوتی' : 'نگارخانه ویدیویی', $canonicalOverride ?? url('media'), $kind === 'audio' ? 'همه صوت‌ها' : 'همه ویدیوها');
+$noindexSeo = ($total === 0);
 
 $breadcrumbs = [
     ['name' => 'صفحه اصلی', 'url' => url()],
