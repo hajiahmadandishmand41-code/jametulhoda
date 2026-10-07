@@ -132,6 +132,9 @@ if ($jhdPublicDbReady) {
 <script src="<?= asset('vendor/plyr.js') ?>"></script>
 <script src="<?= asset('js/main.js') ?>"></script>
 <script src="<?= asset('js/media-player.js') ?>" defer></script>
+<?php if (!empty($GLOBALS['JHD_NEEDS_GALLERY'])): ?>
+<script src="<?= asset('js/gallery.js') ?>" defer></script>
+<?php endif; ?>
 <?php if (!empty($GLOBALS['JHD_NEEDS_PDF_READER'])): ?>
 <!-- خوانندهٔ PDF فقط در صفحه‌هایی که سند دارند بارگذاری می‌شود (بدون هزینه برای بقیهٔ صفحه‌ها). -->
 <script src="<?= asset('js/pdf-reader.js') ?>" type="module" defer></script>
