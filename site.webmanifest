@@ -1,0 +1,32 @@
+{
+  "name": "مدرسه جامعه‌الهدی",
+  "short_name": "جامعه‌الهدی",
+  "description": "مرکز علمی، آموزشی و پژوهشی در پرتو قرآن و عترت — کابل، افغانستان",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "lang": "fa",
+  "dir": "rtl",
+  "display": "standalone",
+  "background_color": "#f8f7f2",
+  "theme_color": "#103d2e",
+  "icons": [
+    {
+      "src": "assets/img/favicon-48.png",
+      "sizes": "48x48",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/img/favicon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/img/favicon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
