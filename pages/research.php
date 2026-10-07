@@ -3,6 +3,7 @@
  * research.php — پژوهش‌ها و دستاوردهای علمی مدرسه علمیه جامعه‌الهدی
  */
 $pageTitle = 'پژوهش‌های علمی';
+$metaTitleOverride = 'پژوهش‌های اسلامی | تحقیقات و مطالعات علوم دینی';
 $pageDesc = 'پژوهش‌های علمی و دینی مدرسه جامعه‌الهدی — مطالب تحقیقی با منابع، چکیده و موضوعات مرتبط.';
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
