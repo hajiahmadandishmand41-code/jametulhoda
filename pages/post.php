@@ -274,13 +274,16 @@ require_once __DIR__ . '/../includes/header.php';
         <?php endforeach; ?>
         </div>
         <?php
-        // مطالعهٔ آنلاین هر PDF پیوست، داخل همین صفحه (موبایل و دسکتاپ).
+        // PDFهای پیوست در صفحهٔ مطلب رندر نمی‌شوند؛ هر سند یک مقصد مطالعه دارد.
         $pdfDocs = array_values(array_filter($postDocuments, static fn(array $f): bool => (bool)preg_match('~\.pdf$~i', (string)$f['file_path'])));
         foreach ($pdfDocs as $pdfDoc):
+            $pdfTitle = (string)($pdfDoc['title'] ?: basename((string)$pdfDoc['file_path']));
         ?>
-        <div class="mt-3"><?= jhd_pdf_reader(imgUrl((string)$pdfDoc['file_path']), [
-            'title' => (string)($pdfDoc['title'] ?: basename((string)$pdfDoc['file_path'])),
-        ]) ?></div>
+        <div class="jhd-file-row mt-3">
+            <i class="bi bi-file-earmark-pdf" aria-hidden="true"></i>
+            <span class="file-name"><?= sanitize($pdfTitle) ?></span>
+            <a class="btn btn-sm btn-outline-primary" href="<?= sanitize(documentReaderUrl('post', (string)$post['slug'], (int)($pdfDoc['id'] ?? 0))) ?>"><i class="bi bi-book ms-1"></i>مطالعه</a>
+        </div>
         <?php endforeach; ?>
     </section>
     <?php endif; ?>
