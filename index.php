@@ -127,52 +127,53 @@ if ($jhdPublicDbReady) {
     $recentPool = getPosts(['limit' => 12]);
 
     /*
-     * ستون کناری ویترین «در یک نگاه» است، نه محل تکرار همان مطالب.
-     * ابتدا انتخاب‌های صریح مدیر نمایش داده می‌شوند و سپس تازه‌ترین مطالب
-     * علمی/خبری برای پرکردن ستون انتخاب می‌شوند.
+     * ویترین بر اساس اولویت تحریریه عمل می‌کند:
+     * مطلب شاخص → در یک نگاه → اخبار → مقالات → پژوهش → گزارش‌ها …
+     * هر داستان فقط یک‌بار در کل صفحهٔ اول پذیرفته می‌شود؛ حتی اگر همان
+     * رویداد در بیش از یک نوع محتوا یا بیش از یک بخش ثبت شده باشد.
      */
-    $featuredSide = array_values(array_filter(
+    $acceptedHomepagePosts = $heroPost ? [$heroPost] : [];
+
+    $featuredCandidates = array_values(array_filter(
         getPosts(['featured' => 1, 'limit' => 8]),
         static fn(array $p): bool => (int)$p['id'] !== $heroId
     ));
-    $usedIds = [$heroId];
-    foreach ($featuredSide as $side) $usedIds[] = (int)$side['id'];
+    $featuredSide = jhd_homepage_unique_posts($featuredCandidates, $acceptedHomepagePosts, 3);
 
     if (count($featuredSide) < 3) {
-        foreach ($recentPool as $candidate) {
-            $candidateId = (int)($candidate['id'] ?? 0);
-            if ($candidateId < 1 || in_array($candidateId, $usedIds, true)) continue;
-            $featuredSide[] = $candidate;
-            $usedIds[] = $candidateId;
-            if (count($featuredSide) >= 3) break;
-        }
+        $featuredSide = array_merge(
+            $featuredSide,
+            jhd_homepage_unique_posts($recentPool, $acceptedHomepagePosts, 3 - count($featuredSide))
+        );
     }
-    $featuredSide = array_slice($featuredSide, 0, 3);
 
-    // ─── ۲. بخش‌های محتوایی — هر مطلب در صفحهٔ اول فقط یک‌بار ────────────
-    $latest = array_slice(array_values(array_filter(
-        $recentPool,
-        static fn(array $p): bool => !in_array((int)$p['id'], $usedIds, true)
-    )), 0, 6);
-
-    $excludeHomeIds = static fn(array $p): bool => !in_array((int)($p['id'] ?? 0), $usedIds, true);
-
-    $newsPool = array_values(array_filter(
+    // اخبار در اولویت بالاتری از گزارشِ تکراری همان رویداد قرار دارد.
+    $newsPool = jhd_homepage_unique_posts(
         getPosts(['type' => 'news', 'limit' => 6]),
-        $excludeHomeIds
-    ));
-    $latestArticles = array_values(array_filter(
+        $acceptedHomepagePosts,
+        6
+    );
+
+    $latestArticles = jhd_homepage_unique_posts(
         getPosts(['type' => 'article', 'limit' => 5]),
-        $excludeHomeIds
-    ));
-    $latestReports = array_values(array_filter(
-        getPosts(['type' => 'report', 'limit' => 4]),
-        $excludeHomeIds
-    ));
-    $latestResearch = array_values(array_filter(
+        $acceptedHomepagePosts,
+        5
+    );
+
+    $latestResearch = jhd_homepage_unique_posts(
         getPosts(['type' => 'research', 'limit' => 4]),
-        $excludeHomeIds
-    ));
+        $acceptedHomepagePosts,
+        4
+    );
+
+    $latestReports = jhd_homepage_unique_posts(
+        getPosts(['type' => 'report', 'limit' => 4]),
+        $acceptedHomepagePosts,
+        4
+    );
+
+    // «تازه‌ترین مطالب» عمداً پیش‌فرض خاموش است تا همین داستان‌ها دوباره تکرار نشوند.
+    $latest = []; 
 
     $featuredTopics = [];
     try {
