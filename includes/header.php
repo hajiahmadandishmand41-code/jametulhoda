@@ -293,6 +293,7 @@ if (!$noindexSeo) {
 <link rel="icon" href="<?= sanitize(canonicalUrl('assets/img/favicon-192.png')) ?>" type="image/png" sizes="192x192">
 <link rel="apple-touch-icon" href="<?= sanitize(canonicalUrl('assets/img/favicon-192.png')) ?>" type="image/png" sizes="192x192">
 <link rel="shortcut icon" href="<?= sanitize(canonicalUrl('favicon.ico')) ?>" type="image/x-icon">
+<link rel="manifest" href="<?= sanitize(jhd_web_path('site.webmanifest')) ?>">
 <script src="<?= asset('js/theme.js') ?>"></script>
 <link rel="preload" href="<?= asset('fonts/Vazirmatn-Regular.woff2') ?>" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="<?= asset('vendor/bootstrap.rtl.min.css') ?>">
