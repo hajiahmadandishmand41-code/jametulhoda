@@ -87,13 +87,16 @@ require __DIR__.'/../includes/header.php';
 <div class="p-4 border rounded-4 text-muted small">برای این کتاب تصویر جلد ثبت نشده است.</div>
 <?php endif; ?>
 <div class="mt-4 d-grid gap-2">
-<?php $bookDetailUrl = bookUrl($book); ?>
 <?php if(!empty($book['pdf_file'])): ?>
-<a href="#bookReader" class="btn btn-primary"><i class="bi bi-book ms-2"></i> مطالعهٔ آنلاین کتاب</a>
-<a href="<?= $bookDetailUrl . (str_contains($bookDetailUrl, '?') ? '&amp;' : '?') ?>download=pdf" class="btn btn-outline-primary"><i class="bi bi-file-pdf ms-2"></i> دانلود PDF</a>
+<a href="<?= sanitize(documentReaderUrl('book', (string)$book['slug'])) ?>" class="btn btn-primary"><i class="bi bi-book ms-2"></i>مطالعه کتاب</a>
+<?php elseif(!empty($book['word_file'])): ?>
+<a href="<?= sanitize($bookDetailUrl . (str_contains($bookDetailUrl, '?') ? '&amp;' : '?') . 'download=word') ?>" class="btn btn-primary"><i class="bi bi-file-word ms-2"></i>دریافت فایل کتاب</a>
 <?php endif; ?>
-<?php if(!empty($book['word_file'])): ?><a href="<?= $bookDetailUrl . (str_contains($bookDetailUrl, '?') ? '&amp;' : '?') ?>download=word" class="btn btn-outline-primary"><i class="bi bi-file-word ms-2"></i> دانلود Word</a><?php endif; ?>
-<?php if($attachments): ?><div class="pt-2"><h2 class="h6 fw-bold mb-2">فایل‌های تکمیلی</h2><?php foreach($attachments as $file): ?><a href="<?= imgUrl($file['file_path']) ?>" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary w-100 mb-1"><i class="bi bi-paperclip ms-1"></i><?= sanitize($file['title'] ?: basename($file['file_path'])) ?></a><?php endforeach; ?></div><?php endif; ?>
+<?php if($attachments): ?><div class="pt-2"><h2 class="h6 fw-bold mb-2">فایل‌های تکمیلی</h2><?php foreach($attachments as $file):
+  $fileTitle = (string)($file['title'] ?: basename((string)$file['file_path']));
+  $isPdf = (bool)preg_match('~\.pdf$~i', (string)$file['file_path']);
+  $fileHref = $isPdf ? documentReaderUrl('book', (string)$book['slug'], (int)($file['id'] ?? 0)) : imgUrl((string)$file['file_path']);
+?><a href="<?= sanitize($fileHref) ?>"<?= $isPdf ? '' : ' target="_blank" rel="noopener"' ?> class="btn btn-sm btn-outline-secondary w-100 mb-1"><i class="bi <?= $isPdf ? 'bi-book' : 'bi-paperclip' ?> ms-1"></i><?= sanitize($fileTitle) ?></a><?php endforeach; ?></div><?php endif; ?>
 </div>
 <?php if($topics): ?>
 <div class="text-start mt-4">
@@ -122,25 +125,11 @@ require __DIR__.'/../includes/header.php';
 <?php if(!empty($book['author'])): ?><p class="text-muted mb-3"><i class="bi bi-person ms-1"></i> <?= sanitize($book['author']) ?><?= !empty($book['translator']) ? ' — ترجمهٔ '.sanitize($book['translator']) : '' ?></p><?php endif; ?>
 
 <?php if(!empty($book['pdf_file'])): ?>
-<section class="mb-4" id="bookReader">
-<h2 class="h6 fw-bold" style="color:var(--jhd-green)"><i class="bi bi-book ms-2"></i> مطالعهٔ آنلاین</h2>
-<?= jhd_pdf_reader(imgUrl((string)$book['pdf_file']), [
-    'title'    => (string)$book['title'],
-    'download' => $bookDetailUrl . (str_contains($bookDetailUrl, '?') ? '&' : '?') . 'download=pdf',
-    'note'     => 'همهٔ صفحات همین‌جا قابل مطالعه‌اند؛ برای مطالعهٔ راحت‌تر در موبایل دکمهٔ تمام‌صفحه را بزنید.',
-]) ?>
+<section class="mb-4 jhd-reader-callout">
+  <div><span class="jhd-eyebrow">مرکز مطالعه</span><h2 class="h5 mb-1">مطالعهٔ کتاب</h2><p class="text-muted mb-0">خواندن کتاب در صفحهٔ اختصاصی مطالعه انجام می‌شود.</p></div>
+  <a class="btn btn-primary" href="<?= sanitize(documentReaderUrl('book', (string)$book['slug'])) ?>"><i class="bi bi-book ms-2"></i>مطالعه کتاب</a>
 </section>
 <?php endif; ?>
-
-<?php
-// هر پیوست PDF کتاب هم داخل سایت خوانده می‌شود.
-foreach($attachments as $att):
-    if(!preg_match('~\.pdf$~i', (string)$att['file_path'])) continue; ?>
-<section class="mb-4">
-<h2 class="h6 fw-bold" style="color:var(--jhd-green)"><i class="bi bi-paperclip ms-2"></i> <?= sanitize((string)($att['title'] ?: basename((string)$att['file_path']))) ?></h2>
-<?= jhd_pdf_reader(imgUrl((string)$att['file_path']), ['title' => (string)($att['title'] ?: basename((string)$att['file_path']))]) ?>
-</section>
-<?php endforeach; ?>
 
 <?php if(!empty($book['description'])): ?>
 <section class="mb-4">
