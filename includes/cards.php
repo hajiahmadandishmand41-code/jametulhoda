@@ -59,6 +59,7 @@ function jhd_type_class(string $type): string {
  * سپس از همان حافظهٔ درخواست می‌خواند و هیچ کوئری تکراری اجرا نمی‌شود.
  */
 function jhd_preload_post_topics(array $posts): void {
+    jhd_preload_post_images($posts);
     static $loaded = [];
     $ids = [];
     foreach ($posts as $post) {
@@ -86,8 +87,156 @@ function jhd_preload_post_topics(array $posts): void {
     }
 }
 
-/** حافظهٔ موضوعات هر مطلب در طول یک درخواست. */
-function &jhd_post_topics_cache(): array {
+/**
+ * پیش‌بارگذاری تصاویر گالری مطالب با یک Query مشترک.
+ * کارت‌های عمومی در صورت داشتن چند تصویر، یک پیش‌نمایش چندتصویری شبیه فید
+ * شبکه‌های اجتماعی می‌گیرند؛ خود تصاویر در لایت‌باکس داخلی باز می‌شوند.
+ */
+function jhd_preload_post_images(array $posts): void {
+    static $loaded = [];
+    $ids = [];
+    foreach ($posts as $post) {
+        if (!is_array($post)) continue;
+        $id = (int)($post['id'] ?? 0);
+        if ($id > 0 && !isset($loaded[$id])) $ids[$id] = $id;
+    }
+    if (!$ids) return;
+
+    $cache =& jhd_post_images_cache();
+    try {
+        $marks = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = getDB()->prepare(
+            "SELECT post_id, image_path, alt_text FROM post_images
+             WHERE post_id IN ($marks) ORDER BY post_id ASC, id ASC"
+        );
+        $stmt->execute(array_values($ids));
+        foreach ($ids as $id) {
+            $cache[$id] = $cache[$id] ?? [];
+            $loaded[$id] = true;
+        }
+        foreach ($stmt->fetchAll() as $row) {
+            $pid = (int)$row['post_id'];
+            $cache[$pid][] = [
+                'path' => (string)($row['image_path'] ?? ''),
+                'alt'  => (string)($row['alt_text'] ?? ''),
+            ];
+        }
+    } catch (Throwable) {
+        foreach ($ids as $id) {
+            $cache[$id] = $cache[$id] ?? [];
+            $loaded[$id] = true;
+        }
+    }
+}
+
+/** حافظهٔ تصاویر گالری هر مطلب در طول یک درخواست. */
+function &jhd_post_images_cache(): array {
+    static $cache = [];
+    return $cache;
+}
+
+/** تصاویر قابل نمایش در پیش‌نمایش عمومی کارت، حداکثر ۵ تصویر. */
+function jhd_card_image_set(array $post): array {
+    $id = (int)($post['id'] ?? 0);
+    $rows = [];
+    if ($id > 0) {
+        $cache =& jhd_post_images_cache();
+        if (array_key_exists($id, $cache)) {
+            $rows = $cache[$id];
+        } else {
+            try {
+                $stmt = getDB()->prepare(
+                    'SELECT image_path, alt_text FROM post_images WHERE post_id = ? ORDER BY id ASC'
+                );
+                $stmt->execute([$id]);
+                $rows = array_map(static fn(array $row): array => [
+                    'path' => (string)($row['image_path'] ?? ''),
+                    'alt'  => (string)($row['alt_text'] ?? ''),
+                ], $stmt->fetchAll());
+                $cache[$id] = $rows;
+            } catch (Throwable) {
+                $rows = [];
+                $cache[$id] = [];
+            }
+        }
+    }
+
+    $featured = trim((string)($post['featured_image'] ?? ''));
+    $hasFeatured = false;
+    foreach ($rows as $row) {
+        if ($featured !== '' && (string)($row['path'] ?? '') === $featured) {
+            $hasFeatured = true;
+            break;
+        }
+    }
+    if ($featured !== '' && !$hasFeatured) {
+        array_unshift($rows, ['path' => $featured, 'alt' => (string)($post['title'] ?? '')]);
+    }
+
+    $out = [];
+    $seen = [];
+    foreach ($rows as $row) {
+        $path = trim((string)($row['path'] ?? ''));
+        if ($path === '' || isset($seen[$path])) continue;
+        $seen[$path] = true;
+        $out[] = ['path' => $path, 'alt' => (string)($row['alt'] ?? $post['title'] ?? '')];
+        if (count($out) >= 5) break;
+    }
+    return $out;
+}
+
+/** پیش‌نمایش چندتصویری کارت؛ کلید هر تصویر لایت‌باکس داخلی را باز می‌کند. */
+function jhd_card_gallery(array $images, string $title, string $badge = '', bool $eager = false): string {
+    if (count($images) < 2) return '';
+    $GLOBALS['JHD_NEEDS_GALLERY'] = true;
+    $uid = 'jhdcg-' . substr(bin2hex(random_bytes(5)), 0, 10);
+    $count = count($images);
+    $shown = array_slice($images, 0, 4);
+    $extra = max(0, $count - count($shown));
+
+    $cells = '';
+    foreach ($shown as $index => $image) {
+        $src = imgUrl((string)$image['path']);
+        if ($src === '') continue;
+        $overlay = ($extra > 0 && $index === count($shown) - 1)
+            ? '<span class="jhd-card-gallery__more">+' . jhd_persian_digits($extra) . '</span>'
+            : '';
+        $cells .= '<button type="button" class="jhd-gallery__cell jhd-card-gallery__cell" data-index="' . $index . '" aria-label="نمایش تصویر ' . jhd_persian_digits($index + 1) . ' از ' . jhd_persian_digits($count) . '">'
+            . '<img src="' . sanitize($src) . '" alt="' . sanitize((string)($image['alt'] ?? $title)) . '"'
+            . ($eager ? ' loading="eager" fetchpriority="high"' : ' loading="lazy"')
+            . ' decoding="async" width="800" height="500">'
+            . $overlay . '</button>';
+    }
+    if ($cells === '') return '';
+
+    $data = [];
+    foreach ($images as $image) {
+        $src = imgUrl((string)$image['path']);
+        if ($src === '') continue;
+        $data[] = ['src' => $src, 'alt' => (string)($image['alt'] ?? $title)];
+    }
+
+    $html = '<div class="jhd-card-gallery jhd-card-gallery--' . count($shown) . '" data-jhd-gallery="' . $uid . '" aria-label="تصاویر ' . sanitize($title) . '">'
+        . '<div class="jhd-card-gallery__grid">' . $cells . '</div>'
+        . '<span class="jhd-card-gallery__count"><i class="bi bi-images" aria-hidden="true"></i>' . jhd_persian_digits($count) . ' تصویر</span>'
+        . ($badge !== '' ? '<span class="jhd-card-badge">' . sanitize($badge) . '</span>' : '')
+        . '<div class="jhd-lightbox" data-jhd-lightbox="' . $uid . '" role="dialog" aria-modal="true" aria-label="' . sanitize($title) . '" hidden>'
+        . '<div class="jhd-lightbox__backdrop" data-jhd-lightbox-close></div>'
+        . '<div class="jhd-lightbox__frame">'
+        . '<div class="jhd-lightbox__top"><span class="jhd-lightbox__counter" data-jhd-lightbox-counter></span><div class="jhd-lightbox__tools">'
+        . '<a class="jhd-lightbox__tool" data-jhd-lightbox-download href="' . sanitize($data[0]['src']) . '" download title="دانلود تصویر"><i class="bi bi-download" aria-hidden="true"></i></a>'
+        . '<button type="button" class="jhd-lightbox__tool" data-jhd-lightbox-close title="بستن" aria-label="بستن"><i class="bi bi-x-lg" aria-hidden="true"></i></button>'
+        . '</div></div>'
+        . '<button type="button" class="jhd-lightbox__nav jhd-lightbox__nav--prev" data-jhd-lightbox-prev title="تصویر قبلی" aria-label="تصویر قبلی"><i class="bi bi-chevron-right" aria-hidden="true"></i></button>'
+        . '<figure class="jhd-lightbox__figure"><img data-jhd-lightbox-image src="" alt=""><figcaption data-jhd-lightbox-caption></figcaption></figure>'
+        . '<button type="button" class="jhd-lightbox__nav jhd-lightbox__nav--next" data-jhd-lightbox-next title="تصویر بعدی" aria-label="تصویر بعدی"><i class="bi bi-chevron-left" aria-hidden="true"></i></button>'
+        . '<div class="jhd-lightbox__thumbs" data-jhd-lightbox-thumbs></div>'
+        . '</div></div></div>'
+        . '<script type="application/json" data-jhd-gallery-data="' . $uid . '">'
+        . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP)
+        . '</script>';
+    return $html;
+}
     static $cache = [];
     return $cache;
 }
@@ -132,10 +281,23 @@ function jhd_card_media(array $card, array $opts = []): string {
     $eager   = !empty($opts['eager']);
     $ratio   = (string)($opts['ratio'] ?? '');
     $icon    = (string)($card['icon'] ?? jhd_type_icon($type));
+    $gallery = (array)($card['gallery'] ?? []);
 
     $classes = ['jhd-card-media'];
     if ($ratio !== '') $classes[] = 'jhd-card-media--' . $ratio;
     if ($fit === 'contain') $classes[] = 'jhd-card-media--contain';
+
+    /*
+     * Multi-image public preview: use a social-feed style mosaic instead of
+     * forcing every image into a single cropped cover. Compact side cards stay
+     * single-image for density.
+     */
+    if (count($gallery) > 1 && (($opts['variant'] ?? '') !== 'compact')) {
+        $galleryHtml = jhd_card_gallery($gallery, $title, $badge, $eager);
+        if ($galleryHtml !== '') {
+            return $galleryHtml;
+        }
+    }
 
     $src = $image !== '' ? imgUrl($image) : '';
     $inner = '';
@@ -303,6 +465,7 @@ function renderPostCard(array $post, array $opts = []): string {
         'has_video'   => !empty($post['featured_video']) || !empty($post['has_video']) || !empty($opts['has_video']),
         'has_audio'   => !empty($post['has_audio']) || !empty($opts['has_audio']),
         'has_pdf'     => !empty($post['pdf_file']) || !empty($opts['has_pdf']),
+        'gallery'     => jhd_card_image_set($post),
     ];
     if (isset($opts['index'])) $card['index'] = (int)$opts['index'];
 
