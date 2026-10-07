@@ -3,7 +3,7 @@
  * articles.php — فهرست و آرشیو مقالات علمی و یادداشت‌های پژوهشی
  */
 $pageTitle = 'مقالات علمی';
-$pageDesc = 'مجموعه مقالات علمی، کلامی، فقهی و معرفتی اساتید و پژوهشگران مدرسه مدرسه جامعه‌الهدی.';
+$pageDesc = 'مجموعه مقالات علمی، کلامی، فقهی و معرفتی اساتید و پژوهشگران مدرسه جامعه‌الهدی.';
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
@@ -29,6 +29,9 @@ if ($topicId) $opts['topic'] = $topicId;
 $posts = getPosts($opts);
 $total = countPosts(['type' => 'article'] + ($search ? ['search' => $search] : []) + ($topicId ? ['topic' => $topicId] : []));
 $pages = (int)ceil($total / $limit);
+jhd_validate_pagination($page, $total, $limit, 'مقالات', url('articles'), 'مقالات');
+$noindexSeo = ($total === 0);
+
 
 $breadcrumbs = [
     ['name' => 'صفحه اصلی', 'url' => url()],
