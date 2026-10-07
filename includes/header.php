@@ -243,14 +243,6 @@ if ($jhdPublicDbReady && session_status() === PHP_SESSION_ACTIVE): ?><meta name=
 /*
  * Social preview image.
  *
- * A page may pass its own image (a book cover, a post's featured image); the
- * real school logo is the default, so every page always carries a valid
- * absolute image rather than an empty or placeholder one.
- */
-<?php
-/*
- * Social preview image.
- *
  * Listing/static pages can use the real school logo. Content detail pages must
  * never advertise the logo as their own featured image when no real content
  * image exists; the Article JSON-LD follows the same rule.
