@@ -83,7 +83,7 @@ function jhdNotFound(): void {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex, follow">
+<meta name="robots" content="noindex,follow,max-image-preview:large">
 <title>۴۰۴ — صفحه پیدا نشد | جامعه‌الهدی</title>
 <style>
 @font-face {
