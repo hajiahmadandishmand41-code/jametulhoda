@@ -186,7 +186,9 @@ if ($jhdPublicDbReady) {
 
     // Programs, religious activities and announcements come from one table and
     // are merged straight away: one query instead of three round trips.
-    $eventPool = getPosts(['types' => ['program', 'religious', 'announcement'], 'limit' => 12]);
+    $eventCandidates = getPosts(['types' => ['program', 'religious', 'announcement'], 'limit' => 12]);
+    $eventCandidates = jhd_homepage_unique_posts($eventCandidates, $acceptedHomepagePosts, 12);
+    $eventPool = $eventCandidates;
     $now = time();
     $upcoming = array_values(array_filter($eventPool, static fn(array $e): bool => strtotime((string)($e['published_at'] ?? $e['created_at'] ?? '')) >= $now));
     $past = array_values(array_filter($eventPool, static fn(array $e): bool => strtotime((string)($e['published_at'] ?? $e['created_at'] ?? '')) < $now));
