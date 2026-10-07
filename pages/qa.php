@@ -11,6 +11,9 @@ if($search) $opts['search']=$search;
 $posts=getPosts($opts);
 $total=countPosts(array_merge(['type'=>'qa'], $search?['search'=>$search]:[]));
 $pages=(int)ceil($total/$limit);
+jhd_validate_pagination($page, $total, $limit, 'پرسش و پاسخ', url('qa'), 'پرسش و پاسخ');
+$noindexSeo = ($total === 0);
+
 ?>
 <div class="breadcrumb-bar"><div class="container"><nav><ol class="breadcrumb mb-0"><li class="breadcrumb-item"><a href="<?= siteUrl() ?>">صفحه اصلی</a></li><li class="breadcrumb-item active">پرسش و پاسخ</li></ol></nav></div></div>
 <div class="jhd-section"><div class="container">
