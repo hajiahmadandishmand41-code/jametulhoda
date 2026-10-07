@@ -872,6 +872,15 @@ function mediaUrl(string $kind, int $id): string {
     return url($kind, ['id' => $id]);
 }
 
+/** نشانی یکتای صفحهٔ مطالعهٔ یک PDF؛ خود فایل هرگز در فید عمومی نمایش داده نمی‌شود. */
+function documentReaderUrl(string $type, string $slug, int $mediaId = 0): string {
+    $type = in_array($type, ['book', 'lesson', 'post'], true) ? $type : 'post';
+    $query = ['type' => $type];
+    if ($slug !== '') $query['slug'] = $slug;
+    if ($mediaId > 0) $query['media'] = $mediaId;
+    return url('read', $query);
+}
+
 function loginUrl(): string { return url('login'); }
 function registerUrl(): string { return url('register'); }
 function logoutUrl(): string { return url('logout'); }
