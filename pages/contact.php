@@ -4,7 +4,8 @@
  * اصلاح‌شده: ذخیره در دیتابیس با is_read، CSRF، اعتبارسنجی کامل
  */
 $pageTitle = 'تماس با ما';
-$pageDesc = 'راه‌های ارتباط با مدرسه مدرسه جامعه‌الهدی در کابل، نشانی، شماره تماس و فرم ارسال پیام به مجموعه.';
+$metaTitleOverride = 'تماس با جامعه‌الهدی | آدرس، تلفن و ایمیل';
+$pageDesc = 'راه‌های ارتباط با مدرسه جامعه‌الهدی در کابل، نشانی، شماره تماس و فرم ارسال پیام به مجموعه.';
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
