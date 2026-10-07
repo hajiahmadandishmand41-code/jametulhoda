@@ -1001,7 +1001,11 @@ html[data-theme="dark"] .jhd-card .jhd-event-date { background: rgba(12, 28, 22,
   font-family: var(--jhd-font-body);
   text-rendering: optimizeLegibility;
 }
-.jhd-editorial-title { line-height: 1.6; }
+.jhd-editorial-title { line-height: 1.58; }
+.jhd-editorial-main .jhd-card-summary {
+  font-size: .75rem;
+  line-height: 1.68;
+}
 .jhd-editorial-main .jhd-card-summary { line-height: 1.72; }
 
 .jhd-editorial-title a { color: var(--jhd-ink); }
@@ -1075,6 +1079,33 @@ html[data-theme="dark"] .jhd-card .jhd-event-date { background: rgba(12, 28, 22,
 }
 
 /* ─── ۱. چیپ‌ها، فیلترها و نوار ابزار فهرست ─────────────────────────────── */
+.jhd-card-meta {
+  display: block;
+  min-width: 0;
+}
+.jhd-card-topics {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .25rem .32rem;
+  direction: rtl;
+  min-width: 0;
+  margin-bottom: .2rem;
+}
+.jhd-card-info {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .25rem .62rem;
+  min-width: 0;
+}
+.jhd-card-info > span,
+.jhd-card-info > time {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  min-width: 0;
+}
 .jhd-chip {
   display: inline-flex;
   align-items: center;
@@ -1372,8 +1403,23 @@ html[data-theme="dark"] .jhd-media-play span { color: #0d241b; }
 .jhd-article-figure { margin: 0 0 1.4rem; }
 .jhd-article-figure img { width: 100%; border-radius: var(--jhd-radius-lg); border: 1px solid var(--jhd-border); }
 .jhd-article-figure figcaption { font-size: .78rem; color: var(--jhd-muted); margin-top: .45rem; text-align: center; }
-.jhd-prose { font-size: 1.02rem; line-height: 2.15; }
-.jhd-prose p { margin-bottom: 1.05rem; }
+.jhd-prose {
+  direction: rtl;
+  text-align: right;
+  unicode-bidi: plaintext;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: break-word;
+  font-family: var(--jhd-font-body);
+  font-size: .96rem;
+  line-height: 1.8;
+}
+.jhd-prose p { margin: 0 0 .72rem; }
+.jhd-prose > * { max-width: 100%; }
+.jhd-prose h2, .jhd-prose h3, .jhd-prose h4, .jhd-prose h5,
+.jhd-prose blockquote, .jhd-prose ul, .jhd-prose ol, .jhd-prose table {
+  clear: both;
+}
 .jhd-prose h2, .jhd-prose h3, .jhd-prose h4 { margin: 1.6rem 0 .7rem; line-height: 1.7; }
 .jhd-prose h2 { font-size: 1.25rem; padding-inline-start: .7rem; border-inline-start: 3px solid var(--jhd-gold); }
 .jhd-prose h3 { font-size: 1.1rem; }
