@@ -648,21 +648,27 @@ function renderTopicCard(array $topic, array $opts = []): string {
         if (empty($c['label'])) continue;
         $meta[] = ['icon' => (string)($c['icon'] ?? 'bi-dot'), 'text' => number_format((int)($c['value'] ?? 0)) . ' ' . (string)$c['label']];
     }
+    $minimal = !empty($opts['minimal']);
     $children = (array)($topic['children'] ?? []);
     $kids = '';
-    foreach (array_slice($children, 0, 4) as $ch) {
-        if (empty($ch['name'])) continue;
-        $kids .= '<a class="jhd-chip jhd-chip--soft" href="' . sanitize(topicUrl($ch)) . '">' . sanitize((string)$ch['name']) . '</a>';
+    if (!$minimal) {
+        foreach (array_slice($children, 0, 4) as $ch) {
+            if (empty($ch['name'])) continue;
+            $kids .= '<a class="jhd-chip jhd-chip--soft" href="' . sanitize(topicUrl($ch)) . '">' . sanitize((string)$ch['name']) . '</a>';
+        }
     }
+    $summary = $minimal
+        ? ''
+        : excerpt((string)($topic['intro'] ?? $topic['description'] ?? ''), (int)($opts['excerpt'] ?? 90));
     $card = [
         'type'       => 'topic',
         'url'        => topicUrl($topic),
         'title'      => (string)($topic['name'] ?? ''),
-        'summary'    => excerpt((string)($topic['intro'] ?? $topic['description'] ?? ''), (int)($opts['excerpt'] ?? 90)),
+        'summary'    => $summary,
         'image'      => (string)($topic['cover_image'] ?? ''),
         'badge'      => 'موضوع',
         'meta'       => $meta,
-        'cta'        => (string)($opts['cta'] ?? 'ورود به موضوع'),
+        'cta'        => (string)($opts['cta'] ?? ($minimal ? 'مشاهده موضوع' : 'ورود به موضوع')),
         'body_extra' => $kids !== '' ? '<div class="jhd-card-kids">' . $kids . '</div>' : '',
     ];
     return jhd_card($card, [
