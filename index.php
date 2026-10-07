@@ -146,7 +146,8 @@ if ($jhdPublicDbReady) {
 
     $featuredTopics = [];
     try {
-        $stmt = $db->query("SELECT t.*, COUNT(pt.post_id) as post_count FROM topics t LEFT JOIN post_topics pt ON pt.topic_id = t.id WHERE t.is_active = 1 GROUP BY t.id ORDER BY t.is_featured DESC, t.sort_order ASC, post_count DESC LIMIT 8");
+        // خانه فقط چند محور اصلی را به‌صورت مینیمال نشان می‌دهد؛ فهرست کامل در /topics است.
+        $stmt = $db->query("SELECT t.*, COUNT(pt.post_id) as post_count FROM topics t LEFT JOIN post_topics pt ON pt.topic_id = t.id WHERE t.is_active = 1 GROUP BY t.id ORDER BY t.is_featured DESC, t.sort_order ASC, post_count DESC LIMIT 6");
         $featuredTopics = $stmt->fetchAll();
     } catch (Throwable) {
         $featuredTopics = getTopics(['limit' => 8]);
@@ -180,32 +181,6 @@ if ($jhdPublicDbReady) {
         $latestLessons = [];
     }
 
-    $latestVideos = [];
-    $latestAudios = [];
-    try {
-        $stmt = $db->prepare("
-            SELECT m.*, p.title as post_title, p.slug as post_slug, p.post_type as post_type
-            FROM media_files m
-            LEFT JOIN posts p ON p.id = m.ref_id AND m.ref_type = 'post'
-            WHERE m.kind = 'video' AND (p.status = 'published' OR p.status IS NULL)
-            ORDER BY m.id DESC LIMIT 3
-        ");
-        $stmt->execute();
-        $latestVideos = $stmt->fetchAll();
-        $stmt = $db->prepare("
-            SELECT m.*, p.title as post_title, p.slug as post_slug, p.post_type as post_type
-            FROM media_files m
-            LEFT JOIN posts p ON p.id = m.ref_id AND m.ref_type = 'post'
-            WHERE m.kind = 'audio' AND (p.status = 'published' OR p.status IS NULL)
-            ORDER BY m.id DESC LIMIT 2
-        ");
-        $stmt->execute();
-        $latestAudios = $stmt->fetchAll();
-    } catch (Throwable) {
-        $latestVideos = [];
-        $latestAudios = [];
-    }
-
     $specialBanner = getActiveBanner();
     // NOTE: five COUNT(*) queries (posts/topics/books/lessons/media) used to run
     // here into $homeCounts/$homeContentTotal. Neither variable is rendered
@@ -216,7 +191,7 @@ if ($jhdPublicDbReady) {
     $heroPost = null; $heroTopic = null; $featuredSide = []; $latest = [];
     $newsPool = []; $latestArticles = []; $latestReports = []; $latestResearch = [];
     $featuredTopics = []; $latestEvents = []; $latestBooks = []; $latestLessons = [];
-    $latestVideos = []; $latestAudios = []; $specialBanner = null;
+    $specialBanner = null;
 }
 jhd_preload_post_topics(array_merge(
     $heroPost ? [$heroPost] : [], $featuredSide, $latest, $newsPool,
@@ -235,8 +210,7 @@ $homeHasAnyContent =
     || (!empty($homeSections['topics']) && $featuredTopics)
     || (!empty($homeSections['events']) && $latestEvents)
     || (!empty($homeSections['books']) && $latestBooks)
-    || (!empty($homeSections['lessons']) && $latestLessons)
-    || (!empty($homeSections['media']) && ($latestVideos || $latestAudios));
+    || (!empty($homeSections['lessons']) && $latestLessons);
 ?>
 
 <!-- ─── ۱. تابلوی فشردهٔ برند ─────────────────────────────────────────────── -->
@@ -437,18 +411,18 @@ $homeHasAnyContent =
 <?php endif; ?>
 
 <?php if (!empty($homeSections['topics']) && $featuredTopics): ?>
-<!-- ─── ۸. اطلس موضوعات ──────────────────────────────────────────────────── -->
-<section class="jhd-home-group" id="topics-section">
+<!-- ─── ۸. موضوعات — فقط محورهای اصلی، با نمایش مینیمال ───────────────────── -->
+<section class="jhd-home-group jhd-home-topics" id="topics-section">
     <div class="container">
         <?= jhd_section_head([
-            'eyebrow' => 'ستون فقرات معارف اسلامی',
+            'eyebrow' => 'موضوعات',
             'icon' => 'bi-diagram-3',
-            'title' => 'موضوعات و محورهای پژوهشی',
+            'title' => 'محورهای علمی و معارف',
             'url' => url('topics'),
-            'link' => 'اطلس کامل موضوعات',
+            'link' => 'همه موضوعات',
         ]) ?>
-        <?= jhd_grid_open('jhd-card-grid--rail') ?>
-            <?php foreach ($featuredTopics as $tp): ?><?= renderTopicCard($tp, ['counts' => [['value' => (int)($tp['post_count'] ?? 0), 'label' => 'مطلب', 'icon' => 'bi-journal-text']]]) ?><?php endforeach; ?>
+        <?= jhd_grid_open('jhd-card-grid--rail jhd-topic-home-grid') ?>
+            <?php foreach ($featuredTopics as $tp): ?><?= renderTopicCard($tp, ['minimal' => true, 'col' => 'col-12 col-sm-6 col-lg-4', 'counts' => [['value' => (int)($tp['post_count'] ?? 0), 'label' => 'مطلب', 'icon' => 'bi-journal-text']]]) ?><?php endforeach; ?>
         <?= jhd_grid_close() ?>
     </div>
 </section>
@@ -516,25 +490,6 @@ $homeHasAnyContent =
             </div>
         </div>
         <?php endforeach; ?>
-    </div>
-</section>
-<?php endif; ?>
-
-<?php if (!empty($homeSections['media']) && ($latestVideos || $latestAudios)): ?>
-<!-- ─── ۱۲. رسانه: ویدیو و صوت ──────────────────────────────────────────── -->
-<section class="jhd-home-group" id="media-section">
-    <div class="container">
-        <?= jhd_section_head([
-            'eyebrow' => 'نگارخانه صوتی و تصویری',
-            'icon' => 'bi-play-circle',
-            'title' => 'رسانه و سخنرانی‌ها',
-            'url' => url('media'),
-            'link' => 'همه رسانه‌ها',
-        ]) ?>
-        <?= jhd_grid_open('jhd-card-grid--rail') ?>
-            <?php foreach ($latestVideos as $v): ?><?= renderMediaCard($v, ['url' => !empty($v['post_slug']) ? postUrl(['slug' => (string)$v['post_slug'], 'post_type' => (string)($v['post_type'] ?? '')]) : mediaUrl('video', (int)$v['id'])]) ?><?php endforeach; ?>
-            <?php foreach ($latestAudios as $a): ?><?= renderAudioRow($a) ?><?php endforeach; ?>
-        <?= jhd_grid_close() ?>
     </div>
 </section>
 <?php endif; ?>
