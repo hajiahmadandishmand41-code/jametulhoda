@@ -1706,7 +1706,7 @@ function jhd_homepage_settings(): array {
         'sections' => [
             'hero' => true,
             'editor_picks' => true,
-            'latest' => true,
+            'latest' => false,
             'news' => true,
             'articles' => true,
             'reports' => true,
