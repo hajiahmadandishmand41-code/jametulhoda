@@ -337,7 +337,7 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
 
 <?php if ($latest): ?>
 <!-- ─── ۳. تازه‌ترین مطالب ───────────────────────────────────────────────── -->
-<section class="jhd-section jhd-section--paper" id="latest-section">
+<section class="jhd-home-group jhd-home-group--paper" id="latest-section">
     <div class="container">
         <?= jhd_section_head([
             'eyebrow' => 'تازه‌ها',
@@ -355,7 +355,7 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
 
 <?php if ($newsPool): ?>
 <!-- ─── ۴. اخبار ─────────────────────────────────────────────────────────── -->
-<section class="jhd-section" id="news-section">
+<section class="jhd-home-group" id="news-section">
     <div class="container">
         <?= jhd_section_head([
             'eyebrow' => 'اطلاع‌رسانی جاری',
@@ -378,7 +378,7 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
 
 <?php if ($latestArticles): ?>
 <!-- ─── ۵. مقالات علمی (سرمقاله‌ای) ──────────────────────────────────────── -->
-<section class="jhd-section jhd-section--paper" id="articles-section">
+<section class="jhd-home-group jhd-home-group--paper" id="articles-section">
     <div class="container">
         <?= jhd_section_head([
             'eyebrow' => 'اندیشه و پژوهش دینی',
@@ -396,7 +396,7 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
 
 <?php if ($latestReports): ?>
 <!-- ─── ۶. گزارش‌های تصویری ───────────────────────────────────────────────── -->
-<section class="jhd-section" id="reports-section">
+<section class="jhd-home-group" id="reports-section">
     <div class="container">
         <?= jhd_section_head([
             'eyebrow' => 'پوشش میدانی و رخدادها',
@@ -414,7 +414,7 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
 
 <?php if ($latestResearch): ?>
 <!-- ─── ۷. پژوهش (رسمی) ──────────────────────────────────────────────────── -->
-<section class="jhd-section jhd-section--paper" id="research-section">
+<section class="jhd-home-group jhd-home-group--paper" id="research-section">
     <div class="container">
         <?= jhd_section_head([
             'eyebrow' => 'پژوهش‌های حوزوی',
@@ -432,7 +432,7 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
 
 <?php if ($featuredTopics): ?>
 <!-- ─── ۸. اطلس موضوعات ──────────────────────────────────────────────────── -->
-<section class="jhd-section" id="topics-section">
+<section class="jhd-home-group" id="topics-section">
     <div class="container">
         <?= jhd_section_head([
             'eyebrow' => 'ستون فقرات معارف اسلامی',
@@ -450,7 +450,7 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
 
 <?php if ($latestEvents): ?>
 <!-- ─── ۹. رویدادها و برنامه‌ها (خط زمان) ────────────────────────────────── -->
-<section class="jhd-section jhd-section--paper" id="events-section">
+<section class="jhd-home-group jhd-home-group--paper" id="events-section">
     <div class="container">
         <?= jhd_section_head([
             'eyebrow' => 'تقویم حوزه و مناسبت‌ها',
@@ -468,7 +468,7 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
 
 <?php if ($latestBooks): ?>
 <!-- ─── ۱۰. کتابخانه دیجیتال ─────────────────────────────────────────────── -->
-<section class="jhd-section" id="books-section">
+<section class="jhd-home-group" id="books-section">
     <div class="container">
         <?= jhd_section_head([
             'eyebrow' => 'مرکز اسناد و نشر آثار',
@@ -486,7 +486,7 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
 
 <?php if ($latestLessons): ?>
 <!-- ─── ۱۱. دروس حوزوی ──────────────────────────────────────────────────── -->
-<section class="jhd-section jhd-section--paper" id="lessons-section">
+<section class="jhd-home-group jhd-home-group--paper" id="lessons-section">
     <div class="container">
         <?= jhd_section_head([
             'eyebrow' => 'مدرسه علمیه و آموزش مجازی',
@@ -516,7 +516,7 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
 
 <?php if ($latestVideos || $latestAudios): ?>
 <!-- ─── ۱۲. رسانه: ویدیو و صوت ──────────────────────────────────────────── -->
-<section class="jhd-section" id="media-section">
+<section class="jhd-home-group" id="media-section">
     <div class="container">
         <?= jhd_section_head([
             'eyebrow' => 'نگارخانه صوتی و تصویری',
