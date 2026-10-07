@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $pageTitle = 'ثبت‌نام';
-$pageDesc = 'عضویت در مدرسه مدرسه جامعه‌الهدی برای دسترسی به حساب کاربری و پیگیری مطالب علمی، آموزشی و پژوهشی.';
+$pageDesc = 'عضویت در مدرسه جامعه‌الهدی برای دسترسی به حساب کاربری و پیگیری مطالب علمی، آموزشی و پژوهشی.';
 $canonicalOverride = registerUrl();
 $noindexSeo = true;
 require_once __DIR__ . '/../includes/header.php';
