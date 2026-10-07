@@ -287,6 +287,23 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
 </section>
 <?php endif; ?>
 
+<!-- ناوبری سریع صفحهٔ اصلی -->
+<nav class="jhd-home-nav" aria-label="بخش‌های اصلی پایگاه">
+  <div class="container">
+    <div class="jhd-home-nav__scroll">
+      <a href="#latest-section"><i class="bi bi-clock-history"></i> تازه‌ها</a>
+      <a href="#news-section"><i class="bi bi-newspaper"></i> اخبار</a>
+      <a href="#articles-section"><i class="bi bi-file-earmark-text"></i> مقالات</a>
+      <a href="#research-section"><i class="bi bi-journal-richtext"></i> پژوهش</a>
+      <a href="#reports-section"><i class="bi bi-images"></i> گزارش‌ها</a>
+      <a href="#topics-section"><i class="bi bi-diagram-3"></i> موضوعات</a>
+      <a href="#lessons-section"><i class="bi bi-mortarboard"></i> دروس</a>
+      <a href="#books-section"><i class="bi bi-book"></i> کتابخانه</a>
+      <a href="#media-section"><i class="bi bi-play-circle"></i> رسانه</a>
+    </div>
+  </div>
+</nav>
+
 <?php if (!$homeHasAnyContent): ?>
 <section class="jhd-section">
     <div class="container">
