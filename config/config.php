@@ -93,7 +93,7 @@ define('UPLOAD_AUDIO', env_value('UPLOAD_AUDIO_DIR', 'audios'));
 define('UPLOAD_VIDEO', env_value('UPLOAD_VIDEO_DIR', 'videos'));
 define('UPLOAD_DOCUMENTS', 'documents');
 define('MAX_FILE_SIZE', 20 * 1024 * 1024);
-define('MAX_VIDEO_SIZE', 200 * 1024 * 1024);
+define('MAX_VIDEO_SIZE', 150 * 1024 * 1024);
 define('ALLOWED_IMG',   ['image/jpeg','image/png','image/gif','image/webp']);
 define('ALLOWED_AUDIO', ['audio/mpeg','audio/mp3','audio/ogg','audio/wav','audio/mp4','audio/x-m4a','audio/x-mpeg']);
 define('ALLOWED_VIDEO', ['video/mp4','video/webm','video/ogg','video/quicktime','video/x-matroska']);
