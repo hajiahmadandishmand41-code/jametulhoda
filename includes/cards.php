@@ -238,12 +238,6 @@ function jhd_card_gallery(array $images, string $title, string $badge = '', bool
     return $html;
 }
 
-/** حافظهٔ تصاویر گالری هر مطلب در طول یک درخواست. */
-function &jhd_post_images_cache(): array {
-    static $cache = [];
-    return $cache;
-}
-
 function jhd_card_topics(array $post, int $limit = 2): array {
     $id = (int)($post['id'] ?? 0);
     if ($id < 1) return [];
@@ -619,8 +613,9 @@ function renderLessonCard(array $lesson, array $opts = []): string {
         'has_pdf'     => !empty($lesson['pdf_file']) || !empty($lesson['pdf_path']) || !empty($lesson['attachment']),
     ];
     return jhd_card($card, [
-        'col'   => array_key_exists('col', $opts) ? (string)$opts['col'] : JHD_CARD_COL,
-        'eager' => !empty($opts['eager']),
+        'col'    => array_key_exists('col', $opts) ? (string)$opts['col'] : 'col-12 col-sm-6 col-lg-3',
+        'class'  => 'jhd-card--topic' . (!empty($opts['class']) ? ' ' . trim((string)$opts['class']) : ''),
+        'eager'  => !empty($opts['eager']),
     ]);
 }
 
