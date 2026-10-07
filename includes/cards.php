@@ -499,7 +499,14 @@ function renderMediaCard(array $media, array $opts = []): string {
     $kind = (string)($media['kind'] ?? 'video');
     $id = (int)($media['id'] ?? 0);
     $title = (string)($media['title'] ?? ($media['post_title'] ?? ($kind === 'audio' ? 'صوت' : 'ویدیو')));
-    $href = $opts['url'] ?? (!empty($media['post_slug']) ? postUrl($media['post_slug']) : mediaUrl($kind, $id));
+    $href = $opts['url'] ?? (
+        !empty($media['post_slug'])
+            ? postUrl([
+                'slug' => (string)$media['post_slug'],
+                'post_type' => (string)($media['post_type'] ?? ''),
+            ])
+            : mediaUrl($kind, $id)
+    );
     $parent = trim((string)($media['post_title'] ?? $media['parent_title'] ?? ''));
     $meta = [];
     if ($parent !== '' && $parent !== $title) $meta[] = ['icon' => 'bi-link-45deg', 'text' => $parent];
