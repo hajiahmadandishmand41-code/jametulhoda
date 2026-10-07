@@ -19,9 +19,9 @@
  * it comes first rather than being pushed behind a descriptive phrase. The
  * remainder states plainly what the school is and where it is; nothing else.
  */
-$metaTitleOverride = 'مدرسه جامعه‌الهدی | مدرسه علوم اسلامی در کابل، افغانستان';
+$metaTitleOverride = 'مدرسه جامعه‌الهدی | علوم اسلامی، آموزش دینی و پژوهش';
 $pageTitle = 'مدرسه جامعه‌الهدی';
-$pageDesc = 'مدرسه جامعه‌الهدی در کابل، افغانستان؛ مرکز علمی، آموزشی و پژوهشی علوم اسلامی با دسترسی به اخبار، مقالات، پژوهش‌ها، گزارش‌ها، کتاب‌ها، دروس و موضوعات مرتبط.';
+$pageDesc = 'مدرسه جامعه‌الهدی؛ پایگاه علمی، آموزشی و پژوهشی علوم اسلامی با اخبار، مقالات، دروس، کتاب‌ها و پژوهش‌های دینی.';
 require_once __DIR__ . '/config/config.php';
 
 // Resolve the query route before conditionally loading authentication.
