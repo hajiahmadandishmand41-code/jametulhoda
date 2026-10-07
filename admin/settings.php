@@ -43,6 +43,8 @@ $defaults = [
     'social_instagram' => '',
 ];
 $homepageSectionLabels = [
+    'hero' => 'مطلب شاخص',
+    'editor_picks' => 'برگزیدهٔ سردبیر',
     'latest' => 'تازه‌ترین مطالب',
     'news' => 'اخبار',
     'articles' => 'مقالات',
@@ -257,7 +259,7 @@ $sets = array_merge($sets, $formValues);
                         <div class="form-text">این انتخاب فقط مطلب شاخص بزرگ ابتدای صفحه را کنترل می‌کند.</div>
                     </div>
                     <div class="alert alert-light border mt-3 mb-0 small">
-                        برای <strong>برگزیدهٔ سردبیر</strong>، هنگام ایجاد یا ویرایش مطلب تیک «برگزیدهٔ سردبیر» را فعال کنید. این انتخاب مستقل از مطلب شاخص است.
+                        برای <strong>برگزیدهٔ سردبیر</strong>، هنگام ایجاد یا ویرایش هر مطلب تیک «برگزیدهٔ سردبیر» را فعال کنید؛ این بخش می‌تواند مستقل از مطلب شاخص روشن/خاموش شود.
                     </div>
                 </div>
             </section>
