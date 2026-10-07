@@ -2108,9 +2108,27 @@ function jhd_post_schema_type(string $postType): string {
     };
 }
 
+/** Return the actual MIME type implied by a public image URL/path extension. */
+function imageMimeFromUrl(string $url): string {
+    $path = (string)(parse_url($url, PHP_URL_PATH) ?? '');
+    $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+    return match ($ext) {
+        'jpg', 'jpeg' => 'image/jpeg',
+        'png'         => 'image/png',
+        'gif'         => 'image/gif',
+        'webp'        => 'image/webp',
+        'avif'        => 'image/avif',
+        default       => 'image/png',
+    };
+}
+
 function articleJsonLd(array $post): string {
     if (!SITE_URL) return '';
-    $canonical = canonicalUrl(postUrl($post));
+    // Structured data must use the same canonical pretty path as <link rel="canonical>.
+    // Avoid query URLs here: encoded Persian slugs can otherwise become ?slug=%25...
+    $canonicalPath = jhd_post_canonical_path($post);
+    if ($canonicalPath === '') return '';
+    $canonical = jhd_absolute_url($canonicalPath);
     $author = !empty($post['author_name'])
         ? ['@type' => 'Person', 'name' => $post['author_name']]
         : ['@id' => rtrim(SITE_URL, '/') . '/#organization'];
@@ -2132,10 +2150,11 @@ function articleJsonLd(array $post): string {
         // Reference the one Organization node instead of re-declaring the brand.
         'publisher' => ['@id' => rtrim(SITE_URL, '/') . '/#organization'],
     ];
-    $imagePath = (string)($post['featured_image'] ?? '');
-    $data['image'] = $imagePath !== ''
-        ? [jhd_absolute_url(imgUrl($imagePath))]
-        : [canonicalUrl(SITE_LOGO_PATH)];
+    $imagePath = trim((string)($post['featured_image'] ?? ''));
+    // The school logo identifies the publisher; it is not an article image.
+    if ($imagePath !== '') {
+        $data['image'] = [jhd_absolute_url(imgUrl($imagePath))];
+    }
     $category = trim((string)($post['cat_name'] ?? ''));
     if ($category !== '') $data['articleSection'] = $category;
     return json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
@@ -2147,7 +2166,9 @@ function articleJsonLd(array $post): string {
  */
 function qaJsonLd(array $post): string {
     if (!SITE_URL) return '';
-    $canonical = canonicalUrl(postUrl($post));
+    $canonicalPath = jhd_post_canonical_path($post);
+    if ($canonicalPath === '') return '';
+    $canonical = jhd_absolute_url($canonicalPath);
     $answer = trim(strip_tags((string)($post['content'] ?? '')));
     if ($answer === '') $answer = trim((string)($post['summary'] ?? ''));
     return json_encode([
