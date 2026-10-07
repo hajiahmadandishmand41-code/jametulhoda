@@ -260,6 +260,7 @@ require_once __DIR__ . '/../includes/header.php';
 
     <?php $articleBodyHtml = safeRichText($post['content']); ?>
     <?php if (($post['post_type'] ?? '') === 'article') $articleBodyHtml = jhd_promote_article_headings($articleBodyHtml); ?>
+    <?php $articleBodyHtml = jhd_add_contextual_internal_links($articleBodyHtml, (int)$post['id'], 6); ?>
     <div class="jhd-prose" itemprop="articleBody"><?= $articleBodyHtml ?: '<p class="text-muted">محتوایی ثبت نشده است.</p>' ?></div>
 
     <?php if (!empty($post['sources'])): ?>
