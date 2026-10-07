@@ -1792,6 +1792,71 @@ function getActiveBanner(): ?array {
     return $banners[0] ?? null;
 }
 
+/**
+ * Render a real 404 for an out-of-range public archive page.
+ *
+ * Pagination pages are indexable only while they actually exist. This helper
+ * is deliberately presentation-safe: it changes HTTP status and SEO metadata
+ * but never touches database state.
+ */
+function jhd_pagination_not_found(string $sectionLabel, string $backUrl, string $backLabel = 'بازگشت'): never {
+    http_response_code(404);
+    $pageTitle = 'صفحه یافت نشد | ' . $sectionLabel;
+    $pageDesc = 'صفحه درخواستی در بخش «' . $sectionLabel . '» وجود ندارد.';
+    $noindexSeo = true;
+    $canonical = '';
+    require __DIR__ . '/header.php';
+    echo '<main class="container py-5 text-center">';
+    echo '<h1 class="h3 fw-bold">صفحه مورد نظر یافت نشد</h1>';
+    echo '<p class="text-muted">شماره صفحه خارج از محدوده این بخش است.</p>';
+    echo '<a class="btn btn-primary mt-3" href="' . sanitize($backUrl) . '">' . sanitize($backLabel) . '</a>';
+    echo '</main>';
+    require __DIR__ . '/footer.php';
+    exit;
+}
+
+/** Validate a public pagination number before any empty result page is rendered. */
+function jhd_validate_pagination(int $page, int $total, int $limit, string $sectionLabel, string $backUrl, string $backLabel): void {
+    $safeLimit = max(1, $limit);
+    $pageCount = max(1, (int)ceil(max(0, $total) / $safeLimit));
+    if ($page < 1 || $page > $pageCount) {
+        jhd_pagination_not_found($sectionLabel, $backUrl, $backLabel);
+    }
+}
+
+/**
+ * Promote known, content-backed standalone section headings inside long article
+ * bodies to H2. No new text is introduced: a heading is converted only when the
+ * exact phrase already exists as its own separated line in the stored content.
+ */
+function jhd_promote_article_headings(string $html): string {
+    if ($html === '') return '';
+    $headings = [
+        'مهدویت یعنی چه؟',
+        'مهدویت؛ باور به پایان تاریخ یا ساختن آینده؟',
+        'مهدویت در بستر اندیشه اسلامی',
+        'مهدویت در اندیشه اسلامی',
+        'مهدی موعود در نگاه اسلامی',
+        'مهدی موعود کیست؟',
+        'مهدویت در اندیشه شیعه امامیه',
+        'مهدویت در نگاه شیعه',
+        'مهدویت در نگاه اهل سنت',
+        'غیبت چیست؟',
+        'چرا غیبت اتفاق افتاد؟',
+        'ظهور چیست؟',
+        'انتظار چیست؟',
+        'نشانه‌های ظهور',
+        'وظیفه انسان منتظر',
+        'پرسش‌های متداول درباره مهدویت',
+    ];
+    foreach ($headings as $heading) {
+        $pattern = '~(?:^|(?:\r\n|\n|\r){2,})\s*' . preg_quote($heading, '~') . '\s*(?=(?:\r\n|\n|\r){2,}|$)~u';
+        $replacement = '<h2>' . htmlspecialchars($heading, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</h2>';
+        $html = (string)preg_replace($pattern, $replacement, $html, 1);
+    }
+    return $html;
+}
+
 // ─── Pagination ───────────────────────────────────────────────────────────────
 
 function paginate(int $total, int $limit, int $current, string $urlPattern): string {
@@ -2190,7 +2255,12 @@ function qaJsonLd(array $post): string {
 }
 function bookJsonLd(array $book): string {
     if (!SITE_URL) return '';
-    $canonical = canonicalUrl(bookUrl($book));
+    $slug = trim((string)($book['slug'] ?? ''));
+    $canonicalPath = $slug !== ''
+        ? jhd_route_path('book', ['slug' => $slug])
+        : jhd_route_path('book', ['id' => (int)($book['id'] ?? 0)]);
+    if ($canonicalPath === '') return '';
+    $canonical = jhd_absolute_url($canonicalPath);
     $data = [
         '@context' => 'https://schema.org',
         '@type' => 'Book',
@@ -2206,8 +2276,9 @@ function bookJsonLd(array $book): string {
     if (!empty($book['author'])) $data['author'] = ['@type' => 'Person', 'name' => $book['author']];
     if (!empty($book['translator'])) $data['translator'] = ['@type' => 'Person', 'name' => $book['translator']];
     if (!empty($book['description'])) $data['description'] = excerpt($book['description'], 200);
-    if (!empty($book['cover_image'])) $data['image'] = [jhd_absolute_url(imgUrl($book['cover_image']))];
-    else $data['image'] = [canonicalUrl(SITE_LOGO_PATH)];
+    if (!empty($book['cover_image'])) {
+        $data['image'] = [jhd_absolute_url(imgUrl($book['cover_image']))];
+    }
     if (!empty($book['publish_year'])) $data['datePublished'] = (string)$book['publish_year'];
     if (!empty($book['pages'])) $data['numberOfPages'] = (int)$book['pages'];
     return json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
@@ -2221,7 +2292,12 @@ function bookJsonLd(array $book): string {
  */
 function lessonJsonLd(array $lesson): string {
     if (!SITE_URL) return '';
-    $canonical = canonicalUrl(lessonUrl($lesson));
+    $slug = trim((string)($lesson['slug'] ?? ''));
+    $canonicalPath = $slug !== ''
+        ? jhd_route_path('lesson', ['slug' => $slug])
+        : '';
+    if ($canonicalPath === '') return '';
+    $canonical = jhd_absolute_url($canonicalPath);
     $summary = trim((string)($lesson['summary'] ?? ''));
     if ($summary === '') $summary = trim(strip_tags((string)($lesson['content'] ?? '')));
     return json_encode([
