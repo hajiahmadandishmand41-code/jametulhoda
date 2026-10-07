@@ -177,7 +177,7 @@ if ($jhdPublicDbReady) {
     $featuredTopics = [];
     try {
         // خانه فقط چند محور اصلی را به‌صورت مینیمال نشان می‌دهد؛ فهرست کامل در /topics است.
-        $stmt = $db->query("SELECT t.*, COUNT(pt.post_id) as post_count FROM topics t LEFT JOIN post_topics pt ON pt.topic_id = t.id WHERE t.is_active = 1 GROUP BY t.id ORDER BY t.is_featured DESC, t.sort_order ASC, post_count DESC LIMIT 6");
+        $stmt = $db->query("SELECT t.*, COUNT(DISTINCT pt.post_id) as post_count FROM topics t LEFT JOIN post_topics pt ON pt.topic_id = t.id WHERE t.is_active = 1 GROUP BY t.id HAVING COUNT(DISTINCT pt.post_id) > 0 ORDER BY t.is_featured DESC, t.sort_order ASC, post_count DESC LIMIT 6");
         $featuredTopics = $stmt->fetchAll();
     } catch (Throwable) {
         $featuredTopics = getTopics(['limit' => 8]);
@@ -311,7 +311,7 @@ $homeHasAnyContent =
     <div class="container">
         <div class="row g-4">
             <div class="col-lg-8">
-                <?= renderPostCard($heroPost, ['featured' => true, 'col' => 'col-12', 'cta' => 'مطالعه کامل مطلب', 'excerpt' => 190, 'eager' => true, 'topics' => $heroTopic ? [$heroTopic] : []]) ?>
+                <?= renderPostCard($heroPost, ['featured' => true, 'col' => 'col-12', 'cta' => 'مطالعه کامل مطلب', 'excerpt' => 190, 'eager' => true, 'no_gallery' => true, 'topics' => $heroTopic ? [$heroTopic] : []]) ?>
             </div>
             <div class="col-lg-4">
                 <div class="jhd-side-card h-100">
@@ -507,7 +507,7 @@ $homeHasAnyContent =
 </section>
 <?php endif; ?>
 
-<?php if (!empty($homeSections['topics']) && $featuredTopics): ?>
+<?php if (!empty($homeSections['topics']) && count($featuredTopics) >= 3): ?>
 <!-- ─── ۸. موضوعات — فقط محورهای اصلی، با نمایش مینیمال ───────────────────── -->
 <section class="jhd-home-group jhd-home-topics" id="topics-section">
     <div class="container">
