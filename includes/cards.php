@@ -58,6 +58,12 @@ function jhd_type_class(string $type): string {
  * فهرست‌ها پیش از رندر کارت‌ها این تابع را صدا می‌زنند؛ jhd_card_topics()
  * سپس از همان حافظهٔ درخواست می‌خواند و هیچ کوئری تکراری اجرا نمی‌شود.
  */
+/** حافظهٔ موضوعات مطالب در طول یک درخواست؛ برای جلوگیری از کوئری‌های تکراری. */
+function &jhd_post_topics_cache(): array {
+    static $cache = [];
+    return $cache;
+}
+
 function jhd_preload_post_topics(array $posts): void {
     jhd_preload_post_images($posts);
     static $loaded = [];
