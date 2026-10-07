@@ -34,7 +34,38 @@ if (($collectionSlug !== '' && !$activeCollection) || ($activeCollection && $vol
     exit;
 }
 
+$lessonWhere = [];
+$lessonParams = [];
+if ($activeCollection) {
+    $lessonWhere = ["l.status = 'published'", "l.collection_id = ?"];
+    $lessonParams = [(int)$activeCollection['id']];
+    if ($activeVolume) {
+        $lessonWhere[] = "l.volume_id = ?";
+        $lessonParams[] = (int)$activeVolume['id'];
+    }
+    if ($search) {
+        $lessonWhere[] = "(l.title ILIKE ? OR l.summary ILIKE ?)";
+        $s = "%$search%";
+        $lessonParams[] = $s;
+        $lessonParams[] = $s;
+    }
+    $whereStr = implode(' AND ', $lessonWhere);
+    try {
+        $cntStmt = getDB()->prepare("SELECT COUNT(*) FROM lessons l WHERE $whereStr");
+        $cntStmt->execute($lessonParams);
+        $total = (int)$cntStmt->fetchColumn();
+    } catch (Throwable $e) {
+        $total = 0;
+    }
+    $pages = max(1, (int)ceil($total / $limit));
+    jhd_validate_pagination($page, $total, $limit, 'دروس حوزوی', collectionUrl($activeCollection, $activeVolume ?: null), 'بازگشت به این مجموعه');
+    $noindexSeo = ($total === 0);
+}
+
 $pageTitle = $activeCollection ? $activeCollection['title'] : 'دروس حوزوی';
+if (!$activeCollection) {
+    $metaTitleOverride = 'دروس حوزوی | آموزش علوم اسلامی';
+}
 $pageDesc = $activeCollection && $activeCollection['description'] ? excerpt($activeCollection['description'], 160) : 'مجموعه دروس حوزوی به‌صورت درس‌به‌درس با جلسات صوتی و موضوعات مرتبط.';
 if ($activeCollection) {
     $canonicalOverride = collectionUrl($activeCollection, $activeVolume ?: null);
@@ -179,32 +210,13 @@ require_once __DIR__ . '/../includes/header.php';
     <?php endif; ?>
 
     <?php
-    $where = ["l.status = 'published'", "l.collection_id = ?"];
-    $params = [(int)$activeCollection['id']];
-    if ($activeVolume) {
-        $where[] = "l.volume_id = ?";
-        $params[] = (int)$activeVolume['id'];
-    }
-    if ($search) {
-        $where[] = "(l.title ILIKE ? OR l.summary ILIKE ?)";
-        $s = "%$search%";
-        $params[] = $s;
-        $params[] = $s;
-    }
-    $whereStr = implode(' AND ', $where);
+    $whereStr = implode(' AND ', $lessonWhere);
     try {
-        $cntStmt = getDB()->prepare("SELECT COUNT(*) FROM lessons l WHERE $whereStr");
-        $cntStmt->execute($params);
-        $total = (int)$cntStmt->fetchColumn();
-        $pages = (int)ceil($total / $limit);
-
         $stmt = getDB()->prepare("SELECT l.* FROM lessons l WHERE $whereStr ORDER BY COALESCE(l.lesson_number, 9999) ASC, l.sort_order ASC, l.id ASC LIMIT ? OFFSET ?");
-        $stmt->execute(array_merge($params, [$limit, $offset]));
+        $stmt->execute(array_merge($lessonParams, [$limit, $offset]));
         $lessons = $stmt->fetchAll();
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $lessons = [];
-        $total = 0;
-        $pages = 1;
     }
     ?>
 
