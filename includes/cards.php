@@ -334,22 +334,32 @@ function jhd_card_media(array $card, array $opts = []): string {
 
 /** خط متادیتای کارت (چیپ‌ها، نشانه‌ها و تاریخ) — یک الگو برای همهٔ انواع. */
 function jhd_card_meta_line(array $card): string {
-    $parts = '';
-    $chips = (string)($card['chips'] ?? '');
-    if ($chips !== '') $parts .= $chips;
+    $chips = trim((string)($card['chips'] ?? ''));
+    $info = '';
+
     foreach ((array)($card['meta'] ?? []) as $meta) {
-        if (is_string($meta)) { $parts .= '<span>' . sanitize($meta) . '</span>'; continue; }
+        if (is_string($meta)) {
+            $text = trim($meta);
+            if ($text !== '') $info .= '<span>' . sanitize($text) . '</span>';
+            continue;
+        }
         $text = trim((string)($meta['text'] ?? ''));
         if ($text === '') continue;
         $icon = (string)($meta['icon'] ?? '');
-        $parts .= '<span>' . ($icon !== '' ? '<i class="bi ' . sanitize($icon) . '" aria-hidden="true"></i>' : '') . sanitize($text) . '</span>';
+        $info .= '<span>' . ($icon !== '' ? '<i class="bi ' . sanitize($icon) . '" aria-hidden="true"></i>' : '') . sanitize($text) . '</span>';
     }
+
     $date = trim((string)($card['date_label'] ?? ''));
     if ($date !== '') {
-        $parts .= '<time' . (!empty($card['date_raw']) ? ' datetime="' . sanitize((string)$card['date_raw']) . '"' : '')
+        $info .= '<time' . (!empty($card['date_raw']) ? ' datetime="' . sanitize((string)$card['date_raw']) . '"' : '')
             . '><i class="bi bi-calendar3" aria-hidden="true"></i>' . sanitize($date) . '</time>';
     }
-    return $parts === '' ? '' : '<div class="jhd-card-meta">' . $parts . '</div>';
+
+    if ($chips === '' && $info === '') return '';
+    $html = '<div class="jhd-card-meta">';
+    if ($chips !== '') $html .= '<div class="jhd-card-topics">' . $chips . '</div>';
+    if ($info !== '') $html .= '<div class="jhd-card-info">' . $info . '</div>';
+    return $html . '</div>';
 }
 
 /**
