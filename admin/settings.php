@@ -42,6 +42,42 @@ $defaults = [
     'social_youtube' => '',
     'social_instagram' => '',
 ];
+$homepageSectionLabels = [
+    'latest' => 'تازه‌ترین مطالب',
+    'news' => 'اخبار',
+    'articles' => 'مقالات',
+    'reports' => 'گزارش‌ها',
+    'research' => 'پژوهش‌ها',
+    'topics' => 'موضوعات',
+    'events' => 'رویدادها و برنامه‌ها',
+    'books' => 'کتابخانه دیجیتال',
+    'lessons' => 'دروس',
+    'media' => 'رسانه',
+];
+$homepageCfgRaw = trim((string)($sets['homepage_config'] ?? ''));
+$homepageCfg = json_decode($homepageCfgRaw, true);
+if (!is_array($homepageCfg)) $homepageCfg = [];
+$homepageEnabled = [];
+foreach ($homepageSectionLabels as $sectionKey => $_label) {
+    $homepageEnabled[$sectionKey] = array_key_exists($sectionKey, $homepageCfg['sections'] ?? [])
+        ? (bool)$homepageCfg['sections'][$sectionKey] : true;
+}
+$homepageHeroId = max(0, (int)($homepageCfg['hero_post_id'] ?? 0));
+
+$homepagePosts = [];
+try {
+    $homepagePostsStmt = $db->query(
+        "SELECT id, title, post_type, published_at
+         FROM posts
+         WHERE status='published'
+         ORDER BY published_at DESC, id DESC
+         LIMIT 120"
+    );
+    $homepagePosts = $homepagePostsStmt->fetchAll();
+} catch (Throwable) {
+    $homepagePosts = [];
+}
+
 $formValues = [];
 $error = '';
 
@@ -83,6 +119,27 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             }
         }
 
+        $postedSections = $_POST['homepage_sections'] ?? [];
+        if (!is_array($postedSections)) $postedSections = [];
+        foreach ($homepageSectionLabels as $sectionKey => $_label) {
+            $homepageEnabled[$sectionKey] = in_array($sectionKey, $postedSections, true);
+        }
+        $homepageHeroId = max(0, (int)($_POST['homepage_hero_post_id'] ?? 0));
+        if ($homepageHeroId > 0) {
+            $heroExists = false;
+            foreach ($homepagePosts as $hp) {
+                if ((int)$hp['id'] === $homepageHeroId) { $heroExists = true; break; }
+            }
+            if (!$heroExists) {
+                $homepageHeroId = 0;
+                $error = 'مطلب شاخص صفحه اصلی معتبر نیست؛ یک مطلب منتشرشده انتخاب کنید.';
+            }
+        }
+        $homepageConfigValue = json_encode([
+            'sections' => $homepageEnabled,
+            'hero_post_id' => $homepageHeroId,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
         $newLogo = '';
         if ($error === '' && (isset($_FILES['logo']) || jhdDirectUploadPath('logo') !== '')) {
             $directLogo = jhdDirectUploadPath('logo');
@@ -111,6 +168,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 foreach ($fieldLimits as $field => $_maxLength) {
                     upsertSetting($db, $field, $formValues[$field] ?? '');
                 }
+                upsertSetting($db, 'homepage_config', $homepageConfigValue);
                 if ($newLogo !== '') upsertSetting($db, 'site_logo', $newLogo);
                 $db->commit();
 
@@ -165,6 +223,41 @@ $sets = array_merge($sets, $formValues);
                         <label for="setting-about-long">معرفی کامل سایت</label>
                         <textarea id="setting-about-long" name="about_long" class="form-control" rows="12" maxlength="12000" aria-describedby="about-long-help"><?= sanitize($sets['about_long'] ?? '') ?></textarea>
                         <div class="form-text" id="about-long-help">برای متن کامل معرفی مدرسه، سابقه، اهداف، فعالیت‌های آموزشی، پژوهشی، فرهنگی و اطلاعات تکمیلی استفاده کنید. متن شما در صفحهٔ «درباره ما» نمایش داده می‌شود.</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="admin-card mb-4" aria-labelledby="admin-homepage-heading">
+                <div class="admin-card-header" id="admin-homepage-heading">چیدمان صفحهٔ اصلی</div>
+                <div class="admin-card-body">
+                    <p class="admin-settings-help">مدیر می‌تواند بخش‌های ویترین صفحهٔ اصلی را روشن/خاموش کند و مطلب شاخص را جداگانه انتخاب کند. ترتیب نمایش بخش‌ها در سایت ثابت و ویرایشی است.</p>
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">بخش‌های قابل نمایش در صفحهٔ اصلی</label>
+                        <div class="row g-2">
+                            <?php foreach ($homepageSectionLabels as $sectionKey => $sectionLabel): ?>
+                            <div class="col-12 col-sm-6">
+                                <label class="form-check border rounded-3 p-2 d-flex gap-2 align-items-center">
+                                    <input class="form-check-input m-0" type="checkbox" name="homepage_sections[]" value="<?= sanitize($sectionKey) ?>" <?= !empty($homepageEnabled[$sectionKey]) ? 'checked' : '' ?>>
+                                    <span><?= sanitize($sectionLabel) ?></span>
+                                </label>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="homepage-hero-post" class="form-label fw-bold">مطلب شاخص صفحهٔ اصلی</label>
+                        <select id="homepage-hero-post" name="homepage_hero_post_id" class="form-select">
+                            <option value="0">بدون انتخاب دستی — استفاده از برگزیدهٔ منتشرشده</option>
+                            <?php foreach ($homepagePosts as $hp): ?>
+                            <option value="<?= (int)$hp['id'] ?>" <?= $homepageHeroId === (int)$hp['id'] ? 'selected' : '' ?>>
+                                <?= sanitize(postTypeLabel((string)$hp['post_type'])) ?> — <?= sanitize($hp['title']) ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text">این انتخاب فقط مطلب شاخص بزرگ ابتدای صفحه را کنترل می‌کند.</div>
+                    </div>
+                    <div class="alert alert-light border mt-3 mb-0 small">
+                        برای <strong>برگزیدهٔ سردبیر</strong>، هنگام ایجاد یا ویرایش مطلب تیک «برگزیدهٔ سردبیر» را فعال کنید. این انتخاب مستقل از مطلب شاخص است.
                     </div>
                 </div>
             </section>
