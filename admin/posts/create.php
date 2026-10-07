@@ -342,7 +342,7 @@ $formPostType = $fixedPostType !== '' ? $fixedPostType : (string)($_POST['post_t
                 <div class="admin-card-header"><i class="bi bi-camera-video-fill ms-2"></i>فایل‌های ویدیویی (اختیاری)</div>
                 <div class="admin-card-body">
                     <input type="file" name="video_files[]" id="videoFilesInput" class="form-control" accept="video/*,.mp4,.webm,.mov,.mkv" multiple>
-                    <div class="form-text">MP4، WebM، MOV، MKV — <?= env_value('VERCEL') !== '' ? 'تا ۱۵۰ مگابایت با آپلود مستقیم و resumable در Supabase Storage' : 'تا 200MB برای هر فایل' ?>.</div>
+                    <div class="form-text">MP4، WebM، MOV، MKV — <?= env_value('VERCEL') !== '' ? 'تا ۱۵۰ مگابایت با آپلود مستقیم و resumable در Supabase Storage' : 'تا 150MB برای هر فایل' ?>.</div>
                     <div id="videoThumbProgress" class="mt-2" style="display:none">
                         <div class="d-flex align-items-center gap-2 text-muted small">
                             <div class="spinner-border spinner-border-sm" role="status"></div>
