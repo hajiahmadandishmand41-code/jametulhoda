@@ -778,14 +778,19 @@ function jhd_pdf_reader(string $url, array $opts = []): string {
 /** ردیف فایل/دانلود. */
 function jhd_file_row(string $label, string $url, string $size = '', string $icon = 'bi-file-earmark', array $opts = []): string {
     $isPdf = (bool)($opts['pdf'] ?? preg_match('~\.pdf($|\?)~i', $url));
-    $read = '';
-    if ($isPdf && !empty($opts['reader_target'])) {
-        $read = '<a class="btn btn-sm btn-primary" href="#' . sanitize((string)$opts['reader_target']) . '"><i class="bi bi-book ms-1"></i>مطالعهٔ آنلاین</a>';
+    $readerTarget = trim((string)($opts['reader_target'] ?? ''));
+    $read = ($isPdf && $readerTarget !== '')
+        ? '<a class="btn btn-sm btn-outline-primary" href="' . sanitize($readerTarget) . '"><i class="bi bi-book ms-1"></i>مطالعه</a>'
+        : '';
+    if ($isPdf && $readerTarget !== '') {
+        return '<div class="jhd-file-row"><i class="bi ' . sanitize($icon) . '" aria-hidden="true"></i>'
+            . '<span class="file-name">' . sanitize($label) . '</span>'
+            . ($size !== '' ? '<span class="file-size">' . sanitize($size) . '</span>' : '')
+            . $read . '</div>';
     }
     return '<div class="jhd-file-row"><i class="bi ' . sanitize($icon) . '" aria-hidden="true"></i>'
         . '<span class="file-name">' . sanitize($label) . '</span>'
         . ($size !== '' ? '<span class="file-size">' . sanitize($size) . '</span>' : '')
-        . $read
         . '<a class="btn btn-sm btn-outline-primary" href="' . sanitize($url) . '" download><i class="bi bi-download ms-1"></i>دانلود</a>'
         . '</div>';
 }
