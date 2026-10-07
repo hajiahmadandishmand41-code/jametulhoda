@@ -3,7 +3,8 @@
  * articles.php — فهرست و آرشیو مقالات علمی و یادداشت‌های پژوهشی
  */
 $pageTitle = 'مقالات علمی';
-$pageDesc = 'مجموعه مقالات علمی، کلامی، فقهی و معرفتی اساتید و پژوهشگران مدرسه جامعه‌الهدی.';
+$metaTitleOverride = 'مقالات اسلامی و علمی | فقه، قرآن، مهدویت و معارف';
+$pageDesc = 'مقالات و یادداشت‌های علمی درباره علوم اسلامی، مهدویت، فقه و اصول، قرآن، حدیث و معارف اسلامی از جامعه‌الهدی.';
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
