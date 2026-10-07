@@ -28,7 +28,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 
 $pageTitle = 'خروج از حساب';
-$pageDesc = 'خروج از حساب کاربری مدرسه مدرسه جامعه‌الهدی.';
+$pageDesc = 'خروج از حساب کاربری مدرسه جامعه‌الهدی.';
 $canonicalOverride = logoutUrl();
 $noindexSeo = true;
 require_once $jhdLogoutRoot . '/includes/header.php';
