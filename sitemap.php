@@ -85,8 +85,76 @@ $add = static function (string $route, array $params = [], ?string $lastmod = nu
 };
 
 /**
- * Public landing pages which are real, crawlable parts of the site.
- * Search and every authentication page are intentionally absent.
+ * Public landing pages are included only when the page has real published
+ * content. Static identity pages stay indexable; empty archives do not become
+ * permanent sitemap URLs.
+ */
+$db = jhd_db();
+$landingHasContent = [
+    'home' => true,
+    'about' => true,
+    'contact' => true,
+];
+
+if ($db !== null) {
+    try {
+        $postCounts = $db->query("
+            SELECT post_type, COUNT(*) AS total
+            FROM posts
+            WHERE status = 'published'
+            GROUP BY post_type
+        ")->fetchAll();
+        foreach ($postCounts as $row) {
+            $type = (string)($row['post_type'] ?? '');
+            $landingHasContent[$type] = (int)$row['total'] > 0;
+        }
+        $eventCount = 0;
+        foreach (['program', 'religious', 'announcement'] as $eventType) {
+            $eventCount += (int)($landingHasContent[$eventType] ?? false);
+        }
+        $landingHasContent['events'] = $eventCount > 0;
+        $landingHasContent['programs'] = (bool)($landingHasContent['program'] ?? false);
+        $landingHasContent['announcements'] = (bool)($landingHasContent['announcement'] ?? false);
+        $landingHasContent['religious-activities'] = (bool)($landingHasContent['religious'] ?? false);
+        $landingHasContent['news'] = (bool)($landingHasContent['news'] ?? false);
+        $landingHasContent['articles'] = (bool)($landingHasContent['article'] ?? false);
+        $landingHasContent['research'] = (bool)($landingHasContent['research'] ?? false);
+        $landingHasContent['reports'] = (bool)($landingHasContent['report'] ?? false);
+        $landingHasContent['speeches'] = (bool)($landingHasContent['speech'] ?? false);
+        $landingHasContent['qa'] = (bool)($landingHasContent['qa'] ?? false);
+
+        $lessonCount = (int)$db->query("SELECT COUNT(*) FROM lessons WHERE status = 'published'")->fetchColumn();
+        $bookCount = (int)$db->query("SELECT COUNT(*) FROM books WHERE status = 'published'")->fetchColumn();
+        $topicCount = (int)$db->query("SELECT COUNT(*) FROM topics WHERE is_active = 1 AND COALESCE(slug, '') <> ''")->fetchColumn();
+        $mediaCounts = $db->query("
+            SELECT m.kind, COUNT(DISTINCT m.id) AS total
+            FROM media_files m
+            LEFT JOIN posts p ON m.ref_type = 'post' AND p.id = m.ref_id
+            LEFT JOIN lessons l ON m.ref_type = 'lesson' AND l.id = m.ref_id
+            WHERE m.kind IN ('audio', 'video')
+              AND (p.status = 'published' OR l.status = 'published')
+            GROUP BY m.kind
+        ")->fetchAll();
+
+        $landingHasContent['lessons'] = $lessonCount > 0;
+        $landingHasContent['books'] = $bookCount > 0;
+        $landingHasContent['topics'] = $topicCount > 0;
+        $landingHasContent['media'] = false;
+        $landingHasContent['videos'] = false;
+        $landingHasContent['audios'] = false;
+        foreach ($mediaCounts as $row) {
+            $kind = ($row['kind'] ?? '') === 'audio' ? 'audios' : 'videos';
+            $has = (int)($row['total'] ?? 0) > 0;
+            $landingHasContent[$kind] = $has;
+            if ($has) $landingHasContent['media'] = true;
+        }
+    } catch (Throwable $e) {
+        error_log('sitemap landing counts failed: ' . get_class($e));
+    }
+}
+
+/**
+ * Search and authentication pages are intentionally absent.
  */
 foreach ([
     'home',
@@ -109,10 +177,11 @@ foreach ([
     'about',
     'contact',
 ] as $route) {
+    if ($route !== 'home' && $route !== 'about' && $route !== 'contact' && !($landingHasContent[$route] ?? false)) {
+        continue;
+    }
     $add($route);
 }
-
-$db = jhd_db();
 
 if ($db !== null) {
     // ── Topics: build full parent/child slug paths in memory, avoiding N+1 DB queries.
