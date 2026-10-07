@@ -1829,6 +1829,241 @@ function jhd_validate_pagination(int $page, int $total, int $limit, string $sect
  * bodies to H2. No new text is introduced: a heading is converted only when the
  * exact phrase already exists as its own separated line in the stored content.
  */
+/**
+ * Normalize a Persian title for conservative homepage duplicate detection.
+ * Only editorially obvious duplicates are collapsed; the database is not changed.
+ */
+function jhd_story_key(string $text): string {
+    $text = html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $text = mb_strtolower($text, 'UTF-8');
+    $text = strtr($text, [
+        'ي' => 'ی', 'ى' => 'ی', 'ك' => 'ک', 'ۀ' => 'ه',
+        'ة' => 'ه', 'ؤ' => 'و', 'إ' => 'ا', 'أ' => 'ا',
+        '‌' => ' ',
+    ]);
+    $text = preg_replace('/[\x{064B}-\x{065F}\x{0670}]/u', '', $text) ?? $text;
+    $text = preg_replace('/[«»"“”\'،؛,:.!?؟()\[\]{}<>|\\\/\-_]+/u', ' ', $text) ?? $text;
+    $text = preg_replace('/\s+/u', ' ', trim($text)) ?? trim($text);
+    $text = preg_replace('/^(خبر|گزارش|گزارش تصویری|اطلاعیه|رویداد|اخبار)\s+/u', '', $text) ?? $text;
+    return trim($text);
+}
+
+/** True when two public post records are clearly the same editorial story. */
+function jhd_posts_same_story(array $a, array $b): bool {
+    if ((int)($a['id'] ?? 0) > 0 && (int)($a['id'] ?? 0) === (int)($b['id'] ?? 0)) return true;
+    $ak = jhd_story_key((string)($a['title'] ?? ''));
+    $bk = jhd_story_key((string)($b['title'] ?? ''));
+    if ($ak !== '' && $ak === $bk) return true;
+
+    $aWords = array_values(array_unique(array_filter(preg_split('/\s+/u', $ak) ?: [], static fn(string $w): bool => mb_strlen($w, 'UTF-8') >= 2)));
+    $bWords = array_values(array_unique(array_filter(preg_split('/\s+/u', $bk) ?: [], static fn(string $w): bool => mb_strlen($w, 'UTF-8') >= 2)));
+    if (count($aWords) < 5 || count($bWords) < 5) return false;
+
+    $intersection = count(array_intersect($aWords, $bWords));
+    $union = count(array_unique(array_merge($aWords, $bWords)));
+    return $union > 0 && ($intersection / $union) >= 0.82;
+}
+
+/**
+ * Filter homepage post candidates against already accepted stories.
+ * Priority is determined by call order: earlier sections keep the story.
+ */
+function jhd_homepage_unique_posts(array $candidates, array &$accepted, int $limit = 10): array {
+    $out = [];
+    foreach ($candidates as $candidate) {
+        if (!is_array($candidate)) continue;
+        $duplicate = false;
+        foreach ($accepted as $kept) {
+            if (jhd_posts_same_story($candidate, $kept)) {
+                $duplicate = true;
+                break;
+            }
+        }
+        if ($duplicate) continue;
+        $out[] = $candidate;
+        $accepted[] = $candidate;
+        if (count($out) >= $limit) break;
+    }
+    return $out;
+}
+
+/**
+ * Build a small, evidence-backed internal-link map from real topics and
+ * published content. Empty topics are ignored, so we never create dead links.
+ */
+function jhd_contextual_link_targets(): array {
+    static $targets = null;
+    if (is_array($targets)) return $targets;
+    $targets = [];
+    $db = jhd_db();
+    if ($db === null) return $targets;
+
+    try {
+        $topicSql = "
+            SELECT t.id, t.name, t.slug,
+                   (
+                     (SELECT COUNT(*) FROM post_topics pt JOIN posts p ON p.id = pt.post_id WHERE pt.topic_id=t.id AND p.status='published')
+                     + (SELECT COUNT(*) FROM book_topics bt JOIN books b ON b.id = bt.book_id WHERE bt.topic_id=t.id AND b.status='published')
+                     + (SELECT COUNT(*) FROM lesson_topics lt JOIN lessons l ON l.id = lt.lesson_id WHERE lt.topic_id=t.id AND l.status='published')
+                   ) AS linked_count
+            FROM topics t
+            WHERE t.is_active = 1
+            ORDER BY CHAR_LENGTH(t.name) DESC, t.sort_order ASC, t.id ASC
+        ";
+        $stmt = $db->query($topicSql);
+        foreach ($stmt->fetchAll() as $row) {
+            if ((int)($row['linked_count'] ?? 0) < 1) continue;
+            $label = trim((string)($row['name'] ?? ''));
+            if (mb_strlen($label, 'UTF-8') < 3) continue;
+            $targets[] = [
+                'label' => $label,
+                'url' => topicUrl($row),
+                'kind' => 'topic',
+                'hint' => 'موضوع: ' . $label,
+            ];
+        }
+
+        $stmt = $db->query("
+            SELECT id, title, slug, post_type
+            FROM posts
+            WHERE status='published'
+              AND TRIM(COALESCE(title,'')) <> ''
+            ORDER BY published_at DESC NULLS LAST, id DESC
+            LIMIT 100
+        ");
+        foreach ($stmt->fetchAll() as $row) {
+            $label = trim((string)($row['title'] ?? ''));
+            if (mb_strlen($label, 'UTF-8') < 8) continue;
+            $targets[] = [
+                'label' => $label,
+                'url' => postUrl($row),
+                'kind' => 'post',
+                'hint' => 'مطالعه: ' . $label,
+                'post_id' => (int)($row['id'] ?? 0),
+            ];
+        }
+
+        usort($targets, static function(array $a, array $b): int {
+            $len = mb_strlen((string)$b['label'], 'UTF-8') <=> mb_strlen((string)$a['label'], 'UTF-8');
+            if ($len !== 0) return $len;
+            return strcmp((string)$a['kind'], (string)$b['kind']);
+        });
+
+        $unique = [];
+        $seen = [];
+        foreach ($targets as $target) {
+            $key = (string)$target['label'];
+            if (isset($seen[$key])) continue;
+            $seen[$key] = true;
+            $unique[] = $target;
+        }
+        return $targets = $unique;
+    } catch (Throwable $e) {
+        return $targets = [];
+    }
+}
+
+/**
+ * Add a few contextual internal links inside rich article text.
+ * Links are inserted only into ordinary text nodes — never into existing
+ * anchors, headings, code, quotes or attributes — and each target is linked
+ * at most once per page to avoid keyword stuffing.
+ */
+function jhd_add_contextual_internal_links(string $html, int $currentPostId = 0, int $maxLinks = 6): string {
+    if ($html === '' || $maxLinks < 1) return $html;
+    $targets = jhd_contextual_link_targets();
+    if (!$targets) return $html;
+
+    // Do not create a self-link to the article currently being read.
+    if ($currentPostId > 0) {
+        $targets = array_values(array_filter(
+            $targets,
+            static fn(array $target): bool => (int)($target['post_id'] ?? 0) !== $currentPostId
+        ));
+    }
+    if (!$targets) return $html;
+
+    $dom = new DOMDocument('1.0', 'UTF-8');
+    $prev = libxml_use_internal_errors(true);
+    $dom->loadHTML(
+        '<?xml encoding="UTF-8"?><div id="jhd-autolink-root">' . $html . '</div>',
+        LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING
+    );
+    libxml_clear_errors();
+    libxml_use_internal_errors($prev);
+
+    $root = $dom->getElementById('jhd-autolink-root');
+    if (!$root) return $html;
+
+    $linkedTargetKeys = [];
+    $linkedCount = 0;
+    $blockedTags = ['a'=>true,'h1'=>true,'h2'=>true,'h3'=>true,'h4'=>true,'h5'=>true,'h6'=>true,'code'=>true,'pre'=>true,'script'=>true,'style'=>true,'button'=>true,'blockquote'=>true];
+    $textNodes = [];
+    $walk = function(DOMNode $node) use (&$walk,&$textNodes,$blockedTags): void {
+        if ($node instanceof DOMElement && isset($blockedTags[strtolower($node->tagName)])) return;
+        foreach (iterator_to_array($node->childNodes) as $child) {
+            if ($child instanceof DOMText) {
+                $textNodes[] = $child;
+            } elseif ($child instanceof DOMElement || $child->hasChildNodes()) {
+                $walk($child);
+            }
+        }
+    };
+    $walk($root);
+
+    foreach ($textNodes as $textNode) {
+        if ($linkedCount >= $maxLinks) break;
+        $text = $textNode->nodeValue;
+        if (!is_string($text) || trim($text) === '') continue;
+
+        $parent = $textNode->parentNode;
+        if (!$parent || ($parent instanceof DOMElement && isset($blockedTags[strtolower($parent->tagName)]))) continue;
+
+        foreach ($targets as $target) {
+            if ($linkedCount >= $maxLinks) break;
+            $label = trim((string)($target['label'] ?? ''));
+            $url = trim((string)($target['url'] ?? ''));
+            if ($label === '' || $url === '') continue;
+
+            $targetKey = ($target['kind'] ?? '') . '|' . $label;
+            if (isset($linkedTargetKeys[$targetKey])) continue;
+
+            $pattern = '~' . preg_quote($label, '~') . '~u';
+            if (!preg_match($pattern, $text, $m, PREG_OFFSET_CAPTURE)) continue;
+
+            $offset = (int)$m[0][1];
+            $matchText = (string)$m[0][0];
+            if ($matchText === '') continue;
+
+            $before = substr($text, 0, $offset);
+            $after = substr($text, $offset + strlen($matchText));
+            if ($before === '' && $after === '') continue;
+
+            $fragment = $dom->createDocumentFragment();
+            if ($before !== '') $fragment->appendChild($dom->createTextNode($before));
+            $a = $dom->createElement('a');
+            $a->setAttribute('href', $url);
+            $a->setAttribute('class', 'jhd-context-link');
+            $a->setAttribute('title', (string)($target['hint'] ?? $label));
+            $a->appendChild($dom->createTextNode($matchText));
+            $fragment->appendChild($a);
+            if ($after !== '') $fragment->appendChild($dom->createTextNode($after));
+
+            $parent->replaceChild($fragment, $textNode);
+            $linkedTargetKeys[$targetKey] = true;
+            $linkedCount++;
+            break;
+        }
+        // The text node was replaced; the remaining tail is inside a fresh
+        // text node. It will be discovered on the next DOM pass only, so this
+        // node ends here intentionally to keep the operation deterministic.
+    }
+
+    $out = '';
+    foreach ($root->childNodes as $child) $out .= $dom->saveHTML($child);
+    return $out;
+}
+
 function jhd_promote_article_headings(string $html): string {
     if ($html === '') return '';
     $headings = [
