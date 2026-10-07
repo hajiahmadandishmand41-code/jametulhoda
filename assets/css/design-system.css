@@ -996,6 +996,14 @@ html[data-theme="dark"] .jhd-card .jhd-event-date { background: rgba(12, 28, 22,
   font-size: .98rem;
   line-height: 1.7;
 }
+.jhd-editorial-title,
+.jhd-editorial-main .jhd-card-summary {
+  font-family: var(--jhd-font-body);
+  text-rendering: optimizeLegibility;
+}
+.jhd-editorial-title { line-height: 1.6; }
+.jhd-editorial-main .jhd-card-summary { line-height: 1.72; }
+
 .jhd-editorial-title a { color: var(--jhd-ink); }
 .jhd-editorial-title a:hover { color: var(--jhd-green); }
 .jhd-editorial-main .jhd-card-summary {
