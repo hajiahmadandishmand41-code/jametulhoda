@@ -1,6 +1,6 @@
 <?php
 $pageTitle = 'برنامه‌های آموزشی';
-$pageDesc = 'برنامه‌ها و دوره‌های آموزشی منتشرشدهٔ مدرسه مدرسه جامعه‌الهدی در حوزه علوم اسلامی و آموزش حوزوی.';
+$pageDesc = 'برنامه‌ها و دوره‌های آموزشی منتشرشدهٔ مدرسه جامعه‌الهدی در حوزه علوم اسلامی و آموزش حوزوی.';
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
@@ -12,6 +12,9 @@ $limit = 12;
 $posts = getPosts(['type' => 'program', 'limit' => $limit, 'offset' => ($page - 1) * $limit]);
 $total = countPosts(['type' => 'program']);
 $pages = (int)ceil($total / $limit);
+jhd_validate_pagination($page, $total, $limit, 'برنامه‌ها', url('programs'), 'برنامه‌های آموزشی');
+$noindexSeo = ($total === 0);
+
 
 require_once __DIR__ . '/../includes/header.php';
 ?>
