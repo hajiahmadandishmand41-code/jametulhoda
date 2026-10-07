@@ -65,7 +65,7 @@ if ($jhdPublicDbReady) {
 
                 <!-- لینک‌های اصلی -->
                 <div class="col-lg-3 col-md-6">
-                    <h5 class="footer-title">دسترسی سریع</h5>
+                    <h5 class="footer-title">پیوندهای اصلی</h5>
                     <ul class="footer-links">
                         <li><a href="<?= url('news') ?>"><i class="bi bi-chevron-left"></i>اخبار</a></li>
                         <li><a href="<?= url('articles') ?>"><i class="bi bi-chevron-left"></i>مقالات</a></li>
