@@ -1384,6 +1384,67 @@ html[data-theme="dark"] .jhd-media-play span { color: #0d241b; }
   color: var(--jhd-ink);
 }
 html[dir="rtl"] .jhd-prose blockquote { border-radius: var(--jhd-radius) 0 0 var(--jhd-radius); }
+/* خوانایی متن مقاله و گزارش: فونت فارسی یکدست، اندازه متعادل و فاصله‌خط کمتر */
+.jhd-article .jhd-prose,
+.jhd-article .jhd-prose--sm {
+  font-family: var(--jhd-font-body);
+  font-size: 1rem;
+  line-height: 1.95;
+  font-weight: 400;
+  text-rendering: optimizeLegibility;
+}
+.jhd-article .jhd-prose p {
+  margin-bottom: .78rem;
+}
+.jhd-article .jhd-prose h2,
+.jhd-article .jhd-prose h3,
+.jhd-article .jhd-prose h4 {
+  line-height: 1.6;
+}
+.jhd-card--article .jhd-card-title,
+.jhd-card--report .jhd-card-title {
+  font-family: var(--jhd-font-body);
+  font-size: .96rem;
+  line-height: 1.65;
+}
+.jhd-card--article .jhd-card-summary,
+.jhd-card--report .jhd-card-summary {
+  font-family: var(--jhd-font-body);
+  font-size: .82rem;
+  line-height: 1.78;
+}
+
+/* موضوعات: چهار ستون در دسکتاپ، متن و فاصله کمی جمع‌وجورتر تا چند موضوع هم‌زمان دیده شود */
+.jhd-card--topic .jhd-card-body {
+  padding: .72rem .78rem .8rem;
+  gap: .28rem;
+}
+.jhd-card--topic .jhd-card-title {
+  font-family: var(--jhd-font-body);
+  font-size: .92rem;
+  line-height: 1.6;
+}
+.jhd-card--topic .jhd-card-summary {
+  font-size: .76rem;
+  line-height: 1.7;
+}
+.jhd-card--topic .jhd-card-meta {
+  font-size: .68rem;
+  gap: .2rem .45rem;
+}
+.jhd-card--topic .jhd-card-foot {
+  padding-top: .42rem;
+  font-size: .72rem;
+}
+.jhd-card--topic .jhd-chip--soft {
+  font-size: .63rem;
+  padding: .05rem .42rem;
+}
+@media (max-width: 575.98px) {
+  .jhd-card--topic .jhd-card-body { padding: .62rem .68rem .7rem; }
+  .jhd-card--topic .jhd-card-title { font-size: .88rem; }
+}
+
 .jhd-prose table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .92rem; }
 .jhd-prose th, .jhd-prose td { border: 1px solid var(--jhd-border); padding: .45rem .6rem; }
 .jhd-prose th { background: var(--jhd-soft); }
