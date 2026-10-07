@@ -387,6 +387,30 @@ $queryRoute = (isset($_GET['p']) && is_string($_GET['p'])) ? trim($_GET['p']) : 
 if ($queryRoute === 'home' || $queryRoute === '/') { $queryRoute = ''; unset($_GET['p']); }
 
 /*
+ * Canonicalize legacy query URLs (index.php?p=...) to the current pretty route.
+ * These are valid historical URLs, not alternate canonical documents, so a
+ * permanent redirect is appropriate. Detail slugs remain encoded exactly once
+ * by the central url() helper.
+ */
+if ($path === '/index.php' && $queryRoute !== '') {
+    $legacyQuery = $_GET;
+    unset($legacyQuery['p']);
+    $legacyCanonical = url($queryRoute, $legacyQuery);
+    if ($legacyCanonical !== '') {
+        header('Location: ' . $legacyCanonical, true, 301);
+        exit;
+    }
+}
+if ($path === '/library') {
+    header('Location: ' . url('books'), true, 301);
+    exit;
+}
+if ($path === '/media-library') {
+    header('Location: ' . url('media'), true, 301);
+    exit;
+}
+
+/*
  * Canonicalize legacy listing URLs that carry a detail slug in the query
  * string, e.g. /articles?slug=... or /news?slug=....
  *
