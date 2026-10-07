@@ -133,17 +133,19 @@ require_once __DIR__.'/../includes/header.php';
       <?php endif; ?>
 
       <?php if ($pdfUrl): ?>
-      <div class="jhd-dl-strip">
-        <i class="bi bi-file-earmark-pdf" aria-hidden="true"></i>
-        <span>جزوهٔ نوشتاری این درس به صورت PDF در دسترس است.</span>
-        <a class="btn-read-more" href="<?= htmlspecialchars($pdfUrl, ENT_QUOTES) ?>" download>دریافت PDF <i class="bi bi-arrow-left"></i></a>
-      </div>
-      <div class="mt-3"><?= jhd_pdf_reader($pdfUrl, ['title' => 'جزوهٔ درس: ' . (string)$lesson['title']]) ?></div>
+      <section class="jhd-reader-callout mt-4">
+        <div><span class="jhd-eyebrow">مرکز مطالعه</span><h2 class="h5 mb-1">جزوهٔ درس</h2><p class="text-muted mb-0">جزوه در صفحهٔ اختصاصی مطالعه باز می‌شود.</p></div>
+        <a class="btn btn-primary" href="<?= sanitize(documentReaderUrl('lesson', (string)$lesson['slug'])) ?>"><i class="bi bi-book ms-2"></i>مطالعه جزوه</a>
+      </section>
       <?php endif; ?>
-      <?php foreach ($lessonAttachments as $att): if (!preg_match('~\.pdf$~i', (string)$att['file_path'])) continue; ?>
-      <div class="mt-3"><?= jhd_pdf_reader(imgUrl((string)$att['file_path']), [
-        'title' => (string)($att['title'] ?: basename((string)$att['file_path'])),
-      ]) ?></div>
+      <?php foreach ($lessonAttachments as $att): if (!preg_match('~\.pdf$~i', (string)$att['file_path'])) continue;
+        $attTitle = (string)($att['title'] ?: basename((string)$att['file_path']));
+      ?>
+      <div class="jhd-file-row mt-3">
+        <i class="bi bi-file-earmark-pdf" aria-hidden="true"></i>
+        <span class="file-name"><?= sanitize($attTitle) ?></span>
+        <a class="btn btn-sm btn-outline-primary" href="<?= sanitize(documentReaderUrl('lesson', (string)$lesson['slug'], (int)($att['id'] ?? 0))) ?>"><i class="bi bi-book ms-1"></i>مطالعه</a>
+      </div>
       <?php endforeach; ?>
 
       <?php if ($lesson['content']): ?>
