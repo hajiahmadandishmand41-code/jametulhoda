@@ -80,6 +80,8 @@ html[data-theme="light"] {
   --jhd-gold: #b6923a;
   --jhd-gold-hover: #97782d;
   --jhd-gold-soft: #f8f2e4;
+  /* Text-safe gold: reserved for text links/labels; decorative gold remains --jhd-gold. */
+  --jhd-gold-text: #765a1a;
   --jhd-border: #e1e7e3;
   --jhd-border-strong: #c9d5cd;
 
@@ -127,6 +129,8 @@ html[data-theme="dark"] {
   --jhd-gold: #d2b268;
   --jhd-gold-hover: #e2c684;
   --jhd-gold-soft: #262013;
+  /* Accessible gold text on dark surfaces. */
+  --jhd-gold-text: #e3c878;
   --jhd-border: #25322b;
   --jhd-border-strong: #35463c;
 
@@ -525,7 +529,7 @@ html[data-theme="dark"] .jhd-drawer-search button { color: #0d241b; }
   margin: 0 0 .2rem;
   font-size: .72rem;
   font-weight: 800;
-  color: var(--jhd-gold);
+  color: var(--jhd-gold-text);
   letter-spacing: .06em;
 }
 .jhd-brand-board .container {
@@ -614,7 +618,7 @@ html[data-theme="dark"] .jhd-drawer-search button { color: #0d241b; }
   display: inline-block;
   font-size: .72rem;
   font-weight: 700;
-  color: var(--jhd-gold);
+  color: var(--jhd-gold-text);
   letter-spacing: .02em;
   margin-bottom: .2rem;
 }
@@ -635,7 +639,7 @@ html[data-theme="dark"] .jhd-drawer-search button { color: #0d241b; }
   gap: .3rem;
   padding-bottom: .15rem;
 }
-.jhd-section-link:hover { color: var(--jhd-gold); }
+.jhd-section-link:hover { color: var(--jhd-gold-text); }
 
 /* سرصفحهٔ صفحه‌های داخلی */
 .jhd-page-head { margin-bottom: 1.4rem; }
@@ -3137,7 +3141,8 @@ html { scroll-behavior: smooth; }
   .jhd-section .col-lg-4 > .jhd-side-card,
   .jhd-section .col-lg-3 > .sidebar {
     position: sticky;
-    top: calc(60px + 1rem);
+    /* Header = bismillah + toolbar + desktop nav; keep the sidebar below it. */
+    top: 7.5rem;
   }
 }
 
@@ -3174,4 +3179,34 @@ html { scroll-behavior: smooth; }
   .jhd-card--topic-home .jhd-card-body { padding: .5rem .58rem .55rem; }
   .jhd-card--topic-home .jhd-card-title { font-size: .86rem; }
   .jhd-card--topic-home .jhd-card-foot { font-size: .66rem; }
+}
+
+
+/* ── موبایل‌های خیلی باریک: هدر بدون فشردگی ────────────────────────────────
+ * در 320–360px چهار آیکون ابزار کنار برند فضای مؤثر برند را بیش از حد کم می‌کنند.
+ * حساب کاربری همچنان در منوی کشویی در دسترس است، بنابراین فقط آیکون تکراری پنهان می‌شود.
+ */ 
+@media (max-width: 374.98px) {
+  .jhd-brand small { display: none; }
+  .jhd-brand { gap: .45rem; }
+  .jhd-brand strong { font-size: 1rem; }
+  .jhd-header-row { gap: .55rem; }
+  .jhd-header-actions { gap: .25rem; }
+  .jhd-header-actions a[aria-label="حساب کاربری"] { display: none !important; }
+}
+
+/* ── کارت‌های بدون تصویر در موبایل: فضای بیشتر برای عنوان ───────────────── */
+@media (max-width: 575.98px) {
+  .jhd-card--noimage:not(.jhd-card--featured) > .jhd-card-media {
+    flex-basis: 24%;
+    width: 24%;
+    min-width: 64px;
+    max-width: 84px;
+  }
+  .jhd-card--noimage:not(.jhd-card--featured) .jhd-card-media__plate i {
+    font-size: 1.35rem;
+  }
+  .jhd-card--noimage:not(.jhd-card--featured) .jhd-card-media__mark {
+    display: none;
+  }
 }
