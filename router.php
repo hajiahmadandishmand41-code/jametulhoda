@@ -266,6 +266,7 @@ function jhdServeStatic(string $file): void {
         'svg' => 'image/svg+xml',
         'woff' => 'font/woff',
         'woff2' => 'font/woff2',
+        'webmanifest' => 'application/manifest+json',
         'png' => 'image/png',
         'jpg' => 'image/jpeg',
         'jpeg' => 'image/jpeg',
@@ -357,6 +358,15 @@ if ($path === '/favicon.ico') {
 }
 if ($path === '/favicon.png') {
     $file = __DIR__ . '/assets/img/favicon-48.png';
+    if (is_file($file)) jhdServeStatic($file);
+}
+/*
+ * PWA manifest. Served through the router (like the favicon) so the identical
+ * URL works on Apache, the PHP built-in server and the Vercel serverless
+ * runtime, none of which serve root-level static files the same way.
+ */
+if ($path === '/site.webmanifest' || $path === '/manifest.json' || $path === '/manifest.webmanifest') {
+    $file = __DIR__ . '/site.webmanifest';
     if (is_file($file)) jhdServeStatic($file);
 }
 if (UPLOAD_STORAGE === 'local' && preg_match('~^/uploads/(?:[a-zA-Z0-9_-]+/)+[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|gif|webp|mp3|ogg|wav|m4a|mp4|webm|mov|mkv|pdf|doc|docx)$~D', $path)) {
