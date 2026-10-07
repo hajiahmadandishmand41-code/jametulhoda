@@ -292,7 +292,7 @@ $formPostType = $fixedPostType !== '' ? $fixedPostType : (string)($_POST['post_t
                 <div class="admin-card-header"><i class="bi bi-camera-video-fill ms-2 text-danger"></i>ویدیو شاخص (اختیاری)</div>
                 <div class="admin-card-body">
                     <input type="file" name="featured_video" id="featuredVideoInput" class="form-control" accept="video/*,.mp4,.webm,.mov,.mkv">
-                    <div class="form-text mb-2">این ویدیو مستقل از فایل‌های ویدیویی گالری است و در ابتدای مطلب نمایش داده می‌شود. <?= env_value('VERCEL') !== '' ? 'حداکثر ۴ مگابایت (سقف سرورلس Vercel)' : 'حداکثر 200MB' ?> — MP4، WebM، MOV، MKV</div>
+                    <div class="form-text mb-2">این ویدیو مستقل از فایل‌های ویدیویی گالری است و در ابتدای مطلب نمایش داده می‌شود. <?= env_value('VERCEL') !== '' ? 'حداکثر ۱۵۰ مگابایت با آپلود مستقیم و resumable در Supabase Storage' : 'حداکثر 200MB' ?> — MP4، WebM، MOV، MKV</div>
                     <video id="featVideoPreview" controls style="display:none;max-width:100%;max-height:240px;border-radius:8px;margin-top:8px;background:#000"></video>
                 </div>
             </div>
