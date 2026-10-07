@@ -295,7 +295,7 @@ function jhd_card_media(array $card, array $opts = []): string {
      * forcing every image into a single cropped cover. Compact side cards stay
      * single-image for density.
      */
-    if (count($gallery) > 1 && (($opts['variant'] ?? '') !== 'compact')) {
+    if (count($gallery) > 1 && (($opts['variant'] ?? '') !== 'compact') && empty($opts['no_gallery'])) {
         $galleryHtml = jhd_card_gallery($gallery, $title, $badge, $eager);
         if ($galleryHtml !== '') {
             return $galleryHtml;
@@ -483,9 +483,10 @@ function renderPostCard(array $post, array $opts = []): string {
     if (isset($opts['index'])) $card['index'] = (int)$opts['index'];
 
     return jhd_card($card, [
-        'variant' => $variant,
-        'col'     => array_key_exists('col', $opts) ? (string)$opts['col'] : ($variant === 'featured' ? 'col-12' : JHD_CARD_COL),
-        'eager'   => !empty($opts['eager']),
+        'variant'   => $variant,
+        'col'       => array_key_exists('col', $opts) ? (string)$opts['col'] : ($variant === 'featured' ? 'col-12' : JHD_CARD_COL),
+        'eager'     => !empty($opts['eager']),
+        'no_gallery'=> !empty($opts['no_gallery']),
     ]);
 }
 
