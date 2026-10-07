@@ -345,6 +345,7 @@ $homeHasAnyContent =
 </section>
 <?php endif; ?>
 
+
 <?php if (!empty($homeSections['latest']) && $latest): ?>
 <!-- ─── ۳. جریان تازه‌ها (اختیاری؛ پیش‌فرض خاموش تا از تکرار جلوگیری شود) ── -->
 <section class="jhd-home-group jhd-home-group--paper" id="latest-section">
@@ -404,24 +405,6 @@ $homeHasAnyContent =
 </section>
 <?php endif; ?>
 
-<?php if (!empty($homeSections['reports']) && $latestReports): ?>
-<!-- ─── ۶. گزارش‌های تصویری ───────────────────────────────────────────────── -->
-<section class="jhd-home-group" id="reports-section">
-    <div class="container">
-        <?= jhd_section_head([
-            'eyebrow' => 'پوشش میدانی و رخدادها',
-            'icon' => 'bi-card-text',
-            'title' => 'گزارش‌های حوزه و جامعه',
-            'url' => url('reports'),
-            'link' => 'همه گزارش‌ها',
-        ]) ?>
-        <?= jhd_grid_open('jhd-card-grid--rail') ?>
-            <?php foreach ($latestReports as $rep): ?><?= renderPostCard($rep, ['cta' => 'مشاهده گزارش', 'excerpt' => 110]) ?><?php endforeach; ?>
-        <?= jhd_grid_close() ?>
-    </div>
-</section>
-<?php endif; ?>
-
 <?php if (!empty($homeSections['research']) && $latestResearch): ?>
 <!-- ─── ۷. پژوهش (رسمی) ──────────────────────────────────────────────────── -->
 <section class="jhd-home-group jhd-home-group--paper" id="research-section">
@@ -435,60 +418,6 @@ $homeHasAnyContent =
         ]) ?>
         <?= jhd_grid_open('jhd-card-grid--rail') ?>
         <?php foreach ($latestResearch as $i => $rs): ?><?= renderEditorialRow($rs, ['index' => $i + 1, 'excerpt' => 120, 'cta' => 'مشاهده پژوهش']) ?><?php endforeach; ?>
-        <?= jhd_grid_close() ?>
-    </div>
-</section>
-<?php endif; ?>
-
-<?php if (!empty($homeSections['topics']) && $featuredTopics): ?>
-<!-- ─── ۸. موضوعات — فقط محورهای اصلی، با نمایش مینیمال ───────────────────── -->
-<section class="jhd-home-group jhd-home-topics" id="topics-section">
-    <div class="container">
-        <?= jhd_section_head([
-            'eyebrow' => 'موضوعات',
-            'icon' => 'bi-diagram-3',
-            'title' => 'محورهای علمی و معارف',
-            'url' => url('topics'),
-            'link' => 'همه موضوعات',
-        ]) ?>
-        <?= jhd_grid_open('jhd-card-grid--rail jhd-topic-home-grid') ?>
-            <?php foreach ($featuredTopics as $tp): ?><?= renderTopicCard($tp, ['minimal' => true, 'col' => 'col-12 col-sm-6 col-lg-4', 'counts' => [['value' => (int)($tp['post_count'] ?? 0), 'label' => 'مطلب', 'icon' => 'bi-journal-text']]]) ?><?php endforeach; ?>
-        <?= jhd_grid_close() ?>
-    </div>
-</section>
-<?php endif; ?>
-
-<?php if (!empty($homeSections['events']) && $latestEvents): ?>
-<!-- ─── ۹. رویدادها و برنامه‌ها (خط زمان) ────────────────────────────────── -->
-<section class="jhd-home-group jhd-home-group--paper" id="events-section">
-    <div class="container">
-        <?= jhd_section_head([
-            'eyebrow' => 'تقویم حوزه و مناسبت‌ها',
-            'icon' => 'bi-calendar-event',
-            'title' => 'رویدادها و برنامه‌ها',
-            'url' => url('events'),
-            'link' => 'همه رویدادها',
-        ]) ?>
-        <?= jhd_grid_open('jhd-card-grid--rail') ?>
-        <?php foreach ($latestEvents as $ev): ?><?= renderEventRow($ev) ?><?php endforeach; ?>
-        <?= jhd_grid_close() ?>
-    </div>
-</section>
-<?php endif; ?>
-
-<?php if (!empty($homeSections['books']) && $latestBooks): ?>
-<!-- ─── ۱۰. کتابخانه دیجیتال ─────────────────────────────────────────────── -->
-<section class="jhd-home-group" id="books-section">
-    <div class="container">
-        <?= jhd_section_head([
-            'eyebrow' => 'مرکز اسناد و نشر آثار',
-            'icon' => 'bi-book',
-            'title' => 'کتابخانه دیجیتال',
-            'url' => url('books'),
-            'link' => 'همه کتاب‌ها',
-        ]) ?>
-        <?= jhd_grid_open('jhd-card-grid--rail') ?>
-            <?php foreach ($latestBooks as $b): ?><?= renderBookCard($b) ?><?php endforeach; ?>
         <?= jhd_grid_close() ?>
     </div>
 </section>
@@ -520,6 +449,78 @@ $homeHasAnyContent =
             </div>
         </div>
         <?php endforeach; ?>
+    </div>
+</section>
+<?php endif; ?>
+
+<?php if (!empty($homeSections['books']) && $latestBooks): ?>
+<!-- ─── ۱۰. کتابخانه دیجیتال ─────────────────────────────────────────────── -->
+<section class="jhd-home-group" id="books-section">
+    <div class="container">
+        <?= jhd_section_head([
+            'eyebrow' => 'مرکز اسناد و نشر آثار',
+            'icon' => 'bi-book',
+            'title' => 'کتابخانه دیجیتال',
+            'url' => url('books'),
+            'link' => 'همه کتاب‌ها',
+        ]) ?>
+        <?= jhd_grid_open('jhd-card-grid--rail') ?>
+            <?php foreach ($latestBooks as $b): ?><?= renderBookCard($b) ?><?php endforeach; ?>
+        <?= jhd_grid_close() ?>
+    </div>
+</section>
+<?php endif; ?>
+
+<?php if (!empty($homeSections['reports']) && $latestReports): ?>
+<!-- ─── ۶. گزارش‌های تصویری ───────────────────────────────────────────────── -->
+<section class="jhd-home-group" id="reports-section">
+    <div class="container">
+        <?= jhd_section_head([
+            'eyebrow' => 'پوشش میدانی و رخدادها',
+            'icon' => 'bi-card-text',
+            'title' => 'گزارش‌های حوزه و جامعه',
+            'url' => url('reports'),
+            'link' => 'همه گزارش‌ها',
+        ]) ?>
+        <?= jhd_grid_open('jhd-card-grid--rail') ?>
+            <?php foreach ($latestReports as $rep): ?><?= renderPostCard($rep, ['cta' => 'مشاهده گزارش', 'excerpt' => 110]) ?><?php endforeach; ?>
+        <?= jhd_grid_close() ?>
+    </div>
+</section>
+<?php endif; ?>
+
+<?php if (!empty($homeSections['events']) && $latestEvents): ?>
+<!-- ─── ۹. رویدادها و برنامه‌ها (خط زمان) ────────────────────────────────── -->
+<section class="jhd-home-group jhd-home-group--paper" id="events-section">
+    <div class="container">
+        <?= jhd_section_head([
+            'eyebrow' => 'تقویم حوزه و مناسبت‌ها',
+            'icon' => 'bi-calendar-event',
+            'title' => 'رویدادها و برنامه‌ها',
+            'url' => url('events'),
+            'link' => 'همه رویدادها',
+        ]) ?>
+        <?= jhd_grid_open('jhd-card-grid--rail') ?>
+        <?php foreach ($latestEvents as $ev): ?><?= renderEventRow($ev) ?><?php endforeach; ?>
+        <?= jhd_grid_close() ?>
+    </div>
+</section>
+<?php endif; ?>
+
+<?php if (!empty($homeSections['topics']) && $featuredTopics): ?>
+<!-- ─── ۸. موضوعات — فقط محورهای اصلی، با نمایش مینیمال ───────────────────── -->
+<section class="jhd-home-group jhd-home-topics" id="topics-section">
+    <div class="container">
+        <?= jhd_section_head([
+            'eyebrow' => 'موضوعات',
+            'icon' => 'bi-diagram-3',
+            'title' => 'محورهای علمی و معارف',
+            'url' => url('topics'),
+            'link' => 'همه موضوعات',
+        ]) ?>
+        <?= jhd_grid_open('jhd-card-grid--rail jhd-topic-home-grid') ?>
+            <?php foreach ($featuredTopics as $tp): ?><?= renderTopicCard($tp, ['minimal' => true, 'col' => 'col-12 col-sm-6 col-lg-4', 'counts' => [['value' => (int)($tp['post_count'] ?? 0), 'label' => 'مطلب', 'icon' => 'bi-journal-text']]]) ?><?php endforeach; ?>
+        <?= jhd_grid_close() ?>
     </div>
 </section>
 <?php endif; ?>
