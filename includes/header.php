@@ -153,6 +153,18 @@ if (SITE_URL && !$responseIs404) {
         if (JHD_PRETTY_URLS) {
             $routePath = $_SERVER['JHD_ROUTE_PATH'] ?? current_path();
             $canonical = jhd_absolute_url(ltrim(substr($routePath, strlen(BASE_PATH)), '/'));
+
+            // Real pagination pages have their own crawlable canonical URL.
+            // Filter/search parameters are noindex and intentionally do not
+            // receive a separate pagination canonical signal.
+            $requestKeys = array_keys($_GET);
+            $pageOnly = isset($_GET['page'])
+                && count(array_diff($requestKeys, ['page'])) === 0
+                && ctype_digit((string)$_GET['page']);
+            $pageNumber = $pageOnly ? (int)$_GET['page'] : 1;
+            if ($pageOnly && $pageNumber > 1 && $pageNumber <= 1000000) {
+                $canonical .= '?page=' . $pageNumber;
+            }
         } else {
             $canonical = jhd_absolute_url(jhd_query_canonical($routeName));
         }
