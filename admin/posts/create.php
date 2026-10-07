@@ -292,7 +292,7 @@ $formPostType = $fixedPostType !== '' ? $fixedPostType : (string)($_POST['post_t
                 <div class="admin-card-header"><i class="bi bi-camera-video-fill ms-2 text-danger"></i>ویدیو شاخص (اختیاری)</div>
                 <div class="admin-card-body">
                     <input type="file" name="featured_video" id="featuredVideoInput" class="form-control" accept="video/*,.mp4,.webm,.mov,.mkv">
-                    <div class="form-text mb-2">این ویدیو مستقل از فایل‌های ویدیویی گالری است و در ابتدای مطلب نمایش داده می‌شود. <?= env_value('VERCEL') !== '' ? 'حداکثر ۱۵۰ مگابایت با آپلود مستقیم و resumable در Supabase Storage' : 'حداکثر 200MB' ?> — MP4، WebM، MOV، MKV</div>
+                    <div class="form-text mb-2">این ویدیو مستقل از فایل‌های ویدیویی گالری است و در ابتدای مطلب نمایش داده می‌شود. حداکثر <?= (int)(MAX_VIDEO_SIZE / 1024 / 1024) ?>MB با آپلود مستقیم و resumable در Supabase Storage — MP4، WebM، MOV، MKV</div>
                     <video id="featVideoPreview" controls style="display:none;max-width:100%;max-height:240px;border-radius:8px;margin-top:8px;background:#000"></video>
                 </div>
             </div>
@@ -342,7 +342,7 @@ $formPostType = $fixedPostType !== '' ? $fixedPostType : (string)($_POST['post_t
                 <div class="admin-card-header"><i class="bi bi-camera-video-fill ms-2"></i>فایل‌های ویدیویی (اختیاری)</div>
                 <div class="admin-card-body">
                     <input type="file" name="video_files[]" id="videoFilesInput" class="form-control" accept="video/*,.mp4,.webm,.mov,.mkv" multiple>
-                    <div class="form-text">MP4، WebM، MOV، MKV — <?= env_value('VERCEL') !== '' ? 'تا ۱۵۰ مگابایت با آپلود مستقیم و resumable در Supabase Storage' : 'تا 150MB برای هر فایل' ?>.</div>
+                    <div class="form-text">MP4، WebM، MOV، MKV — تا <?= (int)(MAX_VIDEO_SIZE / 1024 / 1024) ?>MB برای هر فایل با آپلود مستقیم و resumable در Supabase Storage.</div>
                     <div id="videoThumbProgress" class="mt-2" style="display:none">
                         <div class="d-flex align-items-center gap-2 text-muted small">
                             <div class="spinner-border spinner-border-sm" role="status"></div>
