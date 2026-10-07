@@ -945,6 +945,72 @@ html[data-theme="dark"] .jhd-card .jhd-event-date { background: rgba(12, 28, 22,
 .jhd-mini-item h3 a:hover { color: var(--jhd-green); }
 .jhd-mini-item .jhd-card-meta { font-size: .72rem; }
 
+/* لینک‌های معنایی داخلی: شبیه لینک مرجع، اما کاملاً هماهنگ با هویت سایت. */
+.jhd-context-link {
+  color: var(--jhd-green);
+  font-weight: 650;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: color-mix(in srgb, var(--jhd-gold) 70%, transparent);
+  text-underline-offset: .17em;
+}
+.jhd-context-link:hover {
+  color: var(--jhd-green-hover);
+  text-decoration-style: solid;
+}
+
+/* مقاله‌های صفحهٔ اصلی کمی بزرگ‌تر از ردیف‌های آرشیوی؛ عنوان و خلاصه خواناترند. */
+.jhd-home-group#articles-section .jhd-editorial-row {
+  grid-template-columns: 150px minmax(0, 1fr) auto;
+  gap: 0 1.1rem;
+  padding: 1rem;
+  margin-bottom: .7rem;
+  border: 1px solid var(--jhd-border);
+  border-radius: var(--jhd-radius);
+  background: var(--jhd-surface);
+  box-shadow: var(--jhd-shadow-1);
+}
+.jhd-home-group#articles-section .jhd-editorial-row:last-child {
+  border-bottom: 1px solid var(--jhd-border);
+}
+.jhd-home-group#articles-section .jhd-editorial-thumb {
+  width: 150px;
+  aspect-ratio: 16 / 10;
+}
+.jhd-home-group#articles-section .jhd-editorial-title {
+  font-size: 1.07rem;
+  line-height: 1.7;
+}
+.jhd-home-group#articles-section .jhd-editorial-main .jhd-card-summary {
+  font-size: .82rem;
+  line-height: 1.8;
+}
+.jhd-home-group#articles-section .jhd-editorial-cta {
+  font-size: .8rem;
+}
+
+@media (max-width: 700px) {
+  .jhd-home-group#articles-section .jhd-editorial-row {
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 0 .8rem;
+    padding: .85rem;
+  }
+  .jhd-home-group#articles-section .jhd-editorial-thumb {
+    width: 96px;
+  }
+  .jhd-home-group#articles-section .jhd-editorial-title {
+    font-size: .98rem;
+  }
+}
+@media (max-width: 480px) {
+  .jhd-home-group#articles-section .jhd-editorial-row {
+    grid-template-columns: 88px minmax(0, 1fr);
+  }
+  .jhd-home-group#articles-section .jhd-editorial-thumb {
+    width: 88px;
+  }
+}
+
 /* ردیف سرمقاله‌ای (مقالات/پژوهش): متراکم، خوانا و بدون کارت سنگین */
 .jhd-editorial-row {
   position: relative;
