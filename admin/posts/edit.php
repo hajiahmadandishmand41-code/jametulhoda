@@ -487,7 +487,7 @@ $csrfToken        = generateCsrfToken();
                     <?php endif; ?>
                     <label class="form-label small" for="featuredVideoInputEdit">آپلود ویدیوی تازه</label>
                     <input type="file" name="featured_video" id="featuredVideoInputEdit" class="form-control" accept="video/*,.mp4,.webm,.mov,.mkv">
-                    <div class="form-text mb-2">این ویدیو در ابتدای صفحهٔ مطلب نمایش داده می‌شود. <?= env_value('VERCEL') !== '' ? 'حداکثر ۴ مگابایت (سقف سرورلس Vercel)' : 'حداکثر 200MB' ?> — MP4، WebM، MOV، MKV</div>
+                    <div class="form-text mb-2">این ویدیو در ابتدای صفحهٔ مطلب نمایش داده می‌شود. <?= env_value('VERCEL') !== '' ? 'حداکثر ۱۵۰ مگابایت با آپلود مستقیم و resumable در Supabase Storage' : 'حداکثر 200MB' ?> — MP4، WebM، MOV، MKV</div>
                     <video id="featVideoPreviewEdit" controls style="display:none;max-width:100%;max-height:240px;border-radius:8px;margin-top:8px;background:#000"></video>
                 </div>
             </div>
