@@ -1704,6 +1704,8 @@ function clearSettingCache(): void {
 function jhd_homepage_settings(): array {
     $defaults = [
         'sections' => [
+            'hero' => true,
+            'editor_picks' => true,
             'latest' => true,
             'news' => true,
             'articles' => true,
