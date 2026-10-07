@@ -3,7 +3,7 @@
  * reports.php — آرشیو گزارش‌های تصویری، میدانی و فعالیت‌های حوزه علمیه جامعه‌الهدی
  */
 $pageTitle = 'گزارش‌ها و رخدادها';
-$pageDesc = 'گزارش فعالیت‌های علمی، فرهنگی، جلسات، محافل، مراسم و برنامه‌های مذهبی مدرسه مدرسه جامعه‌الهدی.';
+$pageDesc = 'گزارش فعالیت‌های علمی، فرهنگی، جلسات، محافل، مراسم و برنامه‌های مذهبی مدرسه جامعه‌الهدی.';
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
@@ -30,6 +30,9 @@ $posts = getPosts($opts);
 $total = countPosts(['type' => 'report'] + ($search ? ['search' => $search] : []) + ($topicId ? ['topic' => $topicId] : []));
 
 $pages = (int)ceil($total / $limit);
+jhd_validate_pagination($page, $total, $limit, 'گزارش‌ها', url('reports'), 'گزارش‌ها');
+$noindexSeo = ($total === 0);
+
 
 $breadcrumbs = [
     ['name' => 'صفحه اصلی', 'url' => url()],
