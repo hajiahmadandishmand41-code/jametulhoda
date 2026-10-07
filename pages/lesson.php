@@ -6,6 +6,7 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/media.php';
+require_once __DIR__ . '/../includes/cards.php';
 require_once __DIR__ . '/../includes/auth.php';
 startPublicSession();
 
@@ -192,6 +193,29 @@ require_once __DIR__.'/../includes/header.php';
         <a class="jhd-icon-btn" href="https://wa.me/?text=<?= urlencode($lesson['title'] . ' - ' . $lessonUrl) ?>" target="_blank" rel="noopener" aria-label="اشتراک در واتساپ"><i class="bi bi-whatsapp"></i></a>
         <button type="button" class="jhd-icon-btn" data-copy-link="<?= htmlspecialchars($lessonUrl, ENT_QUOTES) ?>" aria-label="کپی لینک"><i class="bi bi-link-45deg"></i></button>
       </section>
+
+      <?php if ($relatedLessons): ?>
+      <section class="jhd-related-section" aria-labelledby="lesson-related-title">
+        <div class="jhd-related-head">
+          <div>
+            <span class="jhd-eyebrow">ادامهٔ مسیر مطالعه</span>
+            <h2 id="lesson-related-title">جستارهای وابسته به این درس</h2>
+            <p>درس‌های دیگری که بر اساس موضوع یا مجموعهٔ آموزشی این درس، برای ادامهٔ مطالعه پیشنهاد می‌شوند.</p>
+          </div>
+          <?php if ($lessonTopics): ?>
+          <a class="jhd-related-link" href="<?= sanitize(topicUrl($lessonTopics[0])) ?>">
+            مشاهده موضوع
+            <i class="bi bi-arrow-left" aria-hidden="true"></i>
+          </a>
+          <?php endif; ?>
+        </div>
+        <div class="row g-3 jhd-related-grid">
+          <?php foreach ($relatedLessons as $relatedLesson): ?>
+            <?= renderLessonCard($relatedLesson, ['col' => 'col-12 col-md-6 col-xl-4', 'class' => 'jhd-related-card']) ?>
+          <?php endforeach; ?>
+        </div>
+      </section>
+      <?php endif; ?>
     </article>
    </div>
 
