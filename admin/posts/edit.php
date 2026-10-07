@@ -487,7 +487,7 @@ $csrfToken        = generateCsrfToken();
                     <?php endif; ?>
                     <label class="form-label small" for="featuredVideoInputEdit">آپلود ویدیوی تازه</label>
                     <input type="file" name="featured_video" id="featuredVideoInputEdit" class="form-control" accept="video/*,.mp4,.webm,.mov,.mkv">
-                    <div class="form-text mb-2">این ویدیو در ابتدای صفحهٔ مطلب نمایش داده می‌شود. <?= env_value('VERCEL') !== '' ? 'حداکثر ۱۵۰ مگابایت با آپلود مستقیم و resumable در Supabase Storage' : 'حداکثر 200MB' ?> — MP4، WebM، MOV، MKV</div>
+                    <div class="form-text mb-2">این ویدیو در ابتدای صفحهٔ مطلب نمایش داده می‌شود. حداکثر <?= (int)(MAX_VIDEO_SIZE / 1024 / 1024) ?>MB با آپلود مستقیم و resumable در Supabase Storage — MP4، WebM، MOV، MKV</div>
                     <video id="featVideoPreviewEdit" controls style="display:none;max-width:100%;max-height:240px;border-radius:8px;margin-top:8px;background:#000"></video>
                 </div>
             </div>
@@ -570,7 +570,7 @@ $csrfToken        = generateCsrfToken();
                         <?php endforeach; ?>
                     </ul>
                     <input type="file" name="video_files[]" id="videoFilesInputEdit" class="form-control" accept="video/*,.mp4,.webm,.mov,.mkv" multiple>
-                    <div class="form-text">افزودن ویدیوهای جدید — MP4، WebM، MOV، MKV (<?= env_value('VERCEL') !== '' ? 'تا ۴ مگابایت در سرورلس Vercel' : 'تا 200MB هرکدام' ?>). ویدیوها در صفحهٔ همین مطلب نمایش داده می‌شوند.</div>
+                    <div class="form-text">افزودن ویدیوهای جدید — MP4، WebM، MOV، MKV (تا <?= (int)(MAX_VIDEO_SIZE / 1024 / 1024) ?>MB برای هرکدام با آپلود مستقیم و resumable در Supabase Storage). ویدیوها در صفحهٔ همین مطلب نمایش داده می‌شوند.</div>
                     <div id="videoThumbProgressEdit" class="mt-2" style="display:none">
                         <div class="d-flex align-items-center gap-2 text-muted small">
                             <div class="spinner-border spinner-border-sm" role="status"></div>
