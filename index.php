@@ -99,6 +99,8 @@ if ($__p !== '') {
 $jhdPublicDbReady = jhd_db_ready();
 $db = jhd_db();
 $GLOBALS['JHD_PUBLIC_DB_READY'] = $jhdPublicDbReady;
+$homeConfig = jhd_homepage_settings();
+$homeSections = $homeConfig['sections'];
 
 if ($jhdPublicDbReady) {
     // Anonymous GETs get no session at all (see startPublicSession): that is
@@ -106,26 +108,30 @@ if ($jhdPublicDbReady) {
     // and the `SELECT … FOR UPDATE` session row lock used to come from.
     startPublicSession();
 
-    // ─── ۱. مطلب شاخص و دو مطلب کناری ─────────────────────────────────────
-    $heroPost = getPosts(['featured' => 1, 'limit' => 1])[0]
-        ?? getPosts(['type' => 'news', 'limit' => 1])[0]
-        ?? getPosts(['type' => 'article', 'limit' => 1])[0]
-        ?? getPosts(['limit' => 1])[0]
-        ?? null;
+    // ─── ویترین اصلی: مدیر می‌تواند یک مطلب شاخص را انتخاب کند. اگر انتخاب
+    // دستی خالی باشد، اولین مطلب «برگزیدهٔ سردبیر» به‌عنوان پیش‌فرض استفاده می‌شود.
+    $heroPost = $homeConfig['hero_post_id'] > 0
+        ? (getPostsByIds([$homeConfig['hero_post_id']])[0] ?? null)
+        : null;
+    if (!$heroPost) {
+        $heroPost = getPosts(['featured' => 1, 'limit' => 1])[0]
+            ?? getPosts(['type' => 'news', 'limit' => 1])[0]
+            ?? getPosts(['type' => 'article', 'limit' => 1])[0]
+            ?? getPosts(['limit' => 1])[0]
+            ?? null;
+    }
     $heroId = $heroPost ? (int)$heroPost['id'] : 0;
-    // The hero's topic is resolved below from the shared preload (one bulk
-    // query for every card on the page) instead of its own extra round trip.
     $heroTopic = null;
-    // One combined list feeds both the sidebar and the "latest" strip. The
-    // previous code ran getPosts(limit 6) and getPosts(limit 12) separately
-    // even though the first result set is a prefix of the second.
-    $recentPool = getPosts(['limit' => 12]);
-    $featuredSide = array_slice(array_values(array_filter(
-        array_slice($recentPool, 0, 6),
-        static fn(array $p): bool => (int)$p['id'] !== $heroId
-    )), 0, 2);
 
-    // ─── ۲. تازه‌ترین مطالب (ترکیبی) ─────────────────────────────────────
+    // برگزیدهٔ سردبیر فقط از مطالبی می‌آید که مدیر در خود مطلب تیک زده است.
+    $featuredSide = array_values(array_filter(
+        getPosts(['featured' => 1, 'limit' => 8]),
+        static fn(array $p): bool => (int)$p['id'] !== $heroId
+    ));
+    $featuredSide = array_slice($featuredSide, 0, 3);
+
+    // تازه‌ترین مطالب از همان pool مشترک خوانده می‌شوند تا تکرار کمتر و درخواست‌ها سبک‌تر باشد.
+    $recentPool = getPosts(['limit' => 12]);    // ─── ۲. تازه‌ترین مطالب (ترکیبی) ─────────────────────────────────────
     $usedIds = array_merge([$heroId], array_map(static fn(array $p): int => (int)$p['id'], $featuredSide));
     $latest = array_slice(array_values(array_filter(
         $recentPool,
@@ -218,7 +224,19 @@ jhd_preload_post_topics(array_merge(
 ));
 if ($heroPost) $heroTopic = jhd_card_topics($heroPost, 1)[0] ?? null;
 require_once __DIR__ . '/includes/header.php';
-$homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $latestReports || $latestResearch || $featuredTopics || $latestEvents || $latestBooks || $latestLessons || $latestVideos || $latestAudios;
+$homeHasAnyContent =
+    (!empty($homeSections['hero']) && $heroPost)
+    || (!empty($homeSections['editor_picks']) && $featuredSide)
+    || (!empty($homeSections['latest']) && $latest)
+    || (!empty($homeSections['news']) && $newsPool)
+    || (!empty($homeSections['articles']) && $latestArticles)
+    || (!empty($homeSections['reports']) && $latestReports)
+    || (!empty($homeSections['research']) && $latestResearch)
+    || (!empty($homeSections['topics']) && $featuredTopics)
+    || (!empty($homeSections['events']) && $latestEvents)
+    || (!empty($homeSections['books']) && $latestBooks)
+    || (!empty($homeSections['lessons']) && $latestLessons)
+    || (!empty($homeSections['media']) && ($latestVideos || $latestAudios));
 ?>
 
 <!-- ─── ۱. تابلوی فشردهٔ برند ─────────────────────────────────────────────── -->
@@ -240,18 +258,6 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
                     <button type="submit"><span>جستجو</span><i class="bi bi-arrow-left" aria-hidden="true"></i></button>
                 </form>
             </div>
-            <aside class="jhd-home-quick" aria-labelledby="home-quick-title">
-                <p class="jhd-home-quick-eyebrow">دسترسی سریع</p>
-                <h2 id="home-quick-title">بخش‌های پایگاه</h2>
-                <nav aria-label="دسترسی سریع به بخش‌های پایگاه">
-                    <ul class="jhd-home-quick-links">
-                        <li><a href="<?= sanitize(url('topics')) ?>"><span class="jhd-home-quick-icon"><i class="bi bi-diagram-3" aria-hidden="true"></i></span><span class="jhd-home-quick-copy"><strong>موضوعات و معارف</strong><small>محورهای علمی</small></span></a></li>
-                        <li><a href="<?= sanitize(url('books')) ?>"><span class="jhd-home-quick-icon"><i class="bi bi-book" aria-hidden="true"></i></span><span class="jhd-home-quick-copy"><strong>کتابخانه دیجیتال</strong><small>منابع مطالعاتی</small></span></a></li>
-                        <li><a href="<?= sanitize(url('lessons')) ?>"><span class="jhd-home-quick-icon"><i class="bi bi-mortarboard" aria-hidden="true"></i></span><span class="jhd-home-quick-copy"><strong>درس‌ها و آموزش‌ها</strong><small>مجموعه‌های آموزشی</small></span></a></li>
-                        <li><a href="<?= sanitize(url('research')) ?>"><span class="jhd-home-quick-icon"><i class="bi bi-journal-richtext" aria-hidden="true"></i></span><span class="jhd-home-quick-copy"><strong>پژوهش‌ها</strong><small>دستاوردهای علمی</small></span></a></li>
-                    </ul>
-                </nav>
-            </aside>
         </div>
         <span class="jhd-board-mark" aria-hidden="true">۞</span>
     </div>
@@ -287,23 +293,6 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
 </section>
 <?php endif; ?>
 
-<!-- ناوبری سریع صفحهٔ اصلی -->
-<nav class="jhd-home-nav" aria-label="بخش‌های اصلی پایگاه">
-  <div class="container">
-    <div class="jhd-home-nav__scroll">
-      <a href="#latest-section"><i class="bi bi-clock-history"></i> تازه‌ها</a>
-      <a href="#news-section"><i class="bi bi-newspaper"></i> اخبار</a>
-      <a href="#articles-section"><i class="bi bi-file-earmark-text"></i> مقالات</a>
-      <a href="#research-section"><i class="bi bi-journal-richtext"></i> پژوهش</a>
-      <a href="#reports-section"><i class="bi bi-images"></i> گزارش‌ها</a>
-      <a href="#topics-section"><i class="bi bi-diagram-3"></i> موضوعات</a>
-      <a href="#lessons-section"><i class="bi bi-mortarboard"></i> دروس</a>
-      <a href="#books-section"><i class="bi bi-book"></i> کتابخانه</a>
-      <a href="#media-section"><i class="bi bi-play-circle"></i> رسانه</a>
-    </div>
-  </div>
-</nav>
-
 <?php if (!$homeHasAnyContent): ?>
 <section class="jhd-section">
     <div class="container">
@@ -312,7 +301,7 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
 </section>
 <?php endif; ?>
 
-<?php if ($heroPost): ?>
+<?php if (!empty($homeSections['hero']) && $heroPost): ?>
 <!-- ─── ۲. مطلب شاخص + دو مطلب کناری (چیدمان رسانه‌ای) ───────────────────── -->
 <section class="jhd-section" aria-label="مطلب شاخص">
     <div class="container">
@@ -323,7 +312,7 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
             <div class="col-lg-4">
                 <div class="jhd-side-card h-100">
                     <h3><i class="bi bi-stars"></i> برگزیدهٔ سردبیر</h3>
-                    <?php if ($featuredSide): ?>
+                    <?php if (!empty($homeSections['editor_picks']) && $featuredSide): ?>
                         <?php foreach ($featuredSide as $side): ?><?= renderMiniItem($side) ?><?php endforeach; ?>
                     <?php else: ?>
                         <p class="text-muted small mb-0">مطلب دیگری برای نمایش ثبت نشده است.</p>
@@ -335,7 +324,24 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
 </section>
 <?php endif; ?>
 
-<?php if ($latest): ?>
+<?php if (empty($homeSections['hero']) && !empty($homeSections['editor_picks']) && $featuredSide): ?>
+<section class="jhd-home-group jhd-home-group--paper" id="editor-picks-section" aria-label="برگزیدهٔ سردبیر">
+  <div class="container">
+    <?= jhd_section_head([
+        'eyebrow' => 'انتخاب سردبیر',
+        'icon' => 'bi-stars',
+        'title' => 'برگزیدهٔ سردبیر',
+        'url' => url('articles'),
+        'link' => 'مطالب بیشتر',
+    ]) ?>
+    <?= jhd_grid_open('jhd-card-grid--rail') ?>
+      <?php foreach ($featuredSide as $side): ?><?= renderMiniItem($side) ?><?php endforeach; ?>
+    <?= jhd_grid_close() ?>
+  </div>
+</section>
+<?php endif; ?>
+
+<?php if (!empty($homeSections['latest']) && $latest): ?>
 <!-- ─── ۳. تازه‌ترین مطالب ───────────────────────────────────────────────── -->
 <section class="jhd-home-group jhd-home-group--paper" id="latest-section">
     <div class="container">
@@ -353,7 +359,7 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
 </section>
 <?php endif; ?>
 
-<?php if ($newsPool): ?>
+<?php if (!empty($homeSections['news']) && $newsPool): ?>
 <!-- ─── ۴. اخبار ─────────────────────────────────────────────────────────── -->
 <section class="jhd-home-group" id="news-section">
     <div class="container">
@@ -376,7 +382,7 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
 </section>
 <?php endif; ?>
 
-<?php if ($latestArticles): ?>
+<?php if (!empty($homeSections['articles']) && $latestArticles): ?>
 <!-- ─── ۵. مقالات علمی (سرمقاله‌ای) ──────────────────────────────────────── -->
 <section class="jhd-home-group jhd-home-group--paper" id="articles-section">
     <div class="container">
@@ -394,7 +400,7 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
 </section>
 <?php endif; ?>
 
-<?php if ($latestReports): ?>
+<?php if (!empty($homeSections['reports']) && $latestReports): ?>
 <!-- ─── ۶. گزارش‌های تصویری ───────────────────────────────────────────────── -->
 <section class="jhd-home-group" id="reports-section">
     <div class="container">
@@ -412,7 +418,7 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
 </section>
 <?php endif; ?>
 
-<?php if ($latestResearch): ?>
+<?php if (!empty($homeSections['research']) && $latestResearch): ?>
 <!-- ─── ۷. پژوهش (رسمی) ──────────────────────────────────────────────────── -->
 <section class="jhd-home-group jhd-home-group--paper" id="research-section">
     <div class="container">
@@ -430,7 +436,7 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
 </section>
 <?php endif; ?>
 
-<?php if ($featuredTopics): ?>
+<?php if (!empty($homeSections['topics']) && $featuredTopics): ?>
 <!-- ─── ۸. اطلس موضوعات ──────────────────────────────────────────────────── -->
 <section class="jhd-home-group" id="topics-section">
     <div class="container">
@@ -448,7 +454,7 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
 </section>
 <?php endif; ?>
 
-<?php if ($latestEvents): ?>
+<?php if (!empty($homeSections['events']) && $latestEvents): ?>
 <!-- ─── ۹. رویدادها و برنامه‌ها (خط زمان) ────────────────────────────────── -->
 <section class="jhd-home-group jhd-home-group--paper" id="events-section">
     <div class="container">
@@ -466,7 +472,7 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
 </section>
 <?php endif; ?>
 
-<?php if ($latestBooks): ?>
+<?php if (!empty($homeSections['books']) && $latestBooks): ?>
 <!-- ─── ۱۰. کتابخانه دیجیتال ─────────────────────────────────────────────── -->
 <section class="jhd-home-group" id="books-section">
     <div class="container">
@@ -484,7 +490,7 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
 </section>
 <?php endif; ?>
 
-<?php if ($latestLessons): ?>
+<?php if (!empty($homeSections['lessons']) && $latestLessons): ?>
 <!-- ─── ۱۱. دروس حوزوی ──────────────────────────────────────────────────── -->
 <section class="jhd-home-group jhd-home-group--paper" id="lessons-section">
     <div class="container">
@@ -514,7 +520,7 @@ $homeHasAnyContent = $heroPost || $latest || $newsPool || $latestArticles || $la
 </section>
 <?php endif; ?>
 
-<?php if ($latestVideos || $latestAudios): ?>
+<?php if (!empty($homeSections['media']) && ($latestVideos || $latestAudios)): ?>
 <!-- ─── ۱۲. رسانه: ویدیو و صوت ──────────────────────────────────────────── -->
 <section class="jhd-home-group" id="media-section">
     <div class="container">
