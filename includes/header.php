@@ -295,7 +295,6 @@ if (!$noindexSeo) {
 <link rel="shortcut icon" href="<?= sanitize(canonicalUrl('favicon.ico')) ?>" type="image/x-icon">
 <script src="<?= asset('js/theme.js') ?>"></script>
 <link rel="preload" href="<?= asset('fonts/Vazirmatn-Regular.woff2') ?>" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="<?= asset('fonts/Amiri-Bold.woff2') ?>" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="<?= asset('vendor/bootstrap.rtl.min.css') ?>">
 <link rel="stylesheet" href="<?= asset('vendor/icons/bootstrap-icons.min.css') ?>">
 <link rel="stylesheet" href="<?= asset('vendor/plyr.css') ?>">
