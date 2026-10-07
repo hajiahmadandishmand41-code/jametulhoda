@@ -3080,3 +3080,32 @@ html { scroll-behavior: smooth; }
 .main-footer a { transition: color .18s ease, opacity .18s ease; }
 .main-footer a:hover { color: var(--jhd-gold); }
 .main-footer h5, .main-footer h6 { letter-spacing: -0.004em; }
+
+/* صفحهٔ اصلی — موضوعات در خانه عمداً مینیمال و کم‌تعداد هستند */
+.jhd-home-topics .jhd-section-head { margin-bottom: .7rem; }
+.jhd-topic-home-grid { row-gap: .75rem !important; }
+.jhd-card--topic-home .jhd-card-media { aspect-ratio: 16 / 8; }
+.jhd-card--topic-home .jhd-card-body { padding: .62rem .72rem .68rem; gap: .2rem; }
+.jhd-card--topic-home .jhd-card-title {
+  font-size: .94rem;
+  line-height: 1.55;
+  min-height: 0;
+}
+.jhd-card--topic-home .jhd-card-meta {
+  font-size: .68rem;
+  margin-top: .05rem;
+}
+.jhd-card--topic-home .jhd-card-foot {
+  padding-top: .28rem;
+  font-size: .7rem;
+}
+.jhd-card--topic-home .btn-read-more {
+  padding: .18rem .48rem;
+}
+@media (max-width: 575.98px) {
+  .jhd-topic-home-grid { row-gap: .5rem !important; }
+  .jhd-card--topic-home .jhd-card-media { aspect-ratio: 16 / 7; }
+  .jhd-card--topic-home .jhd-card-body { padding: .5rem .58rem .55rem; }
+  .jhd-card--topic-home .jhd-card-title { font-size: .86rem; }
+  .jhd-card--topic-home .jhd-card-foot { font-size: .66rem; }
+}
