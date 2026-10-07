@@ -385,5 +385,5 @@ require_once __DIR__ . '/../includes/header.php';
     if(nextBtn) nextBtn.addEventListener('click', function(){ loadPlaylistItem(currentIdx+1,true); });
 })();
 </script>
-<script src="<?= asset('js/gallery.js') ?>" defer></script>
+
 <?php require_once __DIR__.'/../includes/footer.php'; ?>
