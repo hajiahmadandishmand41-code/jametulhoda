@@ -27,39 +27,26 @@ header('Cache-Control: public, max-age=900, stale-while-revalidate=3600');
  * Path prefixes that must never appear in a public sitemap.
  * Matched against the path portion (without query string) of every candidate.
  */
-$sitemapDeny = '~^/(?:' . implode('|', [
-    'admin(?:/|$)',
-    'login(?:/|$)',
-    'logout(?:/|$)',
-    'register(?:/|$)',
-    'account(?:/|$)',
-    'profile(?:/|$)',
-    'password-change(?:/|$)',
-    'search(?:/|$)',
-    'install(?:/|$)',
-    'php/(?:install|migrate)(?:/|$)',
-    'migrate(?:/|$)',
-    'config(?:/|$)',
-    'includes(?:/|$)',
-    'database(?:/|$)',
-    'bin(?:/|$)',
-    'storage(?:/|$)',
-    'tests(?:/|$)',
-    'uploads(?:/|$)',
-    'api(?:/|$)',
-]) . '~i';
+$sitemapDenyPrefixes = [
+    '/admin', '/login', '/logout', '/register', '/account', '/profile',
+    '/password-change', '/search', '/install', '/php/install', '/php/migrate',
+    '/migrate', '/config', '/includes', '/database', '/bin', '/storage',
+    '/tests', '/uploads', '/api',
+];
 
 /**
  * Reject any URL that is not a plain public page of this origin.
  * http:// is accepted because a local/dev origin uses it; production always
  * configures SITE_URL as https, so a published sitemap is https throughout.
  */
-$sitemapAllowed = static function (string $url) use ($origin, $sitemapDeny): bool {
+$sitemapAllowed = static function (string $url) use ($origin, $sitemapDenyPrefixes): bool {
     if (!preg_match('~^https?://~i', $url)) return false;
     $path = parse_url($url, PHP_URL_PATH);
     if (!is_string($path) || $path === '') return false;
     if (!str_starts_with($url, $origin . '/') && $url !== $origin . '/') return false;
-    if (preg_match($sitemapDeny, $path)) return false;
+    foreach ($sitemapDenyPrefixes as $prefix) {
+        if ($path === $prefix || str_starts_with($path, $prefix . '/')) return false;
+    }
     return true;
 };
 
