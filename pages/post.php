@@ -270,7 +270,12 @@ require_once __DIR__ . '/../includes/header.php';
         <h2 class="h6"><i class="bi bi-paperclip ms-1 text-gold"></i> فایل‌های تکمیلی</h2>
         <div class="jhd-files">
         <?php foreach ($postDocuments as $file): ?>
-            <?= jhd_file_row((string)($file['title'] ?: basename((string)$file['file_path'])), imgUrl((string)$file['file_path']), '', 'bi-file-earmark-arrow-down') ?>
+            <?php
+            $fileTitle = (string)($file['title'] ?: basename((string)$file['file_path']));
+            $isPdf = (bool)preg_match('~\.pdf$~i', (string)$file['file_path']);
+            $readerHref = $isPdf ? documentReaderUrl('post', (string)$post['slug'], (int)($file['id'] ?? 0)) : '';
+            echo jhd_file_row($fileTitle, imgUrl((string)$file['file_path']), '', 'bi-file-earmark-arrow-down', $isPdf ? ['reader_target' => $readerHref] : []);
+            ?>
         <?php endforeach; ?>
         </div>
         <?php
