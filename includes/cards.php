@@ -216,7 +216,7 @@ function jhd_card_gallery(array $images, string $title, string $badge = '', bool
         $data[] = ['src' => $src, 'alt' => (string)($image['alt'] ?? $title)];
     }
 
-    $html = '<div class="jhd-card-gallery jhd-card-gallery--' . count($shown) . '" data-jhd-gallery="' . $uid . '" aria-label="تصاویر ' . sanitize($title) . '">'
+    $html = '<div class="jhd-card-media jhd-card-gallery jhd-card-gallery--' . count($shown) . '" data-jhd-gallery="' . $uid . '" aria-label="تصاویر ' . sanitize($title) . '">'
         . '<div class="jhd-card-gallery__grid">' . $cells . '</div>'
         . '<span class="jhd-card-gallery__count"><i class="bi bi-images" aria-hidden="true"></i>' . jhd_persian_digits($count) . ' تصویر</span>'
         . ($badge !== '' ? '<span class="jhd-card-badge">' . sanitize($badge) . '</span>' : '')
@@ -800,6 +800,7 @@ function jhd_file_row(string $label, string $url, string $size = '', string $ico
  * بندانگشتی‌ها و دانلود. اگر تصویری نباشد هیچ فضای خالی تولید نمی‌شود.
  */
 function jhd_gallery(array $images, array $opts = []): string {
+    $GLOBALS['JHD_NEEDS_GALLERY'] = true;
     $items = [];
     foreach ($images as $image) {
         if (is_array($image)) {
