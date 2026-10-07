@@ -1715,7 +1715,6 @@ function jhd_homepage_settings(): array {
             'events' => true,
             'books' => true,
             'lessons' => true,
-            'media' => true,
         ],
         'hero_post_id' => 0,
     ];
