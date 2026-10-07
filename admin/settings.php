@@ -54,7 +54,6 @@ $homepageSectionLabels = [
     'events' => 'رویدادها و برنامه‌ها',
     'books' => 'کتابخانه دیجیتال',
     'lessons' => 'دروس',
-    'media' => 'رسانه',
 ];
 $homepageCfgRaw = trim((string)($sets['homepage_config'] ?? ''));
 $homepageCfg = json_decode($homepageCfgRaw, true);
