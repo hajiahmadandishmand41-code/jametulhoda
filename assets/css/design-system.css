@@ -957,27 +957,113 @@ html[data-theme="dark"] .jhd-card .jhd-event-date { background: rgba(12, 28, 22,
 .jhd-mini-item h3 a:hover { color: var(--jhd-green); }
 .jhd-mini-item .jhd-card-meta { font-size: .72rem; }
 
-/* ردیف سرمقاله‌ای (مقالات/پژوهش): خط‌کشی‌شده، بدون جعبه */
+/* ردیف سرمقاله‌ای (مقالات/پژوهش): متراکم، خوانا و بدون کارت سنگین */
 .jhd-editorial-row {
+  position: relative;
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: .35rem 1rem;
-  padding: .95rem 0;
+  grid-template-columns: 116px minmax(0, 1fr) auto;
+  gap: 0 1rem;
+  align-items: center;
+  padding: .85rem 0;
   border-bottom: 1px solid var(--jhd-border);
 }
 .jhd-editorial-row:first-child { padding-top: 0; }
 .jhd-editorial-row:last-child { border-bottom: 0; }
-.jhd-editorial-row h3 { margin: 0; font-size: 1.02rem; }
-.jhd-editorial-row h3 a { color: var(--jhd-ink); }
-.jhd-editorial-row h3 a:hover { color: var(--jhd-green); }
-.jhd-editorial-row .jhd-card-summary { -webkit-line-clamp: 2; }
+.jhd-editorial-thumb {
+  display: block;
+  width: 116px;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-radius: var(--jhd-radius-sm);
+  background: var(--jhd-soft);
+  border: 1px solid var(--jhd-border);
+}
+.jhd-editorial-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform .25s ease;
+}
+.jhd-editorial-thumb:hover img { transform: scale(1.025); }
+.jhd-editorial-main { min-width: 0; }
+.jhd-editorial-meta .jhd-card-meta {
+  margin-bottom: .18rem;
+  font-size: .7rem;
+}
+.jhd-editorial-title {
+  margin: 0;
+  font-size: .98rem;
+  line-height: 1.7;
+}
+.jhd-editorial-title a { color: var(--jhd-ink); }
+.jhd-editorial-title a:hover { color: var(--jhd-green); }
+.jhd-editorial-main .jhd-card-summary {
+  margin-top: .18rem;
+  font-size: .78rem;
+  line-height: 1.75;
+  -webkit-line-clamp: 2;
+}
+.jhd-editorial-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  margin-top: .28rem;
+  font-size: .75rem;
+  font-weight: 800;
+}
+.jhd-editorial-badge {
+  align-self: start;
+  margin-top: .15rem;
+  padding: .16rem .42rem;
+  border-radius: 999px;
+  background: var(--jhd-green-soft);
+  color: var(--jhd-green);
+  font-size: .62rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
 .jhd-editorial-row .jhd-row-index {
   font-family: var(--jhd-font-display);
-  font-size: 1.5rem;
+  font-size: 1.35rem;
   color: var(--jhd-border-strong);
   line-height: 1;
   align-self: start;
-  padding-top: .2rem;
+  padding-top: .15rem;
+}
+@media (max-width: 700px) {
+  .jhd-editorial-row {
+    grid-template-columns: 86px minmax(0, 1fr);
+    gap: 0 .7rem;
+    align-items: start;
+    padding: .75rem 0;
+  }
+  .jhd-editorial-thumb {
+    width: 86px;
+  }
+  .jhd-editorial-badge {
+    position: absolute;
+    top: .7rem;
+    inset-inline-end: 0;
+  }
+  .jhd-editorial-row .jhd-row-index {
+    position: absolute;
+    inset-inline-start: 0;
+    bottom: .7rem;
+    font-size: 1rem;
+  }
+  .jhd-editorial-cta {
+    font-size: .72rem;
+  }
+}
+@media (max-width: 480px) {
+  .jhd-editorial-row {
+    grid-template-columns: 78px minmax(0, 1fr);
+    gap: 0 .6rem;
+  }
+  .jhd-editorial-thumb { width: 78px; }
+  .jhd-editorial-title { font-size: .9rem; padding-inline-end: 2.6rem; }
+  .jhd-editorial-main .jhd-card-summary { font-size: .75rem; }
 }
 
 /* ─── ۱. چیپ‌ها، فیلترها و نوار ابزار فهرست ─────────────────────────────── */
