@@ -78,14 +78,21 @@ function previewImg(input, previewId) {
     }
 }
 
-// Enforce file size limit matching server runtime ceiling
+// Client-side guard mirrors the application limits. Large files are not sent
+// through the Vercel PHP function; supabase-direct-upload.js moves them to
+// Supabase Storage via TUS before the form/AJAX request is submitted.
 document.querySelectorAll('input[type="file"]').forEach(function (input) {
     input.addEventListener('change', function () {
-        var onVercel = <?= json_encode(env_value('VERCEL') !== '') ?>;
-        var limit = onVercel ? 4 * 1024 * 1024 : 200 * 1024 * 1024;
+        var videoLimit = <?= (int)MAX_VIDEO_SIZE ?>;
+        var otherLimit = <?= (int)MAX_FILE_SIZE ?>;
+        var accept = (input.getAttribute('accept') || '').toLowerCase();
+        var name = (input.getAttribute('name') || '').toLowerCase();
+        var isVideo = accept.indexOf('video') >= 0 || /video/.test(name);
+        var limit = isVideo ? videoLimit : otherLimit;
         for (var i = 0; i < (this.files || []).length; i++) {
             if (this.files[i].size > limit) {
-                alert('فایل «' + this.files[i].name + '» بزرگتر از سقف مجاز سرور (' + (onVercel ? '۴ مگابایت در محیط سرورلس' : 'سقف مجاز') + ') است و رد خواهد شد.');
+                var mb = Math.round(limit / 1024 / 1024);
+                alert('فایل «' + this.files[i].name + '» از سقف ' + mb + 'MB بیشتر است.');
                 this.value = '';
                 return;
             }
