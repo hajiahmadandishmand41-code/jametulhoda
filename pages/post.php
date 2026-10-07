@@ -161,8 +161,10 @@ if ($primaryTopic) {
         $breadcrumbs[] = ['name' => $bt['name'], 'url' => topicUrl($bt)];
     }
 }
-$canonicalOverride = postUrl($post);
-$breadcrumbs[] = ['name' => $post['title'], 'url' => canonicalUrl(postUrl($post))];
+$postCanonicalPath = jhd_post_canonical_path($post);
+$postCanonicalUrl = $postCanonicalPath !== '' ? jhd_absolute_url($postCanonicalPath) : canonicalUrl(postUrl($post));
+$canonicalOverride = $postCanonicalPath !== '' ? $postCanonicalPath : postUrl($post);
+$breadcrumbs[] = ['name' => $post['title'], 'url' => $postCanonicalUrl];
 $breadcrumbsJsonLd = breadcrumbsJsonLd($breadcrumbs);
 // Structured data matches the content type: a question page is a QAPage, a
 // news item a NewsArticle, a research piece a ScholarlyArticle, …
@@ -256,11 +258,13 @@ require_once __DIR__ . '/../includes/header.php';
     </section>
     <?php endif; ?>
 
-    <div class="jhd-prose" itemprop="articleBody"><?= safeRichText($post['content']) ?: '<p class="text-muted">محتوایی ثبت نشده است.</p>' ?></div>
+    <?php $articleBodyHtml = safeRichText($post['content']); ?>
+    <?php if (($post['post_type'] ?? '') === 'article') $articleBodyHtml = jhd_promote_article_headings($articleBodyHtml); ?>
+    <div class="jhd-prose" itemprop="articleBody"><?= $articleBodyHtml ?: '<p class="text-muted">محتوایی ثبت نشده است.</p>' ?></div>
 
     <?php if (!empty($post['sources'])): ?>
     <section class="jhd-side-card mt-4">
-        <h3><i class="bi bi-journal-text"></i> منابع و مآخذ</h3>
+        <h2 class="h5"><i class="bi bi-journal-text"></i> منابع و مآخذ</h2>
         <div class="jhd-prose" style="font-size:.9rem"><?= safeRichText($post['sources']) ?></div>
     </section>
     <?php endif; ?>
@@ -306,7 +310,7 @@ require_once __DIR__ . '/../includes/header.php';
     </section>
     <?php endif; ?>
 
-    <?= jhd_share_row(canonicalUrl(postUrl($post)), (string)$post['title']) ?>
+    <?= jhd_share_row($postCanonicalUrl, (string)$post['title']) ?>
 
     <?php
     // ناوبری مطالب پیوسته (قبلی/بعدی در همان نوع محتوا)
