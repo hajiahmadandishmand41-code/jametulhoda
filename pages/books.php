@@ -3,6 +3,7 @@
  * books.php — کتابخانه دیجیتال (مرجع کتب حوزوی و پژوهشی)
  */
 $pageTitle = 'کتابخانه دیجیتال';
+$metaTitleOverride = 'کتابخانه علوم اسلامی | کتاب‌های حوزوی و پژوهشی';
 $pageDesc = 'کتابخانه دیجیتال مدرسه جامعه‌الهدی — کتب علمی، حوزوی و پژوهشی با دسترسی آزاد، معرفی و دانلود فایل‌های PDF و Word.';
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
