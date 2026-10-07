@@ -218,7 +218,7 @@ $sets = array_merge($sets, $formValues);
                             <a class="btn btn-sm btn-outline-primary" href="<?= adminUrl('videos') ?>"><i class="bi bi-camera-video ms-1"></i>ویدیوها</a>
                             <a class="btn btn-sm btn-outline-primary" href="<?= adminUrl('audios') ?>"><i class="bi bi-music-note-beamed ms-1"></i>صوت‌ها</a>
                         </div>
-                        <div class="form-text mt-3">محدودیت فعلی برنامه: تصویر تا 20MB و ویدیو تا 200MB برای هر فایل.</div>
+                        <div class="form-text mt-3">محدودیت فعلی برنامه: تصویر تا 20MB و ویدیو تا 150MB برای هر فایل.</div>
                     </div>
                 </section>
                 <section class="admin-card mb-4" aria-labelledby="admin-logo-heading">
