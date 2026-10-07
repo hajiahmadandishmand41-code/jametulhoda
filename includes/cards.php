@@ -325,11 +325,62 @@ function renderMiniItem(array $post, array $opts = []): string {
     return renderPostCard($post, $opts);
 }
 
-/** ردیف سرمقاله‌ای مقالات/پژوهش — اکنون همان کارت استاندارد با شمارهٔ ردیف. */
+/**
+ * ردیف سرمقاله‌ای مقالات/پژوهش.
+ * برخلاف کارت‌های عمومی، این نوع برای محتوای متنی فشرده است: عنوان و خلاصه
+ * قهرمان‌اند، تصویر فقط یک بندانگشتی کوچک است و کل ردیف به همان URL داخلی
+ * canonical وصل می‌شود. این الگو برای صفحهٔ اصلی و آرشیو مقاله/پژوهش خواناتر
+ * و از نظر تراکم اطلاعات مناسب‌تر است.
+ */
 function renderEditorialRow(array $post, array $opts = []): string {
-    $opts['excerpt'] = $opts['excerpt'] ?? 150;
-    $opts['cta'] = $opts['cta'] ?? 'ادامه مطلب';
-    return renderPostCard($post, $opts);
+    $href = (string)($opts['url'] ?? postUrl($post));
+    $title = (string)($post['title'] ?? '');
+    $summary = excerpt(
+        (string)($post['summary'] ?? $post['content'] ?? ''),
+        (int)($opts['excerpt'] ?? 105)
+    );
+    $rawDate = (string)($post['published_at'] ?? $post['created_at'] ?? '');
+    $topics = $opts['topics'] ?? jhd_card_topics($post, 2);
+    $index = isset($opts['index']) ? max(0, (int)$opts['index']) : null;
+    $image = trim((string)($post['featured_image'] ?? ''));
+    $type = (string)($post['post_type'] ?? 'article');
+    $badge = (string)($opts['badge'] ?? postTypeLabel($type));
+    $meta = jhd_card_meta_line([
+        'chips' => jhd_topic_chips($topics),
+        'date_label' => $rawDate !== '' ? persianDate($rawDate) : '',
+        'date_raw' => $rawDate,
+    ]);
+
+    $thumb = '';
+    if ($image !== '') {
+        $src = imgUrl($image);
+        $thumb = '<a class="jhd-editorial-thumb" href="' . sanitize($href) . '"'
+            . ' aria-label="' . sanitize($title) . '">'
+            . '<img src="' . sanitize($src) . '" alt="' . sanitize($title) . '"'
+            . ' loading="' . (!empty($opts['eager']) ? 'eager' : 'lazy') . '" decoding="async"'
+            . ' width="180" height="112"></a>';
+    }
+
+    $cta = (string)($opts['cta'] ?? 'مطالعه مقاله');
+    $body = '<div class="jhd-editorial-main">'
+        . ($meta !== '' ? '<div class="jhd-editorial-meta">' . $meta . '</div>' : '')
+        . '<h3 class="jhd-editorial-title">'
+        . ($href !== '' ? '<a href="' . sanitize($href) . '">' . sanitize($title) . '</a>' : sanitize($title))
+        . '</h3>'
+        . ($summary !== '' ? '<p class="jhd-card-summary">' . sanitize($summary) . '</p>' : '')
+        . '<a class="jhd-editorial-cta" href="' . sanitize($href) . '">'
+        . sanitize($cta) . ' <i class="bi bi-arrow-left" aria-hidden="true"></i></a>'
+        . '</div>';
+
+    $number = $index !== null
+        ? '<span class="jhd-row-index" aria-hidden="true">' . str_pad((string)$index, 2, '0', STR_PAD_LEFT) . '</span>'
+        : '';
+
+    return '<div class="col-12"><article class="jhd-editorial-row">'
+        . $thumb . $body
+        . '<span class="jhd-editorial-badge">' . sanitize($badge) . '</span>'
+        . $number
+        . '</article></div>';
 }
 
 /** رویداد/برنامه/اطلاعیه — همان کارت، با جعبهٔ تاریخ در متادیتا. */
