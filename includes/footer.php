@@ -49,7 +49,7 @@ if ($jhdPublicDbReady) {
                 <!-- برند و معرفی -->
                 <div class="col-lg-4 col-md-6">
                     <div class="footer-brand">
-                        <?php if ($siteLogo): ?><img src="<?= imgUrl($siteLogo) ?>" alt="نشان <?= sanitize($siteName) ?>"><?php endif; ?>
+                        <?php if ($siteLogo): ?><img src="<?= imgUrl($siteLogo) ?>" width="40" height="41" alt="نشان <?= sanitize($siteName) ?>"><?php endif; ?>
                         <h5><?= sanitize($siteName) ?></h5>
                     </div>
                     <p class="footer-text"><?= sanitize($siteSlogan) ?></p>
@@ -109,9 +109,14 @@ if ($jhdPublicDbReady) {
             </div>
         </div>
     </div>
+<?php
+// سال شمسی جاری برای کپی‌رایت — هماهنگ با تاریخ‌نمایش فارسی بقیهٔ سایت.
+$jhdCopyrightYearParts = persianDateParts(date('Y-m-d H:i:s'));
+$jhdCopyrightYear = $jhdCopyrightYearParts['year'] ?? (int)date('Y');
+?>
     <div class="footer-bottom">
         <div class="container d-flex flex-wrap align-items-center justify-content-between gap-2">
-            <p>&copy; <?= date('Y') ?> <?= sanitize($siteName) ?> — تمامی حقوق محفوظ است.</p>
+            <p>&copy; <?= $jhdCopyrightYear ?> <?= sanitize($siteName) ?> — تمامی حقوق محفوظ است.</p>
             <p class="footer-ayah d-none d-md-block mb-0">«طلب العلم فريضة على كل مسلم»</p>
             <p class="d-flex gap-2 mb-0">
                 <a href="<?= url('sitemap.xml') ?>">نقشه سایت</a>
