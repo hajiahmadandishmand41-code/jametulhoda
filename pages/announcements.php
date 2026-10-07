@@ -1,6 +1,6 @@
 <?php
 $pageTitle = 'اطلاعیه‌ها و اعلانات';
-$pageDesc = 'اطلاعیه‌های رسمی، برنامه‌های آموزشی و خبرهای ثبت‌شدهٔ مدرسه مدرسه جامعه‌الهدی را در این بخش دنبال کنید.';
+$pageDesc = 'اطلاعیه‌های رسمی، برنامه‌های آموزشی و خبرهای ثبت‌شدهٔ مدرسه جامعه‌الهدی را در این بخش دنبال کنید.';
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
@@ -16,6 +16,9 @@ if ($search) $opts['search'] = $search;
 $posts = getPosts($opts);
 $total = countPosts(array_merge(['type' => 'announcement'], $search ? ['search' => $search] : []));
 $pages = (int)ceil($total / $limit);
+jhd_validate_pagination($page, $total, $limit, 'اطلاعیه‌ها', url('announcements'), 'اطلاعیه‌ها');
+$noindexSeo = ($total === 0);
+
 
 require_once __DIR__ . '/../includes/header.php';
 ?>
