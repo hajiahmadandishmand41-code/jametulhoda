@@ -124,25 +124,55 @@ if ($jhdPublicDbReady) {
     $heroTopic = null;
 
     // برگزیدهٔ سردبیر فقط از مطالبی می‌آید که مدیر در خود مطلب تیک زده است.
+    $recentPool = getPosts(['limit' => 12]);
+
+    /*
+     * ستون کناری ویترین «در یک نگاه» است، نه محل تکرار همان مطالب.
+     * ابتدا انتخاب‌های صریح مدیر نمایش داده می‌شوند و سپس تازه‌ترین مطالب
+     * علمی/خبری برای پرکردن ستون انتخاب می‌شوند.
+     */
     $featuredSide = array_values(array_filter(
         getPosts(['featured' => 1, 'limit' => 8]),
         static fn(array $p): bool => (int)$p['id'] !== $heroId
     ));
+    $usedIds = [$heroId];
+    foreach ($featuredSide as $side) $usedIds[] = (int)$side['id'];
+
+    if (count($featuredSide) < 3) {
+        foreach ($recentPool as $candidate) {
+            $candidateId = (int)($candidate['id'] ?? 0);
+            if ($candidateId < 1 || in_array($candidateId, $usedIds, true)) continue;
+            $featuredSide[] = $candidate;
+            $usedIds[] = $candidateId;
+            if (count($featuredSide) >= 3) break;
+        }
+    }
     $featuredSide = array_slice($featuredSide, 0, 3);
 
-    // تازه‌ترین مطالب از همان pool مشترک خوانده می‌شوند تا تکرار کمتر و درخواست‌ها سبک‌تر باشد.
-    $recentPool = getPosts(['limit' => 12]);    // ─── ۲. تازه‌ترین مطالب (ترکیبی) ─────────────────────────────────────
-    $usedIds = array_merge([$heroId], array_map(static fn(array $p): int => (int)$p['id'], $featuredSide));
+    // ─── ۲. بخش‌های محتوایی — هر مطلب در صفحهٔ اول فقط یک‌بار ────────────
     $latest = array_slice(array_values(array_filter(
         $recentPool,
         static fn(array $p): bool => !in_array((int)$p['id'], $usedIds, true)
     )), 0, 6);
 
-    // ─── ۳. بخش‌های محتوایی ──────────────────────────────────────────────
-    $newsPool = array_values(array_filter(getPosts(['type' => 'news', 'limit' => 5]), static fn(array $p): bool => (int)$p['id'] !== $heroId));
-    $latestArticles = getPosts(['type' => 'article', 'limit' => 4]);
-    $latestReports = getPosts(['type' => 'report', 'limit' => 3]);
-    $latestResearch = getPosts(['type' => 'research', 'limit' => 3]);
+    $excludeHomeIds = static fn(array $p): bool => !in_array((int)($p['id'] ?? 0), $usedIds, true);
+
+    $newsPool = array_values(array_filter(
+        getPosts(['type' => 'news', 'limit' => 6]),
+        $excludeHomeIds
+    ));
+    $latestArticles = array_values(array_filter(
+        getPosts(['type' => 'article', 'limit' => 5]),
+        $excludeHomeIds
+    ));
+    $latestReports = array_values(array_filter(
+        getPosts(['type' => 'report', 'limit' => 4]),
+        $excludeHomeIds
+    ));
+    $latestResearch = array_values(array_filter(
+        getPosts(['type' => 'research', 'limit' => 4]),
+        $excludeHomeIds
+    ));
 
     $featuredTopics = [];
     try {
@@ -276,7 +306,7 @@ $homeHasAnyContent =
 <?php endif; ?>
 
 <?php if (!empty($homeSections['hero']) && $heroPost): ?>
-<!-- ─── ۲. مطلب شاخص + دو مطلب کناری (چیدمان رسانه‌ای) ───────────────────── -->
+<!-- ─── ۲. ویترین اصلی: یک مطلب شاخص + «در یک نگاه» ─────────────────────── -->
 <section class="jhd-section" aria-label="مطلب شاخص">
     <div class="container">
         <div class="row g-4">
@@ -285,11 +315,11 @@ $homeHasAnyContent =
             </div>
             <div class="col-lg-4">
                 <div class="jhd-side-card h-100">
-                    <h3><i class="bi bi-stars"></i> برگزیدهٔ سردبیر</h3>
+                    <h3><i class="bi bi-stars"></i> در یک نگاه</h3>
                     <?php if (!empty($homeSections['editor_picks']) && $featuredSide): ?>
                         <?php foreach ($featuredSide as $side): ?><?= renderMiniItem($side) ?><?php endforeach; ?>
                     <?php else: ?>
-                        <p class="text-muted small mb-0">مطلب دیگری برای نمایش ثبت نشده است.</p>
+                        <p class="text-muted small mb-0">هنوز مطلب تازه‌ای برای نمایش در این ستون ثبت نشده است.</p>
                     <?php endif; ?>
                 </div>
             </div>
@@ -316,7 +346,7 @@ $homeHasAnyContent =
 <?php endif; ?>
 
 <?php if (!empty($homeSections['latest']) && $latest): ?>
-<!-- ─── ۳. تازه‌ترین مطالب ───────────────────────────────────────────────── -->
+<!-- ─── ۳. جریان تازه‌ها (اختیاری؛ پیش‌فرض خاموش تا از تکرار جلوگیری شود) ── -->
 <section class="jhd-home-group jhd-home-group--paper" id="latest-section">
     <div class="container">
         <?= jhd_section_head([
