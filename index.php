@@ -69,13 +69,14 @@ if ($__p !== '') {
         header('Content-Type: text/html; charset=utf-8');
         echo '<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8">'
             . '<meta name="viewport" content="width=device-width"><title>۴۰۴ — صفحه پیدا نشد</title>'
-            . '<style>body{font-family:Tahoma,system-ui,sans-serif;background:#f6f7f4;color:#182d39;margin:0;display:flex;min-height:100vh;align-items:center;justify-content:center}'
-            . 'main{max-width:520px;padding:32px;background:#fff;border:1px solid #e2e6e2;border-radius:16px;text-align:center;line-height:2}'
-            . 'a{color:#245c4c}h1{font-size:1.4rem;margin:.4rem 0}</style>'
-            . '<main><div style="font-size:3rem;font-weight:900;color:#245c4c">۴۰۴</div>'
-            . '<h1>صفحه مورد نظر یافت نشد</h1><p class="text-muted">نشانی وارد شده معتبر نیست.</p>'
-            . '<p><a href="' . htmlspecialchars(url(), ENT_QUOTES, 'UTF-8') . '">بازگشت به صفحه اصلی</a></p></main></html>';
-        exit;
+            . '<body class="jhd-public-site"><main class="jhd-section" style="min-height:100vh;display:grid;place-items:center;padding-block:3rem">'
+            . '<div class="jhd-empty-state" style="width:min(100%,520px);padding:2rem 1.25rem">'
+            . '<i class="bi bi-compass" aria-hidden="true" style="font-size:1.4rem;width:52px;height:52px"></i>'
+            . '<div style="font-size:2.7rem;font-weight:900;line-height:1;color:var(--jhd-green)">۴۰۴</div>'
+            . '<h4 style="font-size:1.15rem">صفحه مورد نظر یافت نشد</h4>'
+            . '<p>نشانی وارد شده معتبر نیست یا صفحه جابه‌جا شده است.</p>'
+            . '<a href="' . htmlspecialchars(url(), ENT_QUOTES, 'UTF-8') . '" class="btn btn-primary">بازگشت به صفحه اصلی</a>'
+            . '</div></main></body></html>';        exit;
     }
     foreach ($__resolved['get'] as $__k => $__v) $_GET[$__k] ??= $__v;
     if (!empty($__resolved['expected_type'])) $_GET['expected_type'] = $__resolved['expected_type'];

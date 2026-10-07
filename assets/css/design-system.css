@@ -1855,8 +1855,8 @@ html[data-theme="dark"] .btn-outline-primary:hover { color: #0d241b; }
 .btn-outline-secondary { color: var(--jhd-muted); border-color: var(--jhd-border-strong); }
 .btn-outline-secondary:hover { background: var(--jhd-soft); color: var(--jhd-ink); border-color: var(--jhd-border-strong); }
 .btn-light { background: var(--jhd-surface); border-color: var(--jhd-border); color: var(--jhd-ink); }
-.btn-gold, .btn.btn-gold { background: var(--jhd-gold); border-color: var(--jhd-gold); color: #fff; }
-.btn-gold:hover { background: var(--jhd-gold-hover); border-color: var(--jhd-gold-hover); color: #fff; }
+.btn-gold, .btn.btn-gold { background: var(--jhd-gold); border-color: var(--jhd-gold); color: #14231b; }
+.btn-gold:hover { background: var(--jhd-gold-hover); border-color: var(--jhd-gold-hover); color: #14231b; }
 .btn-green { background: var(--jhd-green); border-color: var(--jhd-green); color: #fff; }
 .btn-green:hover { background: var(--jhd-green-hover); color: #fff; }
 .btn-lg { padding: .55rem 1.2rem; font-size: .95rem; }
@@ -2923,7 +2923,7 @@ body.jhd-pdf-locked { overflow: hidden; }
 
 /* ── حالت فوکوس روشن (دسترس‌پذیری) ──────────────────────────────────────── */
 :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
-  outline: 2px solid var(--jhd-gold);
+  outline: 2px solid var(--jhd-green);
   outline-offset: 2px;
   border-radius: 6px;
 }
@@ -3209,4 +3209,30 @@ html { scroll-behavior: smooth; }
   .jhd-card--noimage:not(.jhd-card--featured) .jhd-card-media__mark {
     display: none;
   }
+}
+
+
+/* ── Polish نهایی فوتر و نقاط تراکم ─────────────────────────────────────── */
+.main-footer .container { max-width: 1180px; }
+.main-footer .footer-top .row { align-items: flex-start; }
+.main-footer .footer-text { max-width: 42ch; }
+.main-footer .footer-title { position: relative; padding-inline-start: .65rem; }
+.main-footer .footer-title::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  top: .2em;
+  bottom: .2em;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--jhd-gold);
+}
+.main-footer .footer-links a,
+.main-footer .footer-contact li { min-height: 30px; }
+@media (max-width: 575.98px) {
+  .main-footer { margin-top: 1.6rem; }
+  .main-footer .footer-top { padding-block: 1.4rem 1rem; }
+  .main-footer .footer-links a,
+  .main-footer .footer-contact li { min-height: 34px; }
+  .main-footer .footer-text { max-width: none; }
 }
