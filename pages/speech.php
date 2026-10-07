@@ -15,7 +15,7 @@ $post = $slug ? getPostBySlug($slug) : null;
 if (!$post || $post['post_type'] !== 'speech') {
     http_response_code(404);
     $pageTitle = 'سخنرانی یافت نشد';
-    $pageDesc = 'سخنرانی درخواستی در آرشیو مدرسه مدرسه جامعه‌الهدی در دسترس نیست.';
+    $pageDesc = 'سخنرانی درخواستی در آرشیو مدرسه جامعه‌الهدی در دسترس نیست.';
     require_once __DIR__ . '/../includes/header.php';
     echo '<div class="container py-5 text-center"><h2>سخنرانی مورد نظر یافت نشد</h2><a href="' . siteUrl('speeches') . '" class="btn btn-primary mt-3">بازگشت به سخنرانی‌ها</a></div>';
     require_once __DIR__ . '/../includes/footer.php';
