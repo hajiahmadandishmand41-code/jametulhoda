@@ -375,6 +375,48 @@ $queryRoute = (isset($_GET['p']) && is_string($_GET['p'])) ? trim($_GET['p']) : 
 // `?p=home` maps to index.php, which itself dispatches `?p=`; resolving it here
 // would recurse. The home route is simply the homepage.
 if ($queryRoute === 'home' || $queryRoute === '/') { $queryRoute = ''; unset($_GET['p']); }
+
+/*
+ * Canonicalize legacy listing URLs that carry a detail slug in the query
+ * string, e.g. /articles?slug=... or /news?slug=....
+ *
+ * Older links/search results used the listing prefix plus ?slug=.  PHP decodes
+ * query parameters once, so a value that arrived as %25D9... is still
+ * percent-encoded at this point.  Decode at most two layers, then let the
+ * single central url() helper perform the only output encoding.  This turns
+ * legacy/double-encoded URLs into one permanent canonical detail URL instead
+ * of rendering a listing page with a stray slug parameter.
+ */
+if ($queryRoute === '' && isset($_GET['slug']) && is_string($_GET['slug'])) {
+    $legacyDetailRoutes = [
+        'articles'              => 'article',
+        'news'                  => 'news',
+        'research'              => 'research',
+        'reports'               => 'report',
+        'announcements'         => 'announcement',
+        'programs'              => 'program',
+        'religious-activities'  => 'religious',
+        'events'                 => 'event',
+        'speeches'               => 'speech',
+        'qa'                     => 'qa',
+    ];
+    $listingPrefix = trim($path, '/');
+    if (isset($legacyDetailRoutes[$listingPrefix])) {
+        $legacySlug = trim((string)$_GET['slug']);
+        for ($i = 0; $i < 2; $i++) {
+            $decoded = rawurldecode($legacySlug);
+            if ($decoded === $legacySlug) break;
+            $legacySlug = $decoded;
+        }
+        $legacySlug = trim($legacySlug, '/');
+        if ($legacySlug !== '') {
+            $canonicalLegacyUrl = url($legacyDetailRoutes[$listingPrefix], ['slug' => $legacySlug]);
+            header('Location: ' . $canonicalLegacyUrl, true, 301);
+            exit;
+        }
+    }
+}
+
 $resolved = null;
 if ($queryRoute !== '') {
     $resolved = jhd_resolve_query($queryRoute, $_GET);
