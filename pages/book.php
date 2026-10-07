@@ -86,6 +86,7 @@ require __DIR__.'/../includes/header.php';
 <?php else: ?>
 <div class="p-4 border rounded-4 text-muted small">برای این کتاب تصویر جلد ثبت نشده است.</div>
 <?php endif; ?>
+<?php $bookDetailUrl = bookUrl($book); ?>
 <div class="mt-4 d-grid gap-2">
 <?php if(!empty($book['pdf_file'])): ?>
 <a href="<?= sanitize(documentReaderUrl('book', (string)$book['slug'])) ?>" class="btn btn-primary"><i class="bi bi-book ms-2"></i>مطالعه کتاب</a>
