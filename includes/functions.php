@@ -1908,7 +1908,7 @@ function jhd_contextual_link_targets(): array {
                    ) AS linked_count
             FROM topics t
             WHERE t.is_active = 1
-            ORDER BY CHAR_LENGTH(t.name) DESC, t.sort_order ASC, t.id ASC
+            ORDER BY LENGTH(t.name) DESC, t.sort_order ASC, t.id ASC
         ";
         $stmt = $db->query($topicSql);
         foreach ($stmt->fetchAll() as $row) {
@@ -1998,65 +1998,72 @@ function jhd_add_contextual_internal_links(string $html, int $currentPostId = 0,
     $linkedTargetKeys = [];
     $linkedCount = 0;
     $blockedTags = ['a'=>true,'h1'=>true,'h2'=>true,'h3'=>true,'h4'=>true,'h5'=>true,'h6'=>true,'code'=>true,'pre'=>true,'script'=>true,'style'=>true,'button'=>true,'blockquote'=>true];
-    $textNodes = [];
-    $walk = function(DOMNode $node) use (&$walk,&$textNodes,$blockedTags): void {
-        if ($node instanceof DOMElement && isset($blockedTags[strtolower($node->tagName)])) return;
-        foreach (iterator_to_array($node->childNodes) as $child) {
-            if ($child instanceof DOMText) {
-                $textNodes[] = $child;
-            } elseif ($child instanceof DOMElement || $child->hasChildNodes()) {
-                $walk($child);
+
+    // Re-scan after every insertion so multiple different concepts in the same
+    // paragraph can receive links, while each target still appears only once.
+    while ($linkedCount < $maxLinks) {
+        $textNodes = [];
+        $walk = function(DOMNode $node) use (&$walk,&$textNodes,$blockedTags): void {
+            if ($node instanceof DOMElement && isset($blockedTags[strtolower($node->tagName)])) return;
+            foreach (iterator_to_array($node->childNodes) as $child) {
+                if ($child instanceof DOMText) {
+                    $textNodes[] = $child;
+                } elseif ($child instanceof DOMElement || $child->hasChildNodes()) {
+                    $walk($child);
+                }
             }
-        }
-    };
-    $walk($root);
+        };
+        $walk($root);
 
-    foreach ($textNodes as $textNode) {
-        if ($linkedCount >= $maxLinks) break;
-        $text = $textNode->nodeValue;
-        if (!is_string($text) || trim($text) === '') continue;
-
-        $parent = $textNode->parentNode;
-        if (!$parent || ($parent instanceof DOMElement && isset($blockedTags[strtolower($parent->tagName)]))) continue;
-
-        foreach ($targets as $target) {
+        $linkedThisPass = false;
+        foreach ($textNodes as $textNode) {
             if ($linkedCount >= $maxLinks) break;
-            $label = trim((string)($target['label'] ?? ''));
-            $url = trim((string)($target['url'] ?? ''));
-            if ($label === '' || $url === '') continue;
+            $text = $textNode->nodeValue;
+            if (!is_string($text) || trim($text) === '') continue;
 
-            $targetKey = ($target['kind'] ?? '') . '|' . $label;
-            if (isset($linkedTargetKeys[$targetKey])) continue;
+            $parent = $textNode->parentNode;
+            if (!$parent || ($parent instanceof DOMElement && isset($blockedTags[strtolower($parent->tagName)]))) continue;
 
-            $pattern = '~' . preg_quote($label, '~') . '~u';
-            if (!preg_match($pattern, $text, $m, PREG_OFFSET_CAPTURE)) continue;
+            foreach ($targets as $target) {
+                if ($linkedCount >= $maxLinks) break;
+                $label = trim((string)($target['label'] ?? ''));
+                $url = trim((string)($target['url'] ?? ''));
+                if ($label === '' || $url === '') continue;
 
-            $offset = (int)$m[0][1];
-            $matchText = (string)$m[0][0];
-            if ($matchText === '') continue;
+                $targetKey = ($target['kind'] ?? '') . '|' . $label;
+                if (isset($linkedTargetKeys[$targetKey])) continue;
 
-            $before = substr($text, 0, $offset);
-            $after = substr($text, $offset + strlen($matchText));
-            if ($before === '' && $after === '') continue;
+                $pattern = '~' . preg_quote($label, '~') . '~u';
+                if (!preg_match($pattern, $text, $m, PREG_OFFSET_CAPTURE)) continue;
 
-            $fragment = $dom->createDocumentFragment();
-            if ($before !== '') $fragment->appendChild($dom->createTextNode($before));
-            $a = $dom->createElement('a');
-            $a->setAttribute('href', $url);
-            $a->setAttribute('class', 'jhd-context-link');
-            $a->setAttribute('title', (string)($target['hint'] ?? $label));
-            $a->appendChild($dom->createTextNode($matchText));
-            $fragment->appendChild($a);
-            if ($after !== '') $fragment->appendChild($dom->createTextNode($after));
+                $offset = (int)$m[0][1];
+                $matchText = (string)$m[0][0];
+                if ($matchText === '') continue;
 
-            $parent->replaceChild($fragment, $textNode);
-            $linkedTargetKeys[$targetKey] = true;
-            $linkedCount++;
-            break;
+                $before = substr($text, 0, $offset);
+                $after = substr($text, $offset + strlen($matchText));
+                $fragment = $dom->createDocumentFragment();
+                if ($before !== '') $fragment->appendChild($dom->createTextNode($before));
+
+                $a = $dom->createElement('a');
+                $a->setAttribute('href', $url);
+                $a->setAttribute('class', 'jhd-context-link');
+                $a->setAttribute('title', (string)($target['hint'] ?? $label));
+                $a->appendChild($dom->createTextNode($matchText));
+                $fragment->appendChild($a);
+
+                if ($after !== '') $fragment->appendChild($dom->createTextNode($after));
+                $parent->replaceChild($fragment, $textNode);
+
+                $linkedTargetKeys[$targetKey] = true;
+                $linkedCount++;
+                $linkedThisPass = true;
+                break;
+            }
+            if ($linkedThisPass) break;
         }
-        // The text node was replaced; the remaining tail is inside a fresh
-        // text node. It will be discovered on the next DOM pass only, so this
-        // node ends here intentionally to keep the operation deterministic.
+
+        if (!$linkedThisPass) break;
     }
 
     $out = '';
