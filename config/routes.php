@@ -44,6 +44,7 @@ return [
         '/reports'              => 'pages/reports.php',
         '/research'             => 'pages/research.php',
         '/search'               => 'pages/search.php',
+        '/read'                 => 'pages/reader.php',
         '/speech'               => 'pages/speech.php',
         '/speeches'             => 'pages/speeches.php',
         '/topic'                => 'pages/topic.php',
