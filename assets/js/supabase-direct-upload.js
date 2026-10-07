@@ -113,6 +113,10 @@
       var next = parseInt(patch.headers.get('Upload-Offset') || '', 10);
       if (!Number.isFinite(next) || next <= offset) throw new Error('Storage آفست معتبر برنگرداند.');
       offset = next;
+      if (status) {
+        var percent = file.size > 0 ? Math.min(100, Math.round((offset / file.size) * 100)) : 100;
+        status.textContent = 'در حال آپلود مستقیم «' + file.name + '» — ' + percent + '%';
+      }
     }
   }
 
