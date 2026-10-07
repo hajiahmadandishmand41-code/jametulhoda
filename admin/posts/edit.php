@@ -603,7 +603,7 @@ $csrfToken        = generateCsrfToken();
                     <div class="form-check mb-3">
                         <input class="form-check-input" type="checkbox" name="is_featured" id="is_featured_e" value="1"
                                <?= $post['is_featured'] ? 'checked' : '' ?>>
-                        <label class="form-check-label" for="is_featured_e">نمایش در اسلایدر (برجسته)</label>
+                        <label class="form-check-label" for="is_featured_e">برگزیدهٔ سردبیر</label>
                     </div>
                     <div class="d-grid gap-2">
                         <button type="submit" class="btn btn-success"><i class="bi bi-save ms-1"></i>ذخیره تغییرات</button>
