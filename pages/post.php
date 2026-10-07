@@ -199,7 +199,6 @@ require_once __DIR__ . '/../includes/header.php';
         <div class="jhd-meta-bar">
             <span><i class="bi bi-calendar3"></i><?= persianDate($post['published_at'] ?? $post['created_at']) ?></span>
             <?php if (!empty($post['author_name'])): ?><span><i class="bi bi-person"></i><?= sanitize($post['author_name']) ?></span><?php endif; ?>
-            <?php if (!empty($post['views_count'])): ?><span><i class="bi bi-eye"></i><?= number_format((int)$post['views_count']) ?> بازدید</span><?php endif; ?>
             <?php if ($postVideos): ?><span><i class="bi bi-camera-video"></i><?= count($postVideos) ?> ویدیو</span><?php endif; ?>
             <?php if ($postAudios): ?><span><i class="bi bi-headphones"></i><?= count($postAudios) ?> صوت</span><?php endif; ?>
         </div>
