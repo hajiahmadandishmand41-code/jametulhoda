@@ -675,7 +675,9 @@ function renderTopicCard(array $topic, array $opts = []): string {
     ];
     return jhd_card($card, [
         'col'    => array_key_exists('col', $opts) ? (string)$opts['col'] : 'col-12 col-sm-6 col-lg-3',
-        'class'  => 'jhd-card--topic' . (!empty($opts['class']) ? ' ' . trim((string)$opts['class']) : ''),
+        'class'  => 'jhd-card--topic'
+            . ($minimal ? ' jhd-card--topic-home' : '')
+            . (!empty($opts['class']) ? ' ' . trim((string)$opts['class']) : ''),
         'eager'  => !empty($opts['eager']),
     ]);
 }
