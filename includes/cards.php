@@ -604,6 +604,7 @@ function renderBookCard(array $book, array $opts = []): string {
 
 /** کارت درس — همان کارت استاندارد. */
 function renderLessonCard(array $lesson, array $opts = []): string {
+    $minimal = !empty($opts['minimal']);
     $lessonNo = (int)($lesson['lesson_number'] ?? 0);
     $collection = trim((string)($lesson['collection_title'] ?? $lesson['subject'] ?? ''));
     $meta = [];
