@@ -18,7 +18,8 @@ $topicPage = max(1, (int)($_GET['page'] ?? 1));
 $topicLimit = 12;
 $topicTotal = count($allTopicRoots);
 $topicPages = max(1, (int)ceil($topicTotal / $topicLimit));
-if ($topicPage > $topicPages) $topicPage = $topicPages;
+jhd_validate_pagination($topicPage, $topicTotal, $topicLimit, 'موضوعات', url('topics'), 'اطلس موضوعات');
+$noindexSeo = ($topicTotal === 0);
 $tree = array_slice($allTopicRoots, ($topicPage - 1) * $topicLimit, $topicLimit);
 $breadcrumbs = [
     ['name' => 'صفحه اصلی', 'url' => url()],
