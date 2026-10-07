@@ -359,7 +359,18 @@ require_once __DIR__ . '/../includes/header.php';
 
     <div class="jhd-side-card">
         <h3><i class="bi bi-newspaper"></i> تازه‌های مدرسه</h3>
-        <?php $sideNews = getPosts(['type' => 'report', 'limit' => 3]); if (empty($sideNews)) $sideNews = getPosts(['type' => 'news', 'limit' => 3]); $sideLatest = getPosts(['type' => 'news', 'limit' => 3]); $sideCombined = array_merge($sideNews, $sideLatest); ?>
+        <?php
+        $sidePool = array_merge(
+            getPosts(['type' => 'news', 'limit' => 3]),
+            getPosts(['type' => 'report', 'limit' => 3])
+        );
+        usort($sidePool, static fn(array $a, array $b): int => strcmp(
+            (string)($b['published_at'] ?? $b['created_at'] ?? ''),
+            (string)($a['published_at'] ?? $a['created_at'] ?? '')
+        ));
+        $sideAccepted = [];
+        $sideCombined = jhd_homepage_unique_posts($sidePool, $sideAccepted, 5);
+        ?>
         <ul class="jhd-side-list">
         <?php foreach (array_slice($sideCombined, 0, 5) as $sn): ?>
             <li><a href="<?= postUrl($sn) ?>"><?= sanitize(mb_strimwidth($sn['title'], 0, 60, '...')) ?></a><small><?= persianDate($sn['published_at'] ?? $sn['created_at']) ?></small></li>
