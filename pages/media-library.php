@@ -96,7 +96,12 @@ require_once __DIR__ . '/../includes/header.php';
     <?php else: ?>
     <?= jhd_grid_open() ?>
       <?php foreach ($items as $i => $item):
-          $itemUrl = $item['target'] === 'lesson' ? lessonUrl($item['slug']) : postUrl($item['slug']);
+          $itemUrl = $item['target'] === 'lesson'
+              ? lessonUrl($item['slug'])
+              : postUrl([
+                  'slug' => (string)$item['slug'],
+                  'post_type' => (string)($item['post_type'] ?? ''),
+              ]);
           // همان کارت رسانه‌ای سراسری؛ برای صوت، پخش‌کننده داخل بدنهٔ کارت می‌آید
           // تا شنیدن بدون ترک صفحه ممکن باشد و طراحی هم یکسان بماند.
           $player = $kind === 'audio'
