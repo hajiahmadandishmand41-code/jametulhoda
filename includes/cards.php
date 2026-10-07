@@ -237,6 +237,9 @@ function jhd_card_gallery(array $images, string $title, string $badge = '', bool
         . '</script>';
     return $html;
 }
+
+/** حافظهٔ تصاویر گالری هر مطلب در طول یک درخواست. */
+function &jhd_post_images_cache(): array {
     static $cache = [];
     return $cache;
 }
