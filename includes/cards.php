@@ -716,7 +716,7 @@ function renderDocumentCard(array $doc, array $opts = []): string {
         'image'       => (string)($doc['thumbnail'] ?? ''),
         'badge'       => strtoupper((string)($doc['ext'] ?? 'PDF')),
         'meta'        => (array)($doc['meta'] ?? []),
-        'cta'         => (string)($opts['cta'] ?? 'مطالعه آنلاین'),
+        'cta'         => (string)($opts['cta'] ?? 'مطالعه سند'),
         'has_pdf'     => true,
     ];
     return jhd_card($card, ['col' => array_key_exists('col', $opts) ? (string)$opts['col'] : JHD_CARD_COL]);
