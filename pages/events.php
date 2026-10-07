@@ -57,6 +57,8 @@ if ($db !== null) {
 }
 
 $pages = (int)ceil($total / $limit);
+jhd_validate_pagination($page, $total, $limit, 'رویدادها', url('events'), 'رویدادها');
+$noindexSeo = ($total === 0);
 
 $breadcrumbs = [
     ['name' => 'صفحه اصلی', 'url' => url()],
