@@ -3,7 +3,7 @@
  * news.php — صفحه اخبار مدرسه علمیه جامعه‌الهدی
  */
 $pageTitle = 'اخبار';
-$pageDesc = 'اخبار، رویدادها، اطلاعیه‌ها و گزارش‌های جاری مدرسه مدرسه جامعه‌الهدی';
+$pageDesc = 'اخبار، رویدادها، اطلاعیه‌ها و گزارش‌های جاری مدرسه جامعه‌الهدی';
 require_once __DIR__ . '/../includes/header.php';
 
 $search = trim($_GET['q'] ?? '');
@@ -17,6 +17,9 @@ if ($search) $opts['search'] = $search;
 $posts = getPosts($opts);
 $total = countPosts(array_merge(['type' => 'news'], $search ? ['search' => $search] : []));
 $pages = (int)ceil($total / $limit);
+jhd_validate_pagination($page, $total, $limit, 'اخبار', url('news'), 'اخبار');
+$noindexSeo = ($total === 0);
+
 ?>
 
 <div class="breadcrumb-bar">
@@ -36,7 +39,7 @@ $pages = (int)ceil($total / $limit);
     'eyebrow' => 'اطلاع‌رسانی و رویدادها',
     'icon' => 'bi-newspaper',
     'title' => 'اخبار مدرسه',
-    'lead' => 'تازه‌ترین اخبار، اطلاعیه‌ها و رویدادهای جاری مدرسه علمیه مدرسه مدرسه جامعه‌الهدی',
+    'lead' => 'تازه‌ترین اخبار، اطلاعیه‌ها و رویدادهای جاری مدرسه علمیه مدرسه جامعه‌الهدی',
 ]) ?>
 
         <!-- جستجو در اخبار -->
