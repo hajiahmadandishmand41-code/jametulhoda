@@ -18,7 +18,6 @@ if (APP_ENV !== 'production' && APP_ENV !== 'local') {
         '/account',
         '/profile',
         '/password-change',
-        '/search',
         '/install',
         '/install.php',
         '/php/',
@@ -31,7 +30,6 @@ if (APP_ENV !== 'production' && APP_ENV !== 'local') {
         '/pages/',
         '/storage/',
         '/tests/',
-        '/uploads/',
     ];
     foreach ($privatePaths as $path) {
         echo "Disallow: {$base}{$path}\n";
