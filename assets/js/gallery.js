@@ -21,6 +21,7 @@
         if (!items.length) return;
 
         var lightbox = gallery.querySelector('[data-jhd-lightbox]');
+        if (!lightbox) return;
         var image = lightbox.querySelector('[data-jhd-lightbox-image]');
         var caption = lightbox.querySelector('[data-jhd-lightbox-caption]');
         var counter = lightbox.querySelector('[data-jhd-lightbox-counter]');
@@ -59,7 +60,7 @@
             lightbox.hidden = false;
             document.body.style.overflow = 'hidden';
             show(index);
-            var closeButton = lightbox.querySelector('[data-jhd-lightbox-close]');
+            var closeButton = lightbox.querySelector('button[data-jhd-lightbox-close]');
             if (closeButton) closeButton.focus();
         }
 
@@ -83,9 +84,16 @@
 
         document.addEventListener('keydown', function (event) {
             if (lightbox.hidden) return;
-            if (event.key === 'Escape') { close(); }
-            else if (event.key === 'ArrowLeft') { show(current + 1); }   // RTL: چپ = بعدی
-            else if (event.key === 'ArrowRight') { show(current - 1); } // RTL: راست = قبلی
+            if (event.key === 'Escape') { event.preventDefault(); close(); return; }
+            if (event.key === 'ArrowLeft') { event.preventDefault(); show(current + 1); return; }   // RTL: چپ = بعدی
+            if (event.key === 'ArrowRight') { event.preventDefault(); show(current - 1); return; }
+            if (event.key !== 'Tab') return;
+            var focusable = Array.prototype.slice.call(lightbox.querySelectorAll('button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'))
+                .filter(function (el) { return el.getClientRects().length > 0; });
+            if (!focusable.length) return;
+            var first = focusable[0], last = focusable[focusable.length - 1];
+            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
         });
 
         // سوایپ موبایل
