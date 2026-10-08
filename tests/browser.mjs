@@ -10,6 +10,7 @@ try {
   page.on('pageerror',e=>errors.push(String(e)));
   page.on('response',r=>{if(r.status()>=400) errors.push(r.status()+' '+r.url())});
   await page.goto(base,{waitUntil:'networkidle'});
+  assert.equal(await page.locator('html').getAttribute('data-theme'),'light','first visit defaults to light theme');
   await page.screenshot({path:'test-results/home-desktop.png',fullPage:true});
 
   const homeHero=page.locator('.jhd-home-hero');
@@ -33,7 +34,7 @@ try {
   assert.ok(homeSearchFontSize>=16,'homepage search avoids iOS input zoom on phones');
 
   const viewportAudit=[];
-  for (const width of [360,390,414,768,992,1024,1280,1440]) {
+  for (const width of [320,360,375,390,430,768,992,1024,1280,1440]) {
     await page.setViewportSize({width,height:900});
     const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth);
     const navVisible=await page.locator('.jhd-navbar-desktop').isVisible();
