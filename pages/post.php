@@ -271,34 +271,25 @@ require_once __DIR__ . '/../includes/header.php';
     <?php endif; ?>
 
     <?php if ($postDocuments): ?>
-    <section class="mt-4" aria-label="فایل‌های تکمیلی">
-        <h2 class="h6"><i class="bi bi-paperclip ms-1 text-gold"></i> فایل‌های تکمیلی</h2>
+    <section class="jhd-attachments" aria-label="فایل‌های تکمیلی">
+        <div class="jhd-attachments__head">
+            <h2 class="jhd-attachments__title"><i class="bi bi-paperclip" aria-hidden="true"></i>فایل‌های تکمیلی</h2>
+            <p class="jhd-attachments__lead">جزوه‌ها و اسناد مرتبط با این محتوا</p>
+        </div>
         <div class="jhd-files">
         <?php foreach ($postDocuments as $file): ?>
             <?php
             $fileTitle = (string)($file['title'] ?: basename((string)$file['file_path']));
             $isPdf = (bool)preg_match('~\.pdf$~i', (string)$file['file_path']);
             $readerHref = $isPdf ? documentReaderUrl('post', (string)$post['slug'], (int)($file['id'] ?? 0)) : '';
-            echo jhd_file_row($fileTitle, imgUrl((string)$file['file_path']), '', 'bi-file-earmark-arrow-down', $isPdf ? ['reader_target' => $readerHref] : []);
+            $fileSize = (string)($file['file_size'] ?? ($file['size'] ?? ''));
+            echo jhd_file_row($fileTitle, imgUrl((string)$file['file_path']), $fileSize, 'bi-file-earmark', $isPdf ? ['reader_target' => $readerHref] : []);
             ?>
         <?php endforeach; ?>
         </div>
-        <?php
-        // PDFهای پیوست در صفحهٔ مطلب رندر نمی‌شوند؛ هر سند یک مقصد مطالعه دارد.
-        $pdfDocs = array_values(array_filter($postDocuments, static fn(array $f): bool => (bool)preg_match('~\.pdf$~i', (string)$f['file_path'])));
-        foreach ($pdfDocs as $pdfDoc):
-            $pdfTitle = (string)($pdfDoc['title'] ?: basename((string)$pdfDoc['file_path']));
-        ?>
-        <div class="jhd-file-row mt-3">
-            <i class="bi bi-file-earmark-pdf" aria-hidden="true"></i>
-            <span class="file-name"><?= sanitize($pdfTitle) ?></span>
-            <a class="btn btn-sm btn-outline-primary" href="<?= sanitize(documentReaderUrl('post', (string)$post['slug'], (int)($pdfDoc['id'] ?? 0))) ?>"><i class="bi bi-book ms-1"></i>مطالعه</a>
-        </div>
-        <?php endforeach; ?>
     </section>
-    <?php endif; ?>
 
-    <?php if ($extraImages): ?>
+    <?php if ($extraImages): ?>    <?php if ($extraImages): ?>
     <div class="mt-4">
         <?= jhd_gallery(array_map(static fn(array $i): array => ['path' => (string)$i['image_path'], 'alt' => (string)($i['alt_text'] ?? '')], $extraImages), ['title' => 'گالری تصاویر مطلب']) ?>
     </div>
