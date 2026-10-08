@@ -175,6 +175,7 @@ require_once __DIR__.'/../includes/header.php';
           <?php endforeach; ?>
         </div>
       </section>
+      <?php endif; ?>
 
       <?php if ($lessonAttachments): ?>
       <section class="jhd-attachments" aria-label="فایل‌های تکمیلی درس">
@@ -191,8 +192,9 @@ require_once __DIR__.'/../includes/header.php';
           <?php endforeach; ?>
         </div>
       </section>
+      <?php endif; ?>
 
-      <?php if (!empty($lesson['sources'])): ?>      <?php if (!empty($lesson['sources'])): ?>
+      <?php if (!empty($lesson['sources'])): ?>
       <section class="jhd-side-card mt-3">
         <h3><i class="bi bi-journal-text" aria-hidden="true"></i> منابع درس</h3>
         <div class="jhd-prose jhd-prose--sm" style="white-space:pre-wrap"><?= sanitize($lesson['sources']) ?></div>
