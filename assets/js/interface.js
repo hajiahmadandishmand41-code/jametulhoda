@@ -10,6 +10,8 @@ document.querySelectorAll('[data-theme-toggle]').forEach(button => {
     const update = () => {
         const isDark = document.documentElement.dataset.theme === 'dark';
         button.setAttribute('aria-pressed', String(isDark));
+        button.setAttribute('aria-label', isDark ? 'تغییر به حالت روشن' : 'تغییر به حالت تاریک');
+        button.setAttribute('title', isDark ? 'حالت روشن' : 'حالت تاریک');
         button.innerHTML = isDark ? '<i class="bi bi-sun"></i>' : '<i class="bi bi-moon"></i>';
     };
     update();
