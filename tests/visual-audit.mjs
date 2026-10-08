@@ -51,7 +51,7 @@ const LIST_ROUTES = [
   { path: 'search?q=قرآن', name: 'search' },
 ];
 
-const VIEWPORTS = [360, 390, 430, 768, 1024, 1280, 1440];
+const VIEWPORTS = [320, 360, 375, 390, 430, 768, 1024, 1280, 1440];
 
 /** In-page measurements collected on every audited page. */
 const METRICS_FN = () => {
