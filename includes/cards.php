@@ -186,7 +186,6 @@ function jhd_card_image_set(array $post): array {
         if ($path === '' || isset($seen[$path])) continue;
         $seen[$path] = true;
         $out[] = ['path' => $path, 'alt' => (string)($row['alt'] ?? $post['title'] ?? '')];
-        if (count($out) >= 5) break;
     }
     return $out;
 }
@@ -205,7 +204,7 @@ function jhd_card_gallery(array $images, string $title, string $badge = '', bool
         $src = imgUrl((string)$image['path']);
         if ($src === '') continue;
         $overlay = ($extra > 0 && $index === count($shown) - 1)
-            ? '<span class="jhd-card-gallery__more">+' . jhd_persian_digits($extra) . '</span>'
+            ? '<span class="jhd-card-gallery__more" aria-hidden="true"><strong>+' . jhd_persian_digits($extra) . '</strong><span>تصویر دیگر</span></span>'
             : '';
         $cells .= '<button type="button" class="jhd-gallery__cell jhd-card-gallery__cell" data-index="' . $index . '" aria-label="نمایش تصویر ' . jhd_persian_digits($index + 1) . ' از ' . jhd_persian_digits($count) . '">'
             . '<img src="' . sanitize($src) . '" alt="' . sanitize((string)($image['alt'] ?? $title)) . '"'
@@ -804,22 +803,31 @@ function jhd_pdf_reader(string $url, array $opts = []): string {
 
 /** ردیف فایل/دانلود. */
 function jhd_file_row(string $label, string $url, string $size = '', string $icon = 'bi-file-earmark', array $opts = []): string {
-    $isPdf = (bool)($opts['pdf'] ?? preg_match('~\.pdf($|\?)~i', $url));
+    $path = (string)(parse_url($url, PHP_URL_PATH) ?? $url);
+    $ext = strtolower((string)pathinfo($path, PATHINFO_EXTENSION));
+    $isPdf = (bool)($opts['pdf'] ?? ($ext === 'pdf'));
     $readerTarget = trim((string)($opts['reader_target'] ?? ''));
-    $read = ($isPdf && $readerTarget !== '')
-        ? '<a class="btn btn-sm btn-outline-primary" href="' . sanitize($readerTarget) . '"><i class="bi bi-book ms-1"></i>مطالعه</a>'
-        : '';
+    $type = match ($ext) {
+        'pdf' => 'PDF',
+        'doc', 'docx' => 'Word',
+        default => $ext !== '' ? strtoupper($ext) : 'فایل',
+    };
+    $typeIcon = match ($ext) {
+        'pdf' => 'bi-file-earmark-pdf',
+        'doc', 'docx' => 'bi-file-earmark-word',
+        default => $icon,
+    };
+    $actions = '';
     if ($isPdf && $readerTarget !== '') {
-        return '<div class="jhd-file-row"><i class="bi ' . sanitize($icon) . '" aria-hidden="true"></i>'
-            . '<span class="file-name">' . sanitize($label) . '</span>'
-            . ($size !== '' ? '<span class="file-size">' . sanitize($size) . '</span>' : '')
-            . $read . '</div>';
+        $actions .= '<a class="btn btn-sm btn-outline-primary" href="' . sanitize($readerTarget) . '"><i class="bi bi-book ms-1" aria-hidden="true"></i>مطالعه</a>';
     }
-    return '<div class="jhd-file-row"><i class="bi ' . sanitize($icon) . '" aria-hidden="true"></i>'
-        . '<span class="file-name">' . sanitize($label) . '</span>'
-        . ($size !== '' ? '<span class="file-size">' . sanitize($size) . '</span>' : '')
-        . '<a class="btn btn-sm btn-outline-primary" href="' . sanitize($url) . '" download><i class="bi bi-download ms-1"></i>دانلود</a>'
-        . '</div>';
+    $actions .= '<a class="btn btn-sm btn-outline-secondary" href="' . sanitize($url) . '" download><i class="bi bi-download ms-1" aria-hidden="true"></i>دانلود</a>';
+    return '<article class="jhd-file-row">'
+        . '<span class="jhd-file-row__icon" aria-hidden="true"><i class="bi ' . sanitize($typeIcon) . '"></i></span>'
+        . '<span class="jhd-file-row__body"><span class="jhd-file-row__title file-name">' . sanitize($label) . '</span>'
+        . '<span class="jhd-file-row__meta"><span class="jhd-file-row__type">' . sanitize($type) . '</span>'
+        . ($size !== '' ? '<span class="jhd-file-row__size file-size">' . sanitize($size) . '</span>' : '')
+        . '</span></span><span class="jhd-file-row__actions">' . $actions . '</span></article>';
 }
 
 /**
@@ -837,10 +845,10 @@ function jhd_gallery(array $images, array $opts = []): string {
     foreach ($images as $image) {
         if (is_array($image)) {
             $path = (string)($image['path'] ?? $image['image_path'] ?? '');
-            $alt  = (string)($image['alt'] ?? $image['alt_text'] ?? '');
+            $alt = (string)($image['alt'] ?? $image['alt_text'] ?? '');
         } else {
             $path = (string)$image;
-            $alt  = '';
+            $alt = '';
         }
         $src = imgUrl($path);
         if ($src === '') continue;
@@ -850,41 +858,33 @@ function jhd_gallery(array $images, array $opts = []): string {
 
     $title = (string)($opts['title'] ?? 'گالری تصاویر');
     $uid = 'jhdgal-' . substr(bin2hex(random_bytes(4)), 0, 8);
-    $html = '<section class="jhd-gallery" data-jhd-gallery="' . $uid . '" aria-label="' . sanitize($title) . '">';
+    $count = count($items);
+    $shown = array_slice($items, 0, 4);
+    $extra = max(0, $count - count($shown));
+
+    $html = '<section class="jhd-gallery jhd-gallery--' . count($shown) . '" data-jhd-gallery="' . $uid . '" aria-label="' . sanitize($title) . '">';
     $html .= '<div class="jhd-gallery__head">'
         . '<h2 class="jhd-gallery__title"><i class="bi bi-images ms-1" aria-hidden="true"></i>' . sanitize($title) . '</h2>'
-        . '<span class="jhd-gallery__count">' . jhd_persian_digits(count($items)) . ' تصویر</span>'
-        . '</div>';
-    $html .= '<div class="jhd-gallery__grid">';
-    foreach ($items as $index => $item) {
-        $html .= '<button type="button" class="jhd-gallery__cell" data-index="' . $index . '" aria-label="نمایش تصویر ' . jhd_persian_digits($index + 1) . '">'
-            . '<img src="' . sanitize($item['src']) . '" alt="' . sanitize($item['alt']) . '" loading="lazy" decoding="async">'
-            . '<span class="jhd-gallery__zoom" aria-hidden="true"><i class="bi bi-arrows-angle-expand"></i></span>'
-            . '</button>';
+        . '<span class="jhd-gallery__count">' . jhd_persian_digits($count) . ' تصویر</span>'
+        . '</div><div class="jhd-gallery__grid">';
+    foreach ($shown as $index => $item) {
+        $overlay = ($extra > 0 && $index === count($shown) - 1)
+            ? '<span class="jhd-gallery__more" aria-hidden="true"><strong>+' . jhd_persian_digits($extra) . '</strong><span>تصویر دیگر</span></span>'
+            : '';
+        $html .= '<button type="button" class="jhd-gallery__cell" data-index="' . $index . '" aria-label="نمایش تصویر ' . jhd_persian_digits($index + 1) . ' از ' . jhd_persian_digits($count) . '">'
+            . '<img src="' . sanitize($item['src']) . '" alt="' . sanitize($item['alt']) . '" loading="lazy" decoding="async" width="800" height="600">'
+            . $overlay . '<span class="jhd-gallery__zoom" aria-hidden="true"><i class="bi bi-arrows-angle-expand"></i></span></button>';
     }
     $html .= '</div>';
-
-    // لایت‌باکس: تنها در DOM ساخته می‌شود ولی تا زمانی که باز نشود مخفی است.
-    $html .= '<div class="jhd-lightbox" data-jhd-lightbox="' . $uid . '" role="dialog" aria-modal="true" aria-label="' . sanitize($title) . '" hidden>';
-    $html .= '<div class="jhd-lightbox__backdrop" data-jhd-lightbox-close></div>';
-    $html .= '<div class="jhd-lightbox__frame">';
-    $html .= '<div class="jhd-lightbox__top">'
-        . '<span class="jhd-lightbox__counter" data-jhd-lightbox-counter></span>'
-        . '<div class="jhd-lightbox__tools">'
-        . '<a class="jhd-lightbox__tool" data-jhd-lightbox-download href="' . sanitize($items[0]['src']) . '" download title="دانلود تصویر"><i class="bi bi-download" aria-hidden="true"></i></a>'
-        . '<button type="button" class="jhd-lightbox__tool" data-jhd-lightbox-close title="بستن" aria-label="بستن"><i class="bi bi-x-lg" aria-hidden="true"></i></button>'
-        . '</div></div>';
-    $html .= '<button type="button" class="jhd-lightbox__nav jhd-lightbox__nav--prev" data-jhd-lightbox-prev title="تصویر قبلی" aria-label="تصویر قبلی"><i class="bi bi-chevron-right" aria-hidden="true"></i></button>';
-    $html .= '<figure class="jhd-lightbox__figure">'
-        . '<img data-jhd-lightbox-image src="" alt="">'
-        . '<figcaption data-jhd-lightbox-caption></figcaption>'
-        . '</figure>';
-    $html .= '<button type="button" class="jhd-lightbox__nav jhd-lightbox__nav--next" data-jhd-lightbox-next title="تصویر بعدی" aria-label="تصویر بعدی"><i class="bi bi-chevron-left" aria-hidden="true"></i></button>';
-    $html .= '<div class="jhd-lightbox__thumbs" data-jhd-lightbox-thumbs></div>';
-    $html .= '</div></div>';
-    $html .= '</section>';
-
-    // دادهٔ تصاویر برای اسکریپت (JSON امن درون data attribute)
+    $html .= '<div class="jhd-lightbox" data-jhd-lightbox="' . $uid . '" role="dialog" aria-modal="true" aria-label="' . sanitize($title) . '" hidden>'
+        . '<div class="jhd-lightbox__backdrop" data-jhd-lightbox-close></div><div class="jhd-lightbox__frame">'
+        . '<div class="jhd-lightbox__top"><span class="jhd-lightbox__counter" data-jhd-lightbox-counter></span><div class="jhd-lightbox__tools">'
+        . '<a class="jhd-lightbox__tool" data-jhd-lightbox-download href="' . sanitize($items[0]['src']) . '" download title="دانلود تصویر" aria-label="دانلود تصویر"><i class="bi bi-download" aria-hidden="true"></i></a>'
+        . '<button type="button" class="jhd-lightbox__tool" data-jhd-lightbox-close title="بستن" aria-label="بستن"><i class="bi bi-x-lg" aria-hidden="true"></i></button></div></div>'
+        . '<button type="button" class="jhd-lightbox__nav jhd-lightbox__nav--prev" data-jhd-lightbox-prev title="تصویر قبلی" aria-label="تصویر قبلی"><i class="bi bi-chevron-right" aria-hidden="true"></i></button>'
+        . '<figure class="jhd-lightbox__figure"><img data-jhd-lightbox-image src="" alt=""><figcaption data-jhd-lightbox-caption></figcaption></figure>'
+        . '<button type="button" class="jhd-lightbox__nav jhd-lightbox__nav--next" data-jhd-lightbox-next title="تصویر بعدی" aria-label="تصویر بعدی"><i class="bi bi-chevron-left" aria-hidden="true"></i></button>'
+        . '<div class="jhd-lightbox__thumbs" data-jhd-lightbox-thumbs></div></div></div>';
     $html .= '<script type="application/json" data-jhd-gallery-data="' . $uid . '">'
         . json_encode($items, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP)
         . '</script>';
