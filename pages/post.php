@@ -288,8 +288,9 @@ require_once __DIR__ . '/../includes/header.php';
         <?php endforeach; ?>
         </div>
     </section>
+    <?php endif; ?>
 
-    <?php if ($extraImages): ?>    <?php if ($extraImages): ?>
+    <?php if ($extraImages): ?>
     <div class="mt-4">
         <?= jhd_gallery(array_map(static fn(array $i): array => ['path' => (string)$i['image_path'], 'alt' => (string)($i['alt_text'] ?? '')], $extraImages), ['title' => 'گالری تصاویر مطلب']) ?>
     </div>
