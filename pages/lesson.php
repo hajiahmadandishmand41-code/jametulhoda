@@ -156,23 +156,43 @@ require_once __DIR__.'/../includes/header.php';
       <?php endif; ?>
 
       <?php if ($lessonExtraAudio || $lessonExtraVideo): ?>
-      <section class="jhd-side-card mt-4"><h3>رسانه‌های تکمیلی درس</h3>
-        <?php foreach ($lessonExtraAudio as $file): ?><div class="mb-3"><span><?= sanitize($file['title'] ?: 'صوت درس') ?></span><audio controls preload="none" class="w-100" src="<?= sanitize(imgUrl($file['file_path'])) ?>"></audio></div><?php endforeach; ?>
-        <?php foreach ($lessonExtraVideo as $file): ?><div class="mb-3"><span><?= sanitize($file['title'] ?: 'ویدیوی درس') ?></span><video controls preload="none" class="w-100 rounded" src="<?= sanitize(imgUrl($file['file_path'])) ?>"></video></div><?php endforeach; ?>
-      </section>
-      <?php endif; ?>
-      <?php if ($lessonAttachments): ?>
-      <section class="jhd-side-card mt-4">
-        <h3><i class="bi bi-paperclip" aria-hidden="true"></i> فایل‌های تکمیلی</h3>
-        <ul class="jhd-side-list">
-          <?php foreach ($lessonAttachments as $file): ?>
-          <li><a href="<?= imgUrl($file['file_path']) ?>" target="_blank" rel="noopener"><i class="bi bi-file-earmark-arrow-down ms-1"></i><?= sanitize($file['title'] ?: basename($file['file_path'])) ?></a></li>
+      <section class="jhd-attachments" aria-label="رسانه‌های تکمیلی درس">
+        <div class="jhd-attachments__head"><h2 class="jhd-attachments__title"><i class="bi bi-collection-play" aria-hidden="true"></i>رسانه‌های تکمیلی درس</h2><p class="jhd-attachments__lead">صوت‌ها و ویدیوهای مرتبط با این درس</p></div>
+        <div class="jhd-attachments__media-grid">
+          <?php foreach ($lessonExtraAudio as $file): ?>
+          <article class="jhd-attachment-media">
+            <div class="jhd-attachment-media__head"><span class="jhd-attachment-media__icon" aria-hidden="true"><i class="bi bi-headphones"></i></span><strong class="jhd-attachment-media__title"><?= sanitize($file['title'] ?: 'صوت درس') ?></strong></div>
+            <audio controls preload="none" src="<?= sanitize(imgUrl($file['file_path'])) ?>" aria-label="<?= sanitize($file['title'] ?: 'صوت درس') ?>"></audio>
+            <div class="jhd-attachment-media__foot"><small>صوت تکمیلی</small><a class="btn btn-sm btn-outline-secondary" href="<?= sanitize(imgUrl($file['file_path'])) ?>" download><i class="bi bi-download ms-1" aria-hidden="true"></i>دانلود</a></div>
+          </article>
           <?php endforeach; ?>
-        </ul>
+          <?php foreach ($lessonExtraVideo as $file): ?>
+          <article class="jhd-attachment-media">
+            <div class="jhd-attachment-media__head"><span class="jhd-attachment-media__icon" aria-hidden="true"><i class="bi bi-camera-video"></i></span><strong class="jhd-attachment-media__title"><?= sanitize($file['title'] ?: 'ویدیوی درس') ?></strong></div>
+            <video controls playsinline preload="metadata" src="<?= sanitize(imgUrl($file['file_path'])) ?>" aria-label="<?= sanitize($file['title'] ?: 'ویدیوی درس') ?>"></video>
+            <div class="jhd-attachment-media__foot"><small>ویدیوی تکمیلی</small><a class="btn btn-sm btn-outline-secondary" href="<?= sanitize(imgUrl($file['file_path'])) ?>" download><i class="bi bi-download ms-1" aria-hidden="true"></i>دانلود</a></div>
+          </article>
+          <?php endforeach; ?>
+        </div>
       </section>
-      <?php endif; ?>
 
-      <?php if (!empty($lesson['sources'])): ?>
+      <?php if ($lessonAttachments): ?>
+      <section class="jhd-attachments" aria-label="فایل‌های تکمیلی درس">
+        <div class="jhd-attachments__head"><h2 class="jhd-attachments__title"><i class="bi bi-paperclip" aria-hidden="true"></i>فایل‌های تکمیلی درس</h2><p class="jhd-attachments__lead">جزوه‌ها و اسناد مرتبط با این درس</p></div>
+        <div class="jhd-files">
+          <?php foreach ($lessonAttachments as $file): ?>
+          <?php
+          $fileTitle = (string)($file['title'] ?: basename((string)$file['file_path']));
+          $isPdf = (bool)preg_match('~\.pdf$~i', (string)$file['file_path']);
+          $readerHref = $isPdf ? documentReaderUrl('lesson', (string)$lesson['slug'], (int)($file['id'] ?? 0)) : '';
+          $fileSize = (string)($file['file_size'] ?? ($file['size'] ?? ''));
+          echo jhd_file_row($fileTitle, imgUrl((string)$file['file_path']), $fileSize, 'bi-file-earmark', $isPdf ? ['reader_target' => $readerHref] : []);
+          ?>
+          <?php endforeach; ?>
+        </div>
+      </section>
+
+      <?php if (!empty($lesson['sources'])): ?>      <?php if (!empty($lesson['sources'])): ?>
       <section class="jhd-side-card mt-3">
         <h3><i class="bi bi-journal-text" aria-hidden="true"></i> منابع درس</h3>
         <div class="jhd-prose jhd-prose--sm" style="white-space:pre-wrap"><?= sanitize($lesson['sources']) ?></div>
