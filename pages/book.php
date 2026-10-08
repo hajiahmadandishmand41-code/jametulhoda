@@ -93,12 +93,22 @@ require __DIR__.'/../includes/header.php';
 <?php elseif(!empty($book['word_file'])): ?>
 <a href="<?= sanitize($bookDetailUrl . (str_contains($bookDetailUrl, '?') ? '&amp;' : '?') . 'download=word') ?>" class="btn btn-primary"><i class="bi bi-file-word ms-2"></i>دریافت فایل کتاب</a>
 <?php endif; ?>
-<?php if($attachments): ?><div class="pt-2"><h2 class="h6 fw-bold mb-2">فایل‌های تکمیلی</h2><?php foreach($attachments as $file):
-  $fileTitle = (string)($file['title'] ?: basename((string)$file['file_path']));
-  $isPdf = (bool)preg_match('~\.pdf$~i', (string)$file['file_path']);
-  $fileHref = $isPdf ? documentReaderUrl('book', (string)$book['slug'], (int)($file['id'] ?? 0)) : imgUrl((string)$file['file_path']);
-?><a href="<?= sanitize($fileHref) ?>"<?= $isPdf ? '' : ' target="_blank" rel="noopener"' ?> class="btn btn-sm btn-outline-secondary w-100 mb-1"><i class="bi <?= $isPdf ? 'bi-book' : 'bi-paperclip' ?> ms-1"></i><?= sanitize($fileTitle) ?></a><?php endforeach; ?></div><?php endif; ?>
-</div>
+<?php if($attachments): ?>
+<section class="jhd-attachments pt-2" aria-label="فایل‌های تکمیلی کتاب">
+  <div class="jhd-attachments__head"><h2 class="jhd-attachments__title"><i class="bi bi-paperclip" aria-hidden="true"></i>فایل‌های تکمیلی کتاب</h2><p class="jhd-attachments__lead">ضمیمه‌ها و نسخه‌های قابل دریافت این کتاب</p></div>
+  <div class="jhd-files">
+  <?php foreach($attachments as $file):
+    $fileTitle = (string)($file['title'] ?: basename((string)$file['file_path']));
+    $isPdf = (bool)preg_match('~\.pdf$~i', (string)$file['file_path']);
+    $fileHref = imgUrl((string)$file['file_path']);
+    $readerHref = $isPdf ? documentReaderUrl('book', (string)$book['slug'], (int)($file['id'] ?? 0)) : '';
+    $fileSize = (string)($file['file_size'] ?? ($file['size'] ?? ''));
+  ?>
+    <?= jhd_file_row($fileTitle, $fileHref, $fileSize, 'bi-file-earmark', $isPdf ? ['reader_target' => $readerHref] : []) ?>
+  <?php endforeach; ?>
+  </div>
+</section>
+<?php endif; ?>
 <?php if($topics): ?>
 <div class="text-start mt-4">
 <div class="small fw-bold mb-2" style="color:var(--jhd-green)"><i class="bi bi-tags ms-1"></i> موضوعات</div>
