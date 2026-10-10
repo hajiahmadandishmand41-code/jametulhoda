@@ -8,6 +8,7 @@ require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../../includes/media.php';
 require_once __DIR__ . '/../../includes/post-gallery.php';
 require_once __DIR__ . '/../../includes/content-draft.php';
+require_once __DIR__ . '/../../includes/content-delete.php';
 
 $error = '';
 // شناسهٔ پیش‌نویسِ خودکار (اگر مدیر پیش از ذخیره فایلی آپلود کرده باشد).

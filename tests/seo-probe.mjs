@@ -58,7 +58,8 @@ const metaContent = (html, attr, key) => {
   return c ? c[1] : '';
 };
 const title = (html) => (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || '').trim();
-const canonical = (html) => (html.match(/<link[^>]+rel=["']canonical["'][^>]*>/i)?.[0].match(/href=["']([^"']*)["']/i)?.[1] || '');
+const canonical = (html) => (html.match(/<link[^>]+rel=["']canonical["'][^>]*>/i)?.[0].match(/href=["']([^"']*)["']/i)?.[1] || '').replaceAll('&amp;', '&');
+const decodeXml = (value) => value.replaceAll('&amp;', '&').replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&quot;', '"').replaceAll('&apos;', "'");
 const jsonLd = (html) => {
   const out = [];
   for (const m of html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
@@ -84,13 +85,44 @@ record('/robots.txt declares the sitemap', /Sitemap:\s*\S+/i.test(robots.text), 
 const sitemap = await get('/sitemap.xml');
 record('GET /sitemap.xml → 200', sitemap.status === 200, String(sitemap.status));
 record('/sitemap.xml is XML', (sitemap.headers.get('content-type') || '').includes('xml'), sitemap.headers.get('content-type') || '');
-const locs = [...sitemap.text.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1].trim());
+const locs = [...sitemap.text.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => decodeXml(m[1].trim()));
 record('/sitemap.xml has URLs', locs.length > 0, `${locs.length} URLs`);
 record('/sitemap.xml has no duplicates', new Set(locs).size === locs.length, `${new Set(locs).size} unique`);
 
+// Query URLs are canonical on hosts without rewrite support. Detect that mode
+// from an actual rendered canonical, then permit only the site's explicit
+// public ?p= routes and their optional single slug/id — never search, filters,
+// pagination, or private parameters.
+const modeProbe = await get('/news');
+let queryMode = false;
+try {
+  const modeUrl = new URL(canonical(modeProbe.text), BASE);
+  queryMode = modeUrl.pathname.endsWith('/index.php') && modeUrl.searchParams.has('p');
+} catch { /* the content-index checks below report a bad/missing canonical */ }
+const publicQueryRoutes = new Set([
+  'about', 'announcement', 'announcements', 'article', 'articles', 'audio', 'audios', 'book', 'books',
+  'category', 'contact', 'event', 'events', 'lesson', 'lessons', 'media', 'news',
+  'post', 'program', 'programs', 'qa', 'religious', 'religious-activities', 'report',
+  'reports', 'research', 'speech', 'speeches', 'topic', 'topics', 'video', 'videos',
+]);
 const forbidden = /^https?:\/\/[^/]+\/(admin|login|logout|register|account|profile|password-change|search|install|php\/|migrate|api\/|config\/|includes\/|bin\/|storage\/|tests\/|uploads\/)/i;
-const leaked = locs.filter((u) => forbidden.test(u.replace(/^https?:\/\/[^/]+/, '')) || /[?]p=/.test(u));
-record('/sitemap.xml contains no private/legacy URLs', leaked.length === 0, leaked.slice(0, 5).join(', '));
+const queryUrlIsPublic = (value) => {
+  try {
+    const url = new URL(value);
+    if (!url.search) return true;
+    if (!url.searchParams.has('p')) return false;
+    const routes = url.searchParams.getAll('p');
+    if (routes.length !== 1 || !publicQueryRoutes.has(routes[0])) return false;
+    const keys = [...url.searchParams.keys()];
+    if (keys.some((key) => !['p', 'slug', 'id'].includes(key))) return false;
+    for (const key of ['slug', 'id']) if (url.searchParams.getAll(key).length > 1) return false;
+    if (url.searchParams.has('slug') && !url.searchParams.get('slug')?.trim()) return false;
+    if (url.searchParams.has('id') && !/^[1-9]\d*$/.test(url.searchParams.get('id') || '')) return false;
+    return true;
+  } catch { return false; }
+};
+const leaked = locs.filter((u) => forbidden.test(u.replace(/^https?:\/\/[^/]+/, '')) || !queryUrlIsPublic(u));
+record('/sitemap.xml contains only public canonical URLs', leaked.length === 0, leaked.slice(0, 5).join(', '));
 
 // 2. Favicon / logo identity --------------------------------------------------
 console.log('\n--- Logo & favicon identity ---');
@@ -161,6 +193,12 @@ record('PNG icon link is square and sized',
 // declares its own canonical — including types with no published rows yet,
 // which the sitemap (correctly) cannot cover.
 console.log('\n--- Content type indexes ---');
+const indexQueryRoute = {
+  '/news': 'news', '/articles': 'articles', '/research': 'research', '/reports': 'reports',
+  '/announcements': 'announcements', '/programs': 'programs',
+  '/religious-activities': 'religious-activities', '/speeches': 'speeches', '/qa': 'qa',
+  '/lessons': 'lessons', '/books': 'books', '/topics': 'topics', '/media': 'media',
+};
 for (const [path, label] of [
   ['/news', 'news'],
   ['/articles', 'article'],
@@ -181,9 +219,12 @@ for (const [path, label] of [
   if (r.status !== 200) continue;
   const t = title(r.text);
   record(`${label} index: unique non-empty title`, t.length > 0, t);
+  const expectedIndexCanonical = queryMode
+    ? abs(`/index.php?p=${indexQueryRoute[path]}`)
+    : abs(path);
   record(
-    `${label} index: canonical === requested URL`,
-    canonical(r.text) === BASE + path,
+    `${label} index: canonical matches configured URL mode`,
+    canonical(r.text) === expectedIndexCanonical,
     canonical(r.text)
   );
   record(
@@ -202,6 +243,7 @@ const PREFIX_LABEL = [
   ['/announcements/', 'announcement'],
   ['/programs/', 'program'],
   ['/religious-activities/', 'religious activity'],
+  ['/qa/', 'Q&A'],
   ['/speech/', 'speech'],
   ['/lessons/', 'lesson'],
   ['/books/', 'book'],
@@ -212,13 +254,27 @@ const PREFIX_LABEL = [
 ];
 const seenTypes = new Set();
 const contentSamples = new Map();
+const queryDetailLabel = {
+  announcement: 'announcement', article: 'article', audio: 'audio', book: 'book',
+  category: 'category', event: 'event', lesson: 'lesson', news: 'news', qa: 'Q&A',
+  post: 'news', program: 'program', religious: 'religious activity', report: 'report',
+  research: 'research', speech: 'speech', topic: 'topic', video: 'video',
+};
 for (const loc of locs) {
-  const path = new URL(loc).pathname;
+  const parsed = new URL(loc);
+  const path = parsed.pathname;
+  const samplePath = parsed.pathname + parsed.search;
   for (const [prefix, label] of PREFIX_LABEL) {
     if (path.startsWith(prefix)) {
       seenTypes.add(label);
-      if (!contentSamples.has(label)) contentSamples.set(label, new URL(loc).pathname + new URL(loc).search);
+      if (!contentSamples.has(label)) contentSamples.set(label, samplePath);
     }
+  }
+  const queryRoute = parsed.searchParams.get('p');
+  const queryLabel = queryRoute ? queryDetailLabel[queryRoute] : '';
+  if (queryLabel && (parsed.searchParams.has('slug') || parsed.searchParams.has('id'))) {
+    seenTypes.add(queryLabel);
+    if (!contentSamples.has(queryLabel)) contentSamples.set(queryLabel, samplePath);
   }
 }
 console.log(`  sitemap content types: ${[...seenTypes].sort().join(', ') || 'none'}`);
@@ -247,7 +303,21 @@ for (const [label, samplePath] of contentSamples) {
   record(`${label}: JSON-LD present`, blocks.length > 0, types.join(', '));
   record(`${label}: BreadcrumbList present`, types.includes('BreadcrumbList'), types.join(', '));
   record(`${label}: Organization present`, types.some((x) => /Organization$/i.test(x)), types.join(', '));
-  record(`${label}: og:image absolute`, /^https?:\/\//.test(og), og);
+  const canonicalEntityTypes = new Set(['Article', 'NewsArticle', 'ScholarlyArticle', 'Report', 'QAPage', 'Book', 'Course']);
+  const canonicalEntities = blocks.filter((block) => canonicalEntityTypes.has(block?.['@type']));
+  if (canonicalEntities.length) {
+    const entitiesMatchCanonical = canonicalEntities.every((block) => {
+      const entityUrl = block.url || block.mainEntity?.acceptedAnswer?.url
+        || String(block['@id'] || '').replace(/#(?:article|qa|book|course)$/, '');
+      const mainEntityUrl = block.mainEntityOfPage?.['@id'] || entityUrl;
+      return entityUrl === can && mainEntityUrl === can;
+    });
+    record(`${label}: structured entity URLs match canonical`, entitiesMatchCanonical,
+      canonicalEntities.map((block) => `${block['@type']}:${block.url || block.mainEntity?.acceptedAnswer?.url || block['@id']}`).join(', '));
+  }
+  // Content details intentionally omit a generic logo when the record has no
+  // real featured image. If a preview image is emitted, it must be absolute.
+  record(`${label}: og:image absolute when present`, og === '' || /^https?:\/\//.test(og), og || 'omitted: no real content image');
   record(`${label}: canonical is listed in the sitemap`, inSitemap, can);
 }
 
@@ -279,12 +349,36 @@ for (const loc of locs) {
 
 console.log('\n--- Legacy / duplicate spellings ---');
 const legacyPairs = [];
-if (contentSamples.has('news')) legacyPairs.push(['/post/' + contentSamples.get('news').split('/').pop(), contentSamples.get('news')]);
-if (contentSamples.has('article')) legacyPairs.push(['/article/' + contentSamples.get('article').split('/').pop(), contentSamples.get('article')]);
-if (contentSamples.has('report')) legacyPairs.push(['/report/' + contentSamples.get('report').split('/').pop(), contentSamples.get('report')]);
-if (contentSamples.has('topic')) legacyPairs.push([contentSamples.get('topic').replace(/^\/topics\//, '/topic/'), contentSamples.get('topic')]);
-legacyPairs.push(['/library', '/books']);
-legacyPairs.push(['/index.php?p=news', '/news']);
+const contentSlug = (label) => {
+  if (!contentSamples.has(label)) return '';
+  try {
+    const url = new URL(contentSamples.get(label), BASE);
+    const querySlug = url.searchParams.get('slug');
+    if (querySlug) return querySlug;
+    const pathname = decodeURIComponent(url.pathname);
+    const prefixes = { news: '/news/', article: '/articles/', report: '/reports/', topic: '/topics/' };
+    const prefix = prefixes[label];
+    if (prefix && pathname.startsWith(prefix)) return pathname.slice(prefix.length).replace(/\/+$/, '');
+    return pathname.split('/').filter(Boolean).pop() || '';
+  } catch { return ''; }
+};
+if (contentSamples.has('news')) legacyPairs.push(['/post/' + encodeURIComponent(contentSlug('news')), contentSamples.get('news')]);
+if (contentSamples.has('article')) legacyPairs.push(['/article/' + encodeURIComponent(contentSlug('article')), contentSamples.get('article')]);
+if (contentSamples.has('report')) legacyPairs.push(['/report/' + encodeURIComponent(contentSlug('report')), contentSamples.get('report')]);
+if (contentSamples.has('topic')) {
+  const topicPath = contentSlug('topic').split('/').map(encodeURIComponent).join('/');
+  legacyPairs.push(['/topic/' + topicPath, contentSamples.get('topic')]);
+}
+legacyPairs.push(['/library', queryMode ? '/index.php?p=books' : '/books']);
+legacyPairs.push(['/index.php?p=news', queryMode ? '/index.php?p=news' : '/news']);
+if (queryMode) {
+  for (const label of ['news', 'article', 'report']) {
+    if (contentSamples.has(label)) {
+      const slug = encodeURIComponent(contentSlug(label));
+      legacyPairs.push([`/index.php?p=post&slug=${slug}`, contentSamples.get(label)]);
+    }
+  }
+}
 
 for (const [legacy, expected] of legacyPairs) {
   const res = await get(legacy, { redirect: 'manual' });

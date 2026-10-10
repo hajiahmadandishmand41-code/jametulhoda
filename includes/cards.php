@@ -1085,13 +1085,14 @@ function jhd_render_topic_tree_nav(array $nodes, string $mode = 'desktop'): stri
 function jhd_section_head(array $opts): string {
     $eyebrow = (string)($opts['eyebrow'] ?? '');
     $title   = (string)($opts['title'] ?? '');
+    $titleId = (string)($opts['title_id'] ?? '');
     $icon    = (string)($opts['icon'] ?? '');
     $url     = (string)($opts['url'] ?? '');
     $link    = (string)($opts['link'] ?? '');
     $html = '<div class="jhd-section-head">';
     $html .= '<div>';
     if ($eyebrow !== '') $html .= '<span class="jhd-eyebrow">' . sanitize($eyebrow) . '</span>';
-    $html .= '<h2>';
+    $html .= '<h2' . ($titleId !== '' ? ' id="' . sanitize($titleId) . '"' : '') . '>';
     if ($icon !== '') $html .= '<i class="bi ' . sanitize($icon) . '" aria-hidden="true"></i>';
     $html .= sanitize($title) . '</h2>'
         . '<div class="jhd-rule" aria-hidden="true"></div>'

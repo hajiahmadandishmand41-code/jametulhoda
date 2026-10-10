@@ -768,11 +768,23 @@ function jhd_redirect_to_canonical(string $canonicalUrl, string $canonicalPath):
     $canonicalPath = '/' . trim($canonicalPath, '/');
     if ($requestPath === $canonicalPath) return;
 
-    // Keep meaningful query parameters (a book download, a topic section) so
-    // the redirect lands on the same view of the same page.
-    $query = (string)($_SERVER['QUERY_STRING'] ?? '');
-    if ($query !== '') {
-        $canonicalUrl .= (str_contains($canonicalUrl, '?') ? '&' : '?') . $query;
+    // Preserve non-routing state (for example a topic section), but do not
+    // append the old route's p/slug/id/kind to a mode-aware canonical URL.
+    // Doing so would create duplicate query keys when a legacy Query URL is redirected.
+    $requestParams = [];
+    parse_str((string)($_SERVER['QUERY_STRING'] ?? ''), $requestParams);
+    unset($requestParams['p'], $requestParams['slug'], $requestParams['id'], $requestParams['kind']);
+
+    $canonicalParts = parse_url($canonicalUrl);
+    $canonicalParams = [];
+    if (is_array($canonicalParts) && !empty($canonicalParts['query'])) {
+        parse_str((string)$canonicalParts['query'], $canonicalParams);
+    }
+    foreach (array_keys($canonicalParams) as $key) unset($requestParams[$key]);
+
+    $preservedQuery = http_build_query($requestParams);
+    if ($preservedQuery !== '') {
+        $canonicalUrl .= (str_contains($canonicalUrl, '?') ? '&' : '?') . $preservedQuery;
     }
     header('Location: ' . $canonicalUrl, true, 301);
     exit;
@@ -1149,7 +1161,12 @@ function getPosts(array $opts = []): array {
     if ($limit  > 100) $limit  = 100;
     if ($offset < 0)   $offset = 0;
     $whereStr = implode(' AND ', $where);
-    $sql = "SELECT p.*, c.name AS cat_name, COALESCE(NULLIF(p.author_name,''), NULLIF(p.speaker,''), u.full_name) AS author_name FROM posts p LEFT JOIN categories c ON c.id = p.category_id LEFT JOIN users u ON u.id = p.author_id WHERE $whereStr ORDER BY p.is_featured DESC, p.published_at DESC, p.id DESC LIMIT $limit OFFSET $offset";
+    // Homepage feeds opt into chronological order; all existing calls retain
+    // their established featured-first ordering unless they request otherwise.
+    $orderBy = ($opts['sort'] ?? '') === 'newest'
+        ? 'COALESCE(p.published_at, p.created_at) DESC, p.id DESC'
+        : 'p.is_featured DESC, p.published_at DESC, p.id DESC';
+    $sql = "SELECT p.*, c.name AS cat_name, COALESCE(NULLIF(p.author_name,''), NULLIF(p.speaker,''), u.full_name) AS author_name FROM posts p LEFT JOIN categories c ON c.id = p.category_id LEFT JOIN users u ON u.id = p.author_id WHERE $whereStr ORDER BY $orderBy LIMIT $limit OFFSET $offset";
     try {
         $stmt = $db->prepare($sql);
         $stmt->execute($params);
@@ -1706,7 +1723,7 @@ function jhd_homepage_settings(): array {
         'sections' => [
             'hero' => true,
             'editor_picks' => true,
-            'latest' => false,
+            'latest' => true,
             'news' => true,
             'articles' => true,
             'reports' => true,
@@ -1715,6 +1732,8 @@ function jhd_homepage_settings(): array {
             'events' => true,
             'books' => true,
             'lessons' => true,
+            'speeches' => true,
+            'qa' => true,
         ],
         'hero_post_id' => 0,
     ];
@@ -1842,7 +1861,7 @@ function jhd_story_key(string $text): string {
         '‌' => ' ',
     ]);
     $text = preg_replace('/[\x{064B}-\x{065F}\x{0670}]/u', '', $text) ?? $text;
-    $text = preg_replace('/[«»"“”\'،؛,:.!?؟()\[\]{}<>|\\\/\-_]+/u', ' ', $text) ?? $text;
+    $text = preg_replace('~[«»"“”\x{0027}،؛,:.!?؟()\[\]{}<>|\\/_-]+~u', ' ', $text) ?? $text;
     $text = preg_replace('/\s+/u', ' ', trim($text)) ?? trim($text);
     $text = preg_replace('/^(خبر|گزارش|گزارش تصویری|اطلاعیه|رویداد|اخبار)\s+/u', '', $text) ?? $text;
     return trim($text);
@@ -2071,6 +2090,46 @@ function jhd_add_contextual_internal_links(string $html, int $currentPostId = 0,
     return $out;
 }
 
+/** Add stable in-page anchors and a compact outline to long, sanitized articles. */
+function jhd_article_outline(string $html): array {
+    if ($html === '' || !class_exists(DOMDocument::class)) return ['html' => $html, 'items' => []];
+
+    $dom = new DOMDocument('1.0', 'UTF-8');
+    $previous = libxml_use_internal_errors(true);
+    $loaded = $dom->loadHTML(
+        '<?xml encoding="UTF-8"?><div id="jhd-article-outline-root">' . $html . '</div>',
+        LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING
+    );
+    libxml_clear_errors();
+    libxml_use_internal_errors($previous);
+    if (!$loaded) return ['html' => $html, 'items' => []];
+
+    $root = $dom->getElementById('jhd-article-outline-root');
+    if (!$root) return ['html' => $html, 'items' => []];
+
+    $headings = [];
+    foreach (iterator_to_array($root->getElementsByTagName('*')) as $node) {
+        if (!$node instanceof DOMElement) continue;
+        $tag = strtolower($node->tagName);
+        if (!in_array($tag, ['h2', 'h3'], true)) continue;
+        $title = trim((string)preg_replace('/\s+/u', ' ', (string)$node->textContent));
+        if ($title === '') continue;
+        $headings[] = ['node' => $node, 'title' => $title, 'level' => $tag === 'h3' ? 2 : 1];
+    }
+    if (count($headings) < 3) return ['html' => $html, 'items' => []];
+
+    $items = [];
+    foreach ($headings as $index => $heading) {
+        $id = 'jhd-article-heading-' . ($index + 1);
+        $heading['node']->setAttribute('id', $id);
+        $items[] = ['id' => $id, 'title' => $heading['title'], 'level' => $heading['level']];
+    }
+
+    $body = '';
+    foreach ($root->childNodes as $child) $body .= $dom->saveHTML($child);
+    return ['html' => $body, 'items' => $items];
+}
+
 function jhd_promote_article_headings(string $html): string {
     if ($html === '') return '';
     $headings = [
@@ -2248,44 +2307,108 @@ function validatedTopicIds(array $ids): array {
 
 // ─── Search helper (unified) ──────────────────────────────────────────────────
 
-function searchAll(string $q, int $limit=12, int $offset=0, string $filter='all'): array {
-    if(!$q) return ['total'=>0,'results'=>[]];
-    $allowed=['all','topic','media','audio','video','article','research','report','news','book','lesson'];
-    $filter=in_array($filter,$allowed,true)?$filter:'all';
-    $qLike='%'.$q.'%'; $sources=[];
-    // Every search source exposes exactly the same shape, so pagination and
-    // sorting cover the entire result set rather than only the first source.
-    if(in_array($filter,['all','topic'],true)) $sources[]="SELECT id,name AS title,slug,description AS summary,intro AS content,'' AS featured_image,'topic' AS post_type,created_at AS published_at,created_at,'topic' AS target,'' AS media_kind,0 AS is_featured FROM topics WHERE is_active=1";
-    if(in_array($filter,['all','media','audio','video'],true)) {
-        $kindClause=$filter==='audio'?" AND m.kind='audio'":($filter==='video'?" AND m.kind='video'":'');
-        $sources[]="SELECT m.id,COALESCE(NULLIF(m.title,''),p.title,l.title,'رسانه') AS title,COALESCE(p.slug,l.slug) AS slug,COALESCE(p.summary,l.summary,'') AS summary,'' AS content,m.file_path AS featured_image,'media' AS post_type,COALESCE(p.published_at,l.created_at,m.created_at) AS published_at,m.created_at,'media' AS target,m.kind AS media_kind,0 AS is_featured FROM media_files m LEFT JOIN posts p ON m.ref_type='post' AND p.id=m.ref_id LEFT JOIN lessons l ON m.ref_type='lesson' AND l.id=m.ref_id WHERE m.kind IN ('audio','video') AND ((p.status='published') OR (l.status='published'))$kindClause";
-        // Older records kept primary files in lesson/post columns. Search them
-        // too, but leave their destination as the real parent detail page.
-        if ($filter !== 'video') $sources[]="SELECT l.id,l.title,l.slug,l.summary,'' AS content,'' AS featured_image,'lesson' AS post_type,l.created_at AS published_at,l.created_at,'lesson' AS target,'audio' AS media_kind,0 AS is_featured FROM lessons l WHERE l.status='published' AND l.audio_file IS NOT NULL AND l.audio_file<>'' AND NOT EXISTS(SELECT 1 FROM media_files m WHERE m.ref_type='lesson' AND m.ref_id=l.id AND m.kind='audio' AND m.file_path=l.audio_file)";
+function searchAll(string $q, int $limit=12, int $offset=0, string $filter='all', int $topicId=0, string $sort='relevance'): array {
+    $allowed = ['all','topic','media','audio','video','article','research','report','news','announcement','program','religious','event','speech','qa','book','lesson'];
+    $filter = in_array($filter, $allowed, true) ? $filter : 'all';
+    $topicId = max(0, $topicId);
+    $sort = in_array($sort, ['relevance', 'newest'], true) ? $sort : 'relevance';
+
+    // An empty phrase is useful when the visitor deliberately chooses a type or
+    // topic: it browses published records in that scope. A completely empty
+    // search remains the discovery state and does not scan every content table.
+    if ($q === '' && $filter === 'all' && $topicId < 1) return ['total' => 0, 'results' => []];
+
+    $limit = max(1, min(100, $limit));
+    $offset = max(0, $offset);
+    $qLike = '%' . $q . '%';
+    $scopeIds = $topicId > 0 ? getTopicScopeIds($topicId) : [];
+    $scopeSql = $scopeIds ? implode(',', array_map('intval', $scopeIds)) : '0';
+    $topicMatch = static function (string $junction, string $ownerColumn, string $ownerAlias) use ($scopeIds, $scopeSql): string {
+        if (!$scopeIds) return '1';
+        return "CASE WHEN EXISTS (SELECT 1 FROM $junction topic_filter WHERE topic_filter.$ownerColumn=$ownerAlias.id AND topic_filter.topic_id IN ($scopeSql)) THEN 1 ELSE 0 END";
+    };
+    $postTopicMatch = $topicMatch('post_topics', 'post_id', 'p');
+    $lessonTopicMatch = $topicMatch('lesson_topics', 'lesson_id', 'l');
+    $bookTopicMatch = $topicMatch('book_topics', 'book_id', 'b');
+    $sources = [];
+    $sourceParams = [];
+    $addSource = static function (string $sql, array $params = []) use (&$sources, &$sourceParams): void {
+        $sources[] = $sql;
+        array_push($sourceParams, ...$params);
+    };
+
+    // Every source exposes the same columns so counts, sorting, and pagination
+    // operate across the complete, published result set.
+    if (in_array($filter, ['all', 'topic'], true)) {
+        $topicMatchExpression = $scopeIds ? "CASE WHEN id IN ($scopeSql) THEN 1 ELSE 0 END" : '1';
+        $addSource("SELECT id,name AS title,slug,description AS summary,intro AS content,cover_image AS featured_image,'topic' AS post_type,created_at AS published_at,created_at,'topic' AS target,'' AS media_kind,0 AS is_featured,$topicMatchExpression AS topic_match FROM topics WHERE is_active=1");
+    }
+
+    if (in_array($filter, ['all', 'media', 'audio', 'video'], true)) {
+        $kindClause = in_array($filter, ['audio', 'video'], true) ? ' AND m.kind=?' : '';
+        $kindParams = in_array($filter, ['audio', 'video'], true) ? [$filter] : [];
+        $mediaTopicMatch = $scopeIds
+            ? "CASE WHEN (p.id IS NOT NULL AND EXISTS (SELECT 1 FROM post_topics topic_filter WHERE topic_filter.post_id=p.id AND topic_filter.topic_id IN ($scopeSql))) OR (l.id IS NOT NULL AND EXISTS (SELECT 1 FROM lesson_topics topic_filter WHERE topic_filter.lesson_id=l.id AND topic_filter.topic_id IN ($scopeSql))) THEN 1 ELSE 0 END"
+            : '1';
+        $addSource("SELECT m.id,COALESCE(NULLIF(m.title,''),p.title,l.title,'رسانه') AS title,COALESCE(p.slug,l.slug) AS slug,COALESCE(p.summary,l.summary,'') AS summary,'' AS content,m.file_path AS featured_image,'media' AS post_type,COALESCE(p.published_at,l.created_at,m.created_at) AS published_at,m.created_at,'media' AS target,m.kind AS media_kind,0 AS is_featured,$mediaTopicMatch AS topic_match FROM media_files m LEFT JOIN posts p ON m.ref_type='post' AND p.id=m.ref_id LEFT JOIN lessons l ON m.ref_type='lesson' AND l.id=m.ref_id WHERE m.kind IN ('audio','video') AND ((p.status='published') OR (l.status='published'))$kindClause", $kindParams);
+
+        // Some installations still store a primary audio/video URL on the
+        // published parent row. Include it only when no equivalent media row
+        // exists, and keep the destination on that public parent page.
+        if ($filter !== 'video') {
+            $addSource("SELECT l.id,l.title,l.slug,l.summary,'' AS content,'' AS featured_image,'lesson' AS post_type,l.created_at AS published_at,l.created_at,'lesson' AS target,'audio' AS media_kind,0 AS is_featured,$lessonTopicMatch AS topic_match FROM lessons l WHERE l.status='published' AND l.audio_file IS NOT NULL AND l.audio_file<>'' AND NOT EXISTS(SELECT 1 FROM media_files m WHERE m.ref_type='lesson' AND m.ref_id=l.id AND m.kind='audio' AND m.file_path=l.audio_file)");
+        }
         if ($filter !== 'audio') {
-            $sources[]="SELECT l.id,l.title,l.slug,l.summary,'' AS content,'' AS featured_image,'lesson' AS post_type,l.created_at AS published_at,l.created_at,'lesson' AS target,'video' AS media_kind,0 AS is_featured FROM lessons l WHERE l.status='published' AND l.video_file IS NOT NULL AND l.video_file<>'' AND NOT EXISTS(SELECT 1 FROM media_files m WHERE m.ref_type='lesson' AND m.ref_id=l.id AND m.kind='video' AND m.file_path=l.video_file)";
-            $sources[]="SELECT p.id,p.title,p.slug,p.summary,'' AS content,'' AS featured_image,p.post_type,p.published_at,p.created_at,'post' AS target,'video' AS media_kind,p.is_featured FROM posts p WHERE p.status='published' AND p.featured_video IS NOT NULL AND p.featured_video<>'' AND NOT EXISTS(SELECT 1 FROM media_files m WHERE m.ref_type='post' AND m.ref_id=p.id AND m.kind='video' AND m.file_path=p.featured_video)";
+            $addSource("SELECT l.id,l.title,l.slug,l.summary,'' AS content,'' AS featured_image,'lesson' AS post_type,l.created_at AS published_at,l.created_at,'lesson' AS target,'video' AS media_kind,0 AS is_featured,$lessonTopicMatch AS topic_match FROM lessons l WHERE l.status='published' AND l.video_file IS NOT NULL AND l.video_file<>'' AND NOT EXISTS(SELECT 1 FROM media_files m WHERE m.ref_type='lesson' AND m.ref_id=l.id AND m.kind='video' AND m.file_path=l.video_file)");
+            $addSource("SELECT p.id,p.title,p.slug,p.summary,'' AS content,'' AS featured_image,p.post_type,p.published_at,p.created_at,'post' AS target,'video' AS media_kind,p.is_featured,$postTopicMatch AS topic_match FROM posts p WHERE p.status='published' AND p.featured_video IS NOT NULL AND p.featured_video<>'' AND NOT EXISTS(SELECT 1 FROM media_files m WHERE m.ref_type='post' AND m.ref_id=p.id AND m.kind='video' AND m.file_path=p.featured_video)");
         }
     }
-    $postTypes=['article','research','report','news'];
-    if($filter==='all' || in_array($filter,$postTypes,true)) {
-        $typeClause=$filter==='all'?'':" AND post_type='".$filter."'";
-        $sources[]="SELECT id,title,slug,summary,content,featured_image,post_type,published_at,created_at,'post' AS target,'' AS media_kind,is_featured FROM posts WHERE status='published'$typeClause";
+
+    $postTypes = ['article','research','report','news','announcement','program','religious','event','speech','qa'];
+    if ($filter === 'all') {
+        $addSource("SELECT p.id,p.title,p.slug,p.summary,p.content,p.featured_image,p.post_type,p.published_at,p.created_at,'post' AS target,'' AS media_kind,p.is_featured,$postTopicMatch AS topic_match FROM posts p WHERE p.status='published'");
+    } elseif (in_array($filter, $postTypes, true)) {
+        $addSource("SELECT p.id,p.title,p.slug,p.summary,p.content,p.featured_image,p.post_type,p.published_at,p.created_at,'post' AS target,'' AS media_kind,p.is_featured,$postTopicMatch AS topic_match FROM posts p WHERE p.status='published' AND p.post_type=?", [$filter]);
     }
-    if(in_array($filter,['all','lesson'],true)) $sources[]="SELECT id,title,slug,summary,content,featured_image,'lesson',created_at,created_at,'lesson','',is_featured FROM lessons WHERE status='published'";
-    if(in_array($filter,['all','book'],true)) $sources[]="SELECT id,title,slug,description,description,cover_image,'book',created_at,created_at,'book','',is_featured FROM books WHERE status='published'";
-    if(!$sources) return ['total'=>0,'results'=>[]];
+
+    if (in_array($filter, ['all', 'lesson'], true)) {
+        $addSource("SELECT l.id,l.title,l.slug,l.summary,l.content,l.featured_image,'lesson' AS post_type,l.created_at AS published_at,l.created_at,'lesson' AS target,'' AS media_kind,l.is_featured,$lessonTopicMatch AS topic_match FROM lessons l WHERE l.status='published'");
+    }
+    if (in_array($filter, ['all', 'book'], true)) {
+        $addSource("SELECT b.id,b.title,b.slug,b.description AS summary,b.description AS content,b.cover_image AS featured_image,'book' AS post_type,b.created_at AS published_at,b.created_at,'book' AS target,'' AS media_kind,b.is_featured,$bookTopicMatch AS topic_match FROM books b WHERE b.status='published'");
+    }
+    if (!$sources) return ['total' => 0, 'results' => []];
+
     try {
-        $db=getDB(); $union=implode(' UNION ALL ',$sources);
-        // LOWER(... LIKE LOWER(?)) is available in PostgreSQL, MySQL/MariaDB
-        // and SQLite; unlike ILIKE it does not depend on a driver shim.
-        $where="(LOWER(COALESCE(title, '')) LIKE LOWER(?) OR LOWER(COALESCE(summary, '')) LIKE LOWER(?) OR LOWER(COALESCE(content, '')) LIKE LOWER(?))";
-        $count=$db->prepare("SELECT COUNT(*) FROM ($union) search_rows WHERE $where");$count->execute([$qLike,$qLike,$qLike]);
-        $total=(int)$count->fetchColumn();
-        $stmt=$db->prepare("SELECT * FROM ($union) search_rows WHERE $where ORDER BY is_featured DESC,published_at DESC,id DESC LIMIT ? OFFSET ?");
-        $stmt->execute([$qLike,$qLike,$qLike,max(1,min(100,$limit)),max(0,$offset)]);
-        return ['total'=>$total,'results'=>$stmt->fetchAll()];
-    } catch(PDOException $e){ error_log('search failed: '.get_class($e)); return ['total'=>0,'results'=>[]]; }
+        $db = getDB();
+        $union = implode(' UNION ALL ', $sources);
+        $conditions = [];
+        $whereParams = [];
+        if ($q !== '') {
+            $conditions[] = "(LOWER(COALESCE(title, '')) LIKE LOWER(?) OR LOWER(COALESCE(summary, '')) LIKE LOWER(?) OR LOWER(COALESCE(content, '')) LIKE LOWER(?))";
+            array_push($whereParams, $qLike, $qLike, $qLike);
+        }
+        if ($topicId > 0) $conditions[] = 'topic_match=1';
+        $where = $conditions ? implode(' AND ', $conditions) : '1=1';
+
+        $count = $db->prepare("SELECT COUNT(*) FROM ($union) search_rows WHERE $where");
+        $count->execute(array_merge($sourceParams, $whereParams));
+        $total = (int)$count->fetchColumn();
+
+        if ($q !== '' && $sort === 'relevance') {
+            $orderBy = "CASE WHEN LOWER(COALESCE(title,''))=LOWER(?) THEN 3 WHEN LOWER(COALESCE(title,'')) LIKE LOWER(?) THEN 2 WHEN LOWER(COALESCE(summary,'')) LIKE LOWER(?) THEN 1 ELSE 0 END DESC,is_featured DESC,COALESCE(published_at,created_at) DESC,id DESC";
+            $orderParams = [$q, $qLike, $qLike];
+        } else {
+            $orderBy = 'COALESCE(published_at,created_at) DESC,id DESC';
+            $orderParams = [];
+        }
+        $stmt = $db->prepare("SELECT * FROM ($union) search_rows WHERE $where ORDER BY $orderBy LIMIT ? OFFSET ?");
+        $stmt->execute(array_merge($sourceParams, $whereParams, $orderParams, [$limit, $offset]));
+        return ['total' => $total, 'results' => $stmt->fetchAll()];
+    } catch (PDOException $e) {
+        error_log('search failed: ' . get_class($e));
+        return ['total' => 0, 'results' => []];
+    }
 }
 
 // ─── SEO helpers ──────────────────────────────────────────────────────────────
@@ -2431,9 +2554,10 @@ function imageMimeFromUrl(string $url): string {
 
 function articleJsonLd(array $post): string {
     if (!SITE_URL) return '';
-    // Structured data must use the same canonical pretty path as <link rel="canonical>.
-    // Avoid query URLs here: encoded Persian slugs can otherwise become ?slug=%25...
-    $canonicalPath = jhd_post_canonical_path($post);
+    // Keep structured-data URLs identical to the page canonical in both URL
+    // modes. postUrl() handles Persian slugs and emits the configured route.
+    if (trim((string)($post['slug'] ?? '')) === '') return '';
+    $canonicalPath = postUrl($post);
     if ($canonicalPath === '') return '';
     $canonical = jhd_absolute_url($canonicalPath);
     $author = !empty($post['author_name'])
@@ -2472,8 +2596,8 @@ function articleJsonLd(array $post): string {
  * taken from the stored title and body — nothing is invented.
  */
 function qaJsonLd(array $post): string {
-    if (!SITE_URL) return '';
-    $canonicalPath = jhd_post_canonical_path($post);
+    if (!SITE_URL || trim((string)($post['slug'] ?? '')) === '') return '';
+    $canonicalPath = postUrl($post);
     if ($canonicalPath === '') return '';
     $canonical = jhd_absolute_url($canonicalPath);
     $answer = trim(strip_tags((string)($post['content'] ?? '')));
@@ -2497,10 +2621,7 @@ function qaJsonLd(array $post): string {
 }
 function bookJsonLd(array $book): string {
     if (!SITE_URL) return '';
-    $slug = trim((string)($book['slug'] ?? ''));
-    $canonicalPath = $slug !== ''
-        ? jhd_route_path('book', ['slug' => $slug])
-        : jhd_route_path('book', ['id' => (int)($book['id'] ?? 0)]);
+    $canonicalPath = bookUrl($book);
     if ($canonicalPath === '') return '';
     $canonical = jhd_absolute_url($canonicalPath);
     $data = [
@@ -2533,11 +2654,8 @@ function bookJsonLd(array $book): string {
  * node as everywhere else; the description comes from the lesson itself.
  */
 function lessonJsonLd(array $lesson): string {
-    if (!SITE_URL) return '';
-    $slug = trim((string)($lesson['slug'] ?? ''));
-    $canonicalPath = $slug !== ''
-        ? jhd_route_path('lesson', ['slug' => $slug])
-        : '';
+    if (!SITE_URL || trim((string)($lesson['slug'] ?? '')) === '') return '';
+    $canonicalPath = lessonUrl($lesson);
     if ($canonicalPath === '') return '';
     $canonical = jhd_absolute_url($canonicalPath);
     $summary = trim((string)($lesson['summary'] ?? ''));

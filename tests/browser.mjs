@@ -16,22 +16,47 @@ try {
   const homeHero=page.locator('.jhd-home-hero');
   assert.equal(await homeHero.isVisible(),true,'homepage introduction is visible');
   assert.equal(await page.locator('#home-brand-title').isVisible(),true,'homepage has a visible brand heading');
-  assert.equal(await page.locator('.jhd-home-quick-links a').count(),4,'homepage has four quick-access destinations');
-  const homeSearch=page.locator('.jhd-home-search');
-  const homeSearchInput=page.locator('#home-search-query');
-  assert.equal(await homeSearch.isVisible(),true,'homepage archive search is visible');
-  assert.equal(await page.locator('label[for="home-search-query"]').count(),1,'homepage search has an associated accessible label');
-  await homeSearchInput.fill('قرآن');
+  const quickLinks=page.locator('.jhd-home-quick-links a');
+  assert.equal(await quickLinks.count(),8,'homepage links directly to all eight primary archives');
+  const quickRoutes=await quickLinks.evaluateAll(links=>links.map(link=>{
+    const url=new URL(link.href);
+    const queryRoute=url.searchParams.get('p');
+    return url.pathname.replace(/\/+$/,'')+(queryRoute?'/'+queryRoute:'');
+  }));
+  for (const route of ['news','articles','research','reports','topics','books','lessons','media']) {
+    assert.ok(quickRoutes.some(path=>path.endsWith('/'+route)),`homepage quick access includes ${route}`);
+  }
+  assert.equal(await page.locator('.jhd-home-search').count(),0,'homepage avoids a duplicate search form');
+  const headerSearch=page.locator('.jhd-search #header-search');
+  assert.equal(await headerSearch.isVisible(),true,'shared header search is visible on desktop');
+  await headerSearch.fill('قرآن');
   await Promise.all([
     page.waitForURL(url=>url.pathname.replace(/\/+$/,'').endsWith('/search')||url.searchParams.get('p')==='search',{timeout:30000}),
-    homeSearch.locator('button[type=submit]').click(),
+    page.locator('.jhd-search button[type=submit]').click(),
   ]);
-  assert.equal(new URL(page.url()).searchParams.get('q'),'قرآن','homepage search submits the entered query');
-  assert.equal(await page.locator('#archive-search-query').inputValue(),'قرآن','homepage search opens the archive with the query');
+  assert.equal(new URL(page.url()).searchParams.get('q'),'قرآن','header search submits the entered query');
+  assert.equal(await page.locator('#archive-search-query').inputValue(),'قرآن','header search opens the archive with the query');
+  await page.locator('#archive-search-type').selectOption('article');
+  await page.locator('#archive-search-sort').selectOption('newest');
+  await Promise.all([
+    page.waitForURL(url=>url.searchParams.get('type')==='article'&&url.searchParams.get('sort')==='newest',{timeout:30000}),
+    page.locator('.jhd-search-form button[type=submit]').click(),
+  ]);
+  assert.equal(new URL(page.url()).searchParams.get('type'),'article','archive type filter is submitted');
+  assert.equal(new URL(page.url()).searchParams.get('sort'),'newest','archive date sort is submitted');
+  assert.equal(await page.locator('#archive-search-topic').count(),1,'archive topic filter is available');
+  const topicOptions=await page.locator('#archive-search-topic option').evaluateAll(options=>options.map(option=>option.value).filter(Boolean));
+  if (topicOptions.length) {
+    await page.locator('#archive-search-topic').selectOption(topicOptions[0]);
+    await Promise.all([
+      page.waitForURL(url=>url.searchParams.get('topic')===topicOptions[0],{timeout:30000}),
+      page.locator('.jhd-search-form button[type=submit]').click(),
+    ]);
+    assert.equal(new URL(page.url()).searchParams.get('topic'),topicOptions[0],'archive topic filter is submitted');
+  }
   await page.goto(base,{waitUntil:'networkidle'});
   await page.setViewportSize({width:390,height:844});
-  const homeSearchFontSize=await homeSearchInput.evaluate(el=>parseFloat(getComputedStyle(el).fontSize));
-  assert.ok(homeSearchFontSize>=16,'homepage search avoids iOS input zoom on phones');
+  assert.equal(await page.locator('.jhd-header-actions a[aria-label="جستجو"]').isVisible(),true,'mobile header keeps a direct search link');
 
   const viewportAudit=[];
   for (const width of [320,360,375,390,430,768,992,1024,1280,1440]) {
@@ -57,14 +82,14 @@ try {
     assert.equal(route==='login' ? await page.locator('body.jhd-login-site').count()===1 : await page.locator('body.jhd-public-site').count()===1,true,`shared visual shell ${route}`);
     const description=await page.locator('meta[name="description"]').getAttribute('content');
     assert.ok((description||'').trim().length>20,`descriptive metadata ${route}`);
-    for (const width of [360,768,1280]) {
+    for (const width of [360,390,768,1024,1440]) {
       await page.setViewportSize({width,height:900});
       const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth);
       assert.equal(overflow,false,`horizontal overflow ${route} at ${width}px`);
     }
     pageViewportAudit.push(route);
   }
-  console.log('PASS public browser audit: '+pageViewportAudit.length+' routes × 3 widths');
+  console.log('PASS public browser audit: '+pageViewportAudit.length+' routes × 5 widths');
   // The archive search should stay compact and usable instead of inheriting
   // Bootstrap's oversized input-group-lg typography, especially on phones.
   await page.setViewportSize({width:390,height:844});
@@ -76,7 +101,9 @@ try {
   assert.equal(await archiveQuery.getAttribute('autofocus'),null,'search does not unexpectedly open the mobile keyboard');
   assert.equal(await page.locator('label[for="archive-search-query"]').count(),1,'visible search label is associated with its input');
   assert.equal(await page.locator('#archive-search-type').count(),1,'content type filter is available');
-  for (const width of [360,768,1280]) {
+  assert.equal(await page.locator('#archive-search-topic').count(),1,'topic filter is available');
+  assert.equal(await page.locator('#archive-search-sort').count(),1,'sort control is available');
+  for (const width of [360,390,768,1024,1440]) {
     await page.setViewportSize({width,height:900});
     const searchMetrics=await page.locator('#archive-search-query').evaluate(el=>({
       fontSize:parseFloat(getComputedStyle(el).fontSize),
@@ -87,7 +114,7 @@ try {
     assert.ok(searchMetrics.height<=52,`search control is not oversized at ${width}px (got ${searchMetrics.height}px)`);
     assert.equal(searchMetrics.overflow,false,`search page has no horizontal overflow at ${width}px`);
   }
-  console.log('PASS compact, labelled, responsive archive search');
+  console.log('PASS functional type/topic/sort archive filters and responsive search form');
 
   const detailFixture='test-results/browser-detail-routes.json';
   const detailRoutes=fs.existsSync(detailFixture)?JSON.parse(fs.readFileSync(detailFixture,'utf8')):[];
@@ -97,7 +124,7 @@ try {
     assert.equal(response?.status(),200,`HTTP detail ${route}`);
     assert.equal(await page.locator('h1').first().isVisible(),true,`visible detail heading ${route}`);
     assert.equal(await page.locator('body.jhd-public-site').count(),1,`shared detail shell ${route}`);
-    for (const width of [360,768,1280]) {
+    for (const width of [360,390,768,1024,1440]) {
       await page.setViewportSize({width,height:900});
       const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth);
       assert.equal(overflow,false,`horizontal overflow ${route} at ${width}px`);
@@ -132,7 +159,7 @@ try {
     assert.equal(await page.locator('[data-dashboard-section]').count(),3,'dashboard metrics are separated into three clear sections');
     assert.equal(await page.locator('.admin-quick-group').count(),2,'quick actions are separated by task');
     assert.equal(await page.locator('#admin-nav-content .sidebar-link').count(),8,'content navigation lists each content type separately');
-    for (const width of [360,768,1280]) {
+    for (const width of [360,390,768,1024,1440]) {
       await page.setViewportSize({width,height:900});
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`admin dashboard has no horizontal overflow at ${width}px`);
     }
@@ -189,7 +216,7 @@ try {
     assert.equal(await page.locator('#setting-site-name').isVisible(),true,'site settings form is visible to super admin');
     assert.equal(await page.locator('#admin-nav-system').evaluate(el=>el.open),true,'active system section expands in the sidebar');
     assert.equal(await page.locator('#admin-nav-system [aria-current="page"]').count(),1,'active settings route is identified in the sidebar');
-    for (const width of [360,768,1280]) {
+    for (const width of [360,390,768,1024,1440]) {
       await page.setViewportSize({width,height:900});
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`admin settings has no horizontal overflow at ${width}px`);
     }

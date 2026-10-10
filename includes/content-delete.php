@@ -5,7 +5,8 @@ function deleteContentRecord(string $table, int $id, ?string $postType = null): 
     if (!in_array($table, ['posts','lessons','books'], true) || $id<1) return false;
     $db=getDB(); $db->beginTransaction();
     try {
-        $stmt=$db->prepare("SELECT * FROM $table WHERE id=? FOR UPDATE");$stmt->execute([$id]);$row=$stmt->fetch();
+        $lockSuffix = databaseDriver() === 'sqlite' ? '' : ' FOR UPDATE';
+        $stmt=$db->prepare("SELECT * FROM $table WHERE id=?$lockSuffix");$stmt->execute([$id]);$row=$stmt->fetch();
         if (!$row || ($postType && ($row['post_type']??'')!==$postType)) { $db->rollBack(); return false; }
         $files=[];
         foreach(['featured_image','featured_video','audio_file','video_file','pdf_file','word_file','cover_image'] as $column) if (!empty($row[$column])) $files[]=$row[$column];

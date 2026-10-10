@@ -8,19 +8,34 @@ import fs from 'node:fs';
 
 const origin = (process.env.TEST_BASE_URL || 'http://127.0.0.1:8080').replace(/\/$/, '');
 // Pretty URLs are optional: without mod_rewrite the router serves the query
-// spelling.  Assertions on canonical URLs and internal links accept both.
+// spelling. Assertions follow the application's canonical route registry.
 let prettyUrls = true;
 const canonicalOk = (rawCanon, suffix) => {
   const canon = String(rawCanon).replaceAll('&amp;', '&');
-  const [, route] = suffix.match(/^\/([^/]+)\//) || [];
-  return canon.endsWith(suffix)
-    || (route && canon.endsWith(suffix.replace(/^\/[^/]+\//, `/index.php?p=${route}&slug=`)))
-    || (route && canon.endsWith(suffix.replace(/^\/[^/]+\//, `/index.php?p=${route}&id=`)));
+  let actual;
+  try { actual = new URL(canon, origin); } catch { return false; }
+  const expected = new URL(suffix, origin);
+  if (actual.pathname === expected.pathname && actual.search === expected.search) return true;
+
+  // These detail controllers use a distinct singular query-route key even
+  // though their stable pretty canonical lives under a plural collection.
+  const [collection, ...slugParts] = expected.pathname.split('/').filter(Boolean);
+  const queryRoute = {
+    announcements: 'announcement', articles: 'article', books: 'book', events: 'event',
+    lessons: 'lesson', news: 'news', programs: 'program', 'religious-activities': 'religious',
+    reports: 'report', research: 'research', speech: 'speech', speeches: 'speeches',
+    topics: 'topic', video: 'video', audio: 'audio',
+  }[collection];
+  if (!queryRoute || !actual.pathname.endsWith('/index.php') || actual.searchParams.get('p') !== queryRoute) return false;
+  const identifier = slugParts.join('/');
+  return ['video', 'audio'].includes(collection)
+    ? actual.searchParams.get('id') === identifier
+    : actual.searchParams.get('slug') === identifier;
 };
 const locationOk = (loc, expect) => loc.includes(expect) || loc.includes('p=' + expect.replace(/^\//, ''));
 const deepLinkRe = () => prettyUrls
-  ? /href="(\/(?:article|news|research|post|book|lesson|topic|speech|video|audio)\/[^"]*)"/g
-  : /href="(\/index\.php\?p=(?:article|news|research|post|book|lesson|topic|speech|video|audio)&[^"]*)"/g;
+  ? /href="(\/(?:article|articles|news|research|post|report|reports|announcement|announcements|program|programs|religious-activities|book|books|lesson|lessons|topic|topics|category|speech|speeches|video|videos|audio|audios)\/[^"]*)"/g
+  : /href="(\/index\.php\?p=(?:article|articles|news|research|post|report|reports|announcement|announcements|program|programs|religious-activities|book|books|lesson|lessons|topic|topics|category|speech|speeches|video|videos|audio|audios)&[^"]*)"/g;
 fs.mkdirSync('test-results', { recursive: true });
 const results = [];
 const check = (label, ok, detail = '') => {
@@ -95,15 +110,15 @@ for (const [path, marker] of [
 
 // ─── 2. Detail pages: 200 + canonical + related ───────────────────────────
 for (const [path, marker, canonicalSuffix] of [
-  ['/article/aql-in-religion', 'جایگاه عقل', '/article/aql-in-religion'],
+  ['/article/aql-in-religion', 'جایگاه عقل', '/articles/aql-in-religion'],
   ['/news/new-school-year', 'سال تحصیلی', '/news/new-school-year'],
   ['/research/research-method', 'روش‌شناسی', '/research/research-method'],
-  ['/post/milad-report', 'میلاد', '/report/milad-report'],
+  ['/post/milad-report', 'میلاد', '/reports/milad-report'],
   ['/speech/ramadan-speech', 'رمضان', '/speech/ramadan-speech'],
-  ['/book/usul-aqaid', 'اصول عقاید', '/book/usul-aqaid'],
-  ['/book/1', 'اصول عقاید', '/book/usul-aqaid'],
-  ['/lesson/fiqh-lesson-1', 'مقدمات فقه', '/lesson/fiqh-lesson-1'],
-  ['/topic/mahdaviat', 'امام مهدی', '/topic/mahdaviat'],
+  ['/book/usul-aqaid', 'اصول عقاید', '/books/usul-aqaid'],
+  ['/book/1', 'اصول عقاید', '/books/usul-aqaid'],
+  ['/lesson/fiqh-lesson-1', 'مقدمات فقه', '/lessons/fiqh-lesson-1'],
+  ['/topic/mahdaviat', 'امام مهدی', '/topics/mahdaviat'],
   ['/video/1', 'ویدیو تبیینی', '/video/1'],
   ['/audio/2', 'صوت مقاله', '/audio/2'],
 ]) {
@@ -112,7 +127,8 @@ for (const [path, marker, canonicalSuffix] of [
   if (r.status !== 200) continue;
   check(`GET ${path} body`, r.text.includes(marker) && clean(r.text), 'missing marker or PHP error');
   const canon = r.text.match(/<link rel="canonical" href="([^"]+)"/)?.[1] || '';
-  prettyUrls = prettyUrls && canon.includes('/' + path.split('/')[1] + '/');
+  const canonicalUrl = new URL(canon);
+  prettyUrls = prettyUrls && !(canonicalUrl.pathname.endsWith('/index.php') && canonicalUrl.searchParams.has('p'));
   check(`GET ${path} canonical`, canonicalOk(canon, canonicalSuffix), canon);
 }
 // Unicode slug detail
@@ -120,8 +136,15 @@ for (const [path, marker, canonicalSuffix] of [
   const uni = '/article/' + encodeURIComponent('مقاله-نمونه-فارسی');
   const r = await get(uni);
   check('GET unicode-slug article → 200', r.status === 200, r.status);
-  const canonHref = r.text.match(/<link rel="canonical" href="([^"]+)"/)?.[1] || '';
-  check('unicode article canonical single-encoded', canonHref.includes('%D9%85') && !canonHref.includes('%25'), canonHref);
+  const canonHref = (r.text.match(/<link rel="canonical" href="([^"]+)"/)?.[1] || '').replaceAll('&amp;', '&');
+  let unicodeCanonicalPath = '';
+  try {
+    const parsed = new URL(canonHref);
+    unicodeCanonicalPath = parsed.pathname.endsWith('/index.php')
+      ? `/articles/${parsed.searchParams.get('slug') || ''}`
+      : decodeURIComponent(parsed.pathname);
+  } catch { /* invalid canonical */ }
+  check('unicode article canonical is single-encoded or literal UTF-8', unicodeCanonicalPath.endsWith('/articles/مقاله-نمونه-فارسی') && !/%25(?:D9|d9)/.test(canonHref), canonHref);
 }
 // Legacy spellings keep working (backward compatibility)
 for (const [path, marker] of [
@@ -143,7 +166,7 @@ for (const [path, marker] of [
 {
   const r = await get('/post?slug=aql-in-religion');
   const canon = r.text.match(/<link rel="canonical" href="([^"]+)"/)?.[1] || '';
-  check('legacy /post?slug canonical → /article/…', canonicalOk(canon, '/article/aql-in-religion'), canon);
+  check('legacy /post?slug canonical → /articles/…', canonicalOk(canon, '/articles/aql-in-religion'), canon);
 }
 
 // ─── 3. Redirects: 301/302 with Location ─────────────────────────────────
@@ -232,7 +255,7 @@ for (const q of ['قرآن', 'فقه', 'test-does-not-exist-xyz']) {
   void links;
 }
 
-// ─── 7. Pagination: real pages, prev/next, no 404 ────────────────────────
+// ─── 7. Pagination: real pages stay reachable; out-of-range pages are 404 ───
 for (const [base, page2marker] of [
   ['/articles', 'seed-article-01'],
   ['/news', 'seed-news-01'],
@@ -241,12 +264,13 @@ for (const [base, page2marker] of [
   ['/audios', null],
 ]) {
   const p1 = await get(base);
+  const hasPage2 = /(?:\?|&|&amp;)page=2(?:&|&amp;|["'])/.test(p1.text);
   const p2 = await get(base + '?page=2');
-  check(`GET ${base}?page=2 → 200`, p2.status === 200, p2.status);
-  if (page2marker) check(`${base} page 2 has older items`, p2.text.includes(page2marker), '');
+  const validPage2 = hasPage2 ? p2.status === 200 && clean(p2.text) : p2.status === 404 && clean(p2.text);
+  check(`GET ${base}?page=2 → ${hasPage2 ? '200 (linked page)' : '404 (out of range)'}`, validPage2, p2.status);
+  if (page2marker && hasPage2) check(`${base} page 2 has older items`, p2.text.includes(page2marker), '');
   const bad = await get(base + '?page=999');
-  check(`GET ${base}?page=999 → 200 (empty, no crash)`, bad.status === 200 && clean(bad.text), bad.status);
-  void p1;
+  check(`GET ${base}?page=999 → 404 (out of range)`, bad.status === 404 && clean(bad.text) && bad.text.includes('شماره صفحه خارج از محدوده'), bad.status);
 }
 {
   // Pagination links themselves resolve.
@@ -264,9 +288,8 @@ for (const [base, page2marker] of [
   const sm = await get('/sitemap.xml');
   check('GET /sitemap.xml → 200', sm.status === 200, sm.status);
   const locs = [...sm.text.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1].trim().replaceAll('&amp;', '&'));
-  const typedOk = prettyUrls
-    ? locs.some((u) => u.includes('/article/')) && locs.some((u) => u.includes('/video/'))
-    : locs.some((u) => /p=article(&|$)/.test(u)) && locs.some((u) => /p=video(&|$)/.test(u));
+  const typedOk = locs.some((u) => u.includes('/articles/') || /[?&]p=article(?:&|$)/.test(u))
+    && locs.some((u) => u.includes('/video/') || /[?&]p=video(?:&|$)/.test(u));
   check('sitemap has typed post URLs', typedOk, `${locs.length} urls`);
   let sitemapBad = 0;
   // The sitemap is written with the configured SITE_URL (absolute), which is

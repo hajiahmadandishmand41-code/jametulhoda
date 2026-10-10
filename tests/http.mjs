@@ -34,6 +34,38 @@ for(const path of publicPaths){const r=await api.get(path);check('GET '+path,r.s
 // clean 400 rather than warnings/TypeErrors in a page controller.
 const malformedQuery=await api.get('/index.php?p=topic&slug%5B%5D=unexpected');
 check('array-shaped public query rejected cleanly',malformedQuery.status()===400,String(malformedQuery.status()));
+// Search operates on published content, not on a handcrafted collection of
+// result links. Exercise a known article, an actual topic scope, a draft-only
+// phrase, and SQL-looking input against the isolated fixture database.
+{
+  const articleParams=new URLSearchParams({q:'مهدویت',type:'article',sort:'relevance'});
+  const articleSearch=await api.get('/search?'+articleParams.toString());
+  const articleSearchHtml=await articleSearch.text();
+  check('search returns the matching published article',articleSearch.status()===200&&articleSearchHtml.includes('مهدویت و امید به آینده در اندیشه اسلامی')&&/jhd-search-result-count[\s\S]*?<strong>1<\/strong>/.test(articleSearchHtml),String(articleSearch.status()));
+
+  const initialSearch=await api.get('/search');
+  const initialSearchHtml=await initialSearch.text();
+  const quranTopicId=initialSearchHtml.match(/<option value="(\d+)"[^>]*>قرآن<\/option>/)?.[1]||'';
+  const topicParams=new URLSearchParams({type:'article',topic:quranTopicId,sort:'newest'});
+  const topicSearch=await api.get('/search?'+topicParams.toString());
+  const topicSearchHtml=await topicSearch.text();
+  check('search topic filter scopes to linked published articles',Boolean(quranTopicId)&&topicSearch.status()===200&&topicSearchHtml.includes('جایگاه عقل در معرفت دینی')&&!topicSearchHtml.includes('مهدویت و امید به آینده در اندیشه اسلامی'),String(topicSearch.status()));
+
+  const draftParams=new URLSearchParams({q:'پیش‌نویس منتشرنشده',type:'book'});
+  const draftSearch=await api.get('/search?'+draftParams.toString());
+  const draftSearchHtml=await draftSearch.text();
+  check('search never exposes an unpublished draft',draftSearch.status()===200&&!draftSearchHtml.includes('draft-book')&&!draftSearchHtml.includes('class="jhd-card'),String(draftSearch.status()));
+
+  const injectionParams=new URLSearchParams({q:"') OR 1=1 --",type:'article'});
+  const injectionSearch=await api.get('/search?'+injectionParams.toString());
+  const injectionSearchHtml=await injectionSearch.text();
+  check('SQL-looking search input remains a harmless bound value',injectionSearch.status()===200&&!/Warning|Fatal error|SQLSTATE/.test(injectionSearchHtml)&&/jhd-search-result-count[\s\S]*?<strong>0<\/strong>/.test(injectionSearchHtml),String(injectionSearch.status()));
+
+  const pageTwo=await api.get('/search?'+new URLSearchParams({type:'book',sort:'newest',page:'2'}).toString());
+  const pageTwoHtml=await pageTwo.text();
+  const paginationHrefs=[...pageTwoHtml.matchAll(/href="([^\"]*page=[^\"]+)"/g)].map(match=>new URL(match[1].replaceAll('&amp;','&'),base));
+  check('search pagination preserves type and sort filters',pageTwo.status()===200&&paginationHrefs.some(href=>href.searchParams.get('type')==='book'&&href.searchParams.get('sort')==='newest'&&href.searchParams.has('page')),String(pageTwo.status()));
+}
 
 // The browser installer is state-changing and must reject POSTs without its
 // session-bound CSRF token before inspecting database credentials.
@@ -44,10 +76,10 @@ if(installCsrf){
   check('installer form contains CSRF token',true,'');
   const noInstallCsrf=await api.post('/php/install',{form:{db_host:'invalid host'},maxRedirects:0});
   check('installer POST without CSRF is forbidden',noInstallCsrf.status()===403,String(noInstallCsrf.status()));
-  const invalidInstall=await api.post('/php/install',{form:{csrf_token:installCsrf,db_host:'invalid host',db_port:'3306',db_name:'test',db_user:'test',db_pass:'not-used',admin_username:'testadmin',admin_password:'NotARealPassword!123'},maxRedirects:0});
+  const invalidInstall=await api.post('/php/install',{form:{csrf_token:installCsrf,db_driver:'mysql',db_host:'invalid host',db_port:'3306',db_name:'test',db_user:'test',db_pass:'not-used',admin_username:'testadmin',admin_password:'NotARealPassword!123'},maxRedirects:0});
   const invalidInstallHtml=await invalidInstall.text();
   check('installer invalid host handled without PHP errors',invalidInstall.status()===200&&invalidInstallHtml.includes('میزبان MySQL معتبر نیست')&&!/(Warning|Fatal error|TypeError):/.test(invalidInstallHtml),String(invalidInstall.status()));
-  const emptyAdminPassword=await api.post('/php/install',{form:{csrf_token:installCsrf,db_host:'127.0.0.1',db_port:'3306',db_name:'test',db_user:'test',db_pass:'not-used',admin_username:'testadmin',admin_password:''},maxRedirects:0});
+  const emptyAdminPassword=await api.post('/php/install',{form:{csrf_token:installCsrf,db_driver:'mysql',db_host:'127.0.0.1',db_port:'3306',db_name:'test',db_user:'test',db_pass:'not-used',admin_username:'testadmin',admin_password:''},maxRedirects:0});
   const emptyAdminPasswordHtml=await emptyAdminPassword.text();
   check('installer has no public default admin password',emptyAdminPassword.status()===200&&emptyAdminPasswordHtml.includes('حداقل ۱۴ نویسه')&&!/(Warning|Fatal error|TypeError):/.test(emptyAdminPasswordHtml),String(emptyAdminPassword.status()));
 }else{
@@ -101,12 +133,36 @@ r=await api.get('/admin/books/create.php');csrf=token(await r.text());
 r=await api.post('/admin/books/create.php',{multipart:{csrf_token:csrf,title:'qa-book-'+stamp,description:'کتاب آزمون',status:'published',pdf_file:{name:'document.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF')}},maxRedirects:0});check('upload PDF + create book',r.status()===303,String(r.status()));
 r=await api.get('/books.php?q=qa-book-'+stamp);
 const bookHtml=await r.text();
-const bookMatch=bookHtml.match(/\/book(?:\.php)?\?(?:id=(\d+)|slug=([^"&]+))/) || bookHtml.match(/\/book\/(\d+)/) || bookHtml.match(/href="[^"]*\/book\/([^"?&]+)/) || bookHtml.match(/[?&]p=book&(?:amp;)?slug=([^"&\s]+)/) || bookHtml.match(/[?&]p=book&(?:amp;)?id=(\d+)/);
+const bookMatch=bookHtml.match(/\/book(?:\.php)?\?(?:id=(\d+)|slug=([^"&]+))/) || bookHtml.match(/\/books?\/(\d+)/) || bookHtml.match(/href="[^"]*\/books?\/([^"?&]+)/) || bookHtml.match(/[?&]p=book&(?:amp;)?slug=([^"&\s]+)/) || bookHtml.match(/[?&]p=book&(?:amp;)?id=(\d+)/);
 const bookId=bookMatch?.[1] && /^\d+$/.test(bookMatch[1]) ? bookMatch[1] : null;
 const bookSlug=!bookId && (bookMatch?.[2] || bookMatch?.[1]) ? decodeURIComponent(bookMatch[2] || bookMatch[1]) : null;
 check('book linked in library',Boolean(bookId || bookSlug));
 if(bookId || bookSlug){ const bookUrl = bookId ? '/book/'+bookId : '/book/'+encodeURIComponent(bookSlug); r=await api.get(bookUrl);check('book detail exists',r.status()===200); if(r.status()===200) browserDetailRoutes.push(bookUrl); const dlUrl = bookUrl + (bookUrl.includes('?') ? '&' : '?') + 'download=pdf'; r=await api.get(dlUrl,{maxRedirects:0});const dlOk = r.status()===302||r.status()===303||r.status()===200; check('book PDF download redirect',dlOk,String(r.status())); }
-for(const section of ['articles','news','lessons']){const slug='qa-'+section+'-'+stamp;r=await api.get('/admin/'+section+'/create.php');csrf=token(await r.text());r=await api.post('/admin/'+section+'/create.php',{form:{csrf_token:csrf,title:slug,content:'<p>Test content</p>',status:'published',level:'beginner','page_section[]':'home'},maxRedirects:0});check('create '+section,r.status()===303,String(r.status()));if(r.status()!==303)fs.writeFileSync('test-results/'+section+'-failure.html',await r.text());else{const detailPath=section==='articles'?'/article/'+slug:section==='news'?'/news/'+slug:'/lesson/'+slug;const detail=await api.get(detailPath);check('dynamic '+section+' route maps to detail controller',detail.status()===200 && (await detail.text()).includes(slug),String(detail.status()));if(detail.status()===200)browserDetailRoutes.push(detailPath);if(section==='articles'){const plural=await api.get('/articles/'+slug);check('plural article detail alias',plural.status()===200,String(plural.status()));if(plural.status()===200)browserDetailRoutes.push('/articles/'+slug);}}}
+for(const section of ['articles','news','lessons']){
+  const slug='qa-'+section+'-'+stamp;
+  const articleContent='<h2>بخش نخست</h2><p>متن نخست برای آزمون فهرست مطالب.</p><h2>بخش دوم</h2><p>متن دوم.</p><h3>زیر‌بخش</h3><p>متن پایانی.</p>';
+  const content=section==='articles'?articleContent:'<p>Test content</p>';
+  r=await api.get('/admin/'+section+'/create.php');
+  csrf=token(await r.text());
+  r=await api.post('/admin/'+section+'/create.php',{form:{csrf_token:csrf,title:slug,content,status:'published',level:'beginner','page_section[]':'home'},maxRedirects:0});
+  check('create '+section,r.status()===303,String(r.status()));
+  if(r.status()!==303)fs.writeFileSync('test-results/'+section+'-failure.html',await r.text());
+  else{
+    const detailPath=section==='articles'?'/article/'+slug:section==='news'?'/news/'+slug:'/lesson/'+slug;
+    const detail=await api.get(detailPath);
+    const detailHtml=await detail.text();
+    check('dynamic '+section+' route maps to detail controller',detail.status()===200&&detailHtml.includes(slug),String(detail.status()));
+    if(section==='articles'&&detail.status()===200){
+      check('long article renders reading wrapper and generated outline',detailHtml.includes('class="jhd-article"')&&detailHtml.includes('class="jhd-article-toc"')&&detailHtml.includes('href="#jhd-article-heading-1"'),String(detail.status()));
+    }
+    if(detail.status()===200)browserDetailRoutes.push(detailPath);
+    if(section==='articles'){
+      const plural=await api.get('/articles/'+slug);
+      check('plural article detail alias',plural.status()===200,String(plural.status()));
+      if(plural.status()===200)browserDetailRoutes.push('/articles/'+slug);
+    }
+  }
+}
 // Exercise the real multi-file lesson lifecycle and its stable ID-based folder.
 {
   const lessonTitle='qa-files-'+stamp;
@@ -127,8 +183,8 @@ for(const section of ['articles','news','lessons']){const slug='qa-'+section+'-'
   if (lessonId) {
     const lessonResponse=await api.get('/lesson/'+lessonTitle);
     const lessonHtml=await lessonResponse.text();
-    const keys=[...new Set([...lessonHtml.matchAll(/(?:src|href)="([^"\s]*\/lessons\/\d+\/[^"\s]+)"/g)].map(match=>match[1].replaceAll('&amp;','&')))];
-    check('lesson files stored in own ID folder',lessonResponse.status()===200&&keys.length>=4&&keys.every(key=>key.includes('/lessons/'+lessonId+'/')),String(keys.length));
+    const keys=[...new Set([...lessonHtml.matchAll(/(?:src|href)="([^"\s]*\/lessons\/(?:collection-\d+\/)?lesson-\d+\/[^"\s]+)"/g)].map(match=>match[1].replaceAll('&amp;','&')))];
+    check('lesson files stored in own ID folder',lessonResponse.status()===200&&keys.length>=4&&keys.every(key=>key.includes('/lessons/lesson-'+lessonId+'/')),String(keys.length));
     check('lesson renders two audio tracks and a video', (lessonHtml.match(/<audio /g)||[]).length>=2 && lessonHtml.includes('lecture'),String(lessonResponse.status()));
     for (const key of keys) {
       const file=await api.get(key,{maxRedirects:0});
@@ -249,7 +305,10 @@ r=await api.post('/ajax/like.php',{data:{post_id:Number(id)}});check('like endpo
 r=await api.get('/ajax/like.php');check('like GET also 404',r.status()===404,String(r.status()));
 r=await api.get('/admin/posts/delete.php?id='+id);check('GET delete confirms, no mutation',r.status()===200 && (await r.text()).includes('تأیید عملیات'));r=await api.get('/post.php?slug='+title);check('post still exists after GET delete',r.status()===200);r=await api.post('/admin/posts/delete.php',{form:{id},maxRedirects:0});check('delete missing CSRF rejected',r.status()===403);r=await api.get('/admin/posts/delete.php?id='+id);csrf=token(await r.text());r=await api.post('/admin/posts/delete.php',{form:{id,csrf_token:csrf},maxRedirects:0});check('POST delete valid',r.status()===303,String(r.status()));r=await api.get('/post.php?slug='+title);check('deleted post 404',r.status()===404);for(const url of stored){const file=await api.get(url);check('deleted media returns 404',file.status()===404);}}
 r=await api.get('/admin/posts/create.php');csrf=token(await r.text());
-r=await api.post('/admin/posts/create.php',{multipart:{csrf_token:csrf,title:'rejected-'+stamp,status:'published',featured_image:{name:'photo.jpg',mimeType:'image/jpeg',buffer:Buffer.from('<?php echo "unsafe"; ?>')}},maxRedirects:0});check('spoofed image rejected',r.status()===200 && /تصویر شاخص معتبر نیست|خطا در آپلود/.test(await r.text()));
+const rejectedPostSlug='rejected-'+stamp;
+r=await api.post('/admin/posts/create.php',{multipart:{csrf_token:csrf,title:rejectedPostSlug,status:'published',featured_image:{name:'photo.jpg',mimeType:'image/jpeg',buffer:Buffer.from('<?php echo "unsafe"; ?>')}},maxRedirects:0});check('spoofed image rejected',r.status()===200 && /تصویر شاخص معتبر نیست|خطا در آپلود/.test(await r.text()));
+const rejectedPostDetail=await api.get('/article/'+rejectedPostSlug);
+check('failed post upload leaves no published blank content',rejectedPostDetail.status()===404,String(rejectedPostDetail.status()));
 // Failed multi-file content uploads must not leak a previously accepted image.
 // A standalone media-library upload is intentional and must survive this cleanup.
 r=await api.get('/admin/media/'); csrf=token(await r.text());
