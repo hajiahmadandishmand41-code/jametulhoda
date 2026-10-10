@@ -253,8 +253,7 @@ $homeHasAnyContent =
 <?php
 $homeQuickLinks = [
     ['route' => 'news', 'label' => 'اخبار', 'icon' => 'bi-newspaper'],
-    ['route' => 'articles', 'label' => 'مقالات', 'icon' => 'bi-journal-text'],
-    ['route' => 'research', 'label' => 'پژوهش', 'icon' => 'bi-journal-richtext'],
+    ['route' => 'articles', 'label' => 'مقالات و پژوهش', 'icon' => 'bi-journal-text'],
     ['route' => 'reports', 'label' => 'گزارش‌ها', 'icon' => 'bi-card-text'],
     ['route' => 'topics', 'label' => 'موضوعات', 'icon' => 'bi-diagram-3'],
     ['route' => 'books', 'label' => 'کتابخانه', 'icon' => 'bi-book'],

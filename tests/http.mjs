@@ -20,7 +20,7 @@ const token=html=>html.match(/name="csrf_token" value="([a-f0-9]+)"/)?.[1];
 const publicPaths=['/','/index.php',
  '/about','/about.php','/contact','/contact.php','/news','/news.php','/articles','/articles.php',
  '/reports','/reports.php','/events','/books','/books.php','/lessons','/lessons.php',
- '/research','/research.php','/media','/videos','/audios','/topics','/topics.php','/search','/qa','/login',
+ '/articles?type=research','/media','/videos','/audios','/topics','/topics.php','/search','/qa','/login',
  '/login.php','/register','/register.php','/admin/login','/admin/login.php',
  '/speeches','/speeches.php','/programs','/programs.php','/religious-activities','/religious-activities.php',
  '/announcements','/announcements.php','/search?q=test','/search.php?q=test',

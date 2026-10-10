@@ -391,8 +391,7 @@ if (!$noindexSeo) {
             <ul class="jhd-nav-list mb-0">
                 <li><a href="<?= url() ?>" class="jhd-nav-link <?= $isActiveNav('/') ? 'active' : '' ?>" <?= $isActiveNav('/') ? 'aria-current="page"' : '' ?>>خانه</a></li>
                 <?= jhd_render_desktop_nav_item(['route'=>'news','label'=>'اخبار','types'=>['news']], $isActiveNav) ?>
-                <?= jhd_render_desktop_nav_item(['route'=>'articles','label'=>'مقالات','types'=>['article']], $isActiveNav, ['article']) ?>
-                <?= jhd_render_desktop_nav_item(['route'=>'research','label'=>'پژوهش','types'=>['research']], $isActiveNav) ?>
+                <?= jhd_render_desktop_nav_item(['route'=>'articles','label'=>'مقالات و پژوهش','types'=>['article','research']], $isActiveNav, ['article','research']) ?>
                 <?= jhd_render_desktop_nav_item(['route'=>'books','label'=>'کتابخانه','types'=>[]], $isActiveNav, ['book']) ?>
                 <?= jhd_render_desktop_nav_item(['route'=>'lessons','label'=>'دروس','types'=>[]], $isActiveNav, ['lesson']) ?>
                 <?= jhd_render_desktop_nav_item(['route'=>'events','label'=>'رویدادها','types'=>['program','religious','announcement']], $isActiveNav, ['programs','announcements','religious-activities']) ?>
@@ -444,9 +443,8 @@ if (!$noindexSeo) {
         <div class="drawer-section">ناوبری اصلی</div>
         <a href="<?= url() ?>" class="drawer-link <?= $isActiveNav('/') ? 'active' : '' ?>"><i class="bi bi-house"></i> خانه</a>
         <?= jhd_render_drawer_nav_item(['route'=>'news','label'=>'اخبار','icon'=>'bi-newspaper','types'=>['news']], $isActiveNav) ?>
-        <?= jhd_render_drawer_nav_item(['route'=>'articles','label'=>'مقالات','icon'=>'bi-file-text','types'=>['article']], $isActiveNav) ?>
+        <?= jhd_render_drawer_nav_item(['route'=>'articles','label'=>'مقالات و پژوهش','icon'=>'bi-file-text','types'=>['article','research']], $isActiveNav) ?>
         <?= jhd_render_drawer_nav_item(['route'=>'reports','label'=>'گزارش‌ها','icon'=>'bi-card-text','types'=>['report']], $isActiveNav) ?>
-        <?= jhd_render_drawer_nav_item(['route'=>'research','label'=>'پژوهش','icon'=>'bi-journal-richtext','types'=>['research']], $isActiveNav) ?>
         <?= jhd_render_drawer_nav_item(['route'=>'books','label'=>'کتابخانه','icon'=>'bi-book','types'=>[]], $isActiveNav) ?>
         <?= jhd_render_drawer_nav_item(['route'=>'lessons','label'=>'دروس','icon'=>'bi-mortarboard','types'=>[]], $isActiveNav) ?>
         <?= jhd_render_drawer_nav_item(['route'=>'events','label'=>'رویدادها','icon'=>'bi-calendar-event','types'=>['program','religious','announcement']], $isActiveNav) ?>

@@ -3304,3 +3304,140 @@ html { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: reduce) {
   .jhd-related-link { transition: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   لایهٔ ۲۰۲۶ — تایپوگرافی سبک خبری (الهام از چیدمان و سلسله‌مراتب BBC فارسی)
+   ───────────────────────────────────────────────────────────────────────────
+   - فونت: Vazirmatn (متن‌باز، OFL) با وزن‌های ۴۰۰ و ۸۰۰–۹۰۰. فونت‌های اختصاصی
+     BBC لایسنس عمومی ندارند و در این مخزن استفاده نشده‌اند.
+   - سلسله‌مراتب ثابت: تیتر بزرگ و پرِوزن، خلاصه‌ی خوانا، متن مقاله با
+     اندازهٔ ۱۸px و فاصلهٔ خط ۲، و عرض سطر محدود برای خوانش راحت.
+   - کارت‌ها: تیتر پرِوزن، خط‌های ثابت، بدون افکت تزئینی.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --jhd-measure: 68ch;
+  --jhd-rule: 4px;
+  --jhd-title-lh: 1.45;
+  --jhd-read-size: 1.0625rem;
+  --jhd-read-lh: 2;
+}
+
+body.jhd-public-site {
+  font-size: 16px;
+  line-height: 1.85;
+  font-feature-settings: "kern" 1, "liga" 1;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* تیترها: پرِوزن و فشرده‌تر، مثل تیتر خبری */
+h1, h2, h3, h4 {
+  font-weight: 900;
+  line-height: var(--jhd-title-lh);
+  letter-spacing: 0;
+}
+h2 { font-size: clamp(1.3rem, 1.1rem + .7vw, 1.6rem); }
+h3 { font-size: clamp(1.1rem, 1rem + .4vw, 1.25rem); }
+
+/* سرخط بخش: میلهٔ ضخیم بالای سرخط (ساختار BBC) */
+.jhd-section-head {
+  border-top: var(--jhd-rule) solid var(--jhd-ink);
+  padding-top: .65rem;
+  margin-bottom: 1.1rem;
+}
+.jhd-section-head h2,
+.jhd-section-head .jhd-section-title { font-weight: 900; }
+
+/* کارت‌ها */
+.jhd-card-title,
+.jhd-card--article .jhd-card-title,
+.jhd-card--report .jhd-card-title,
+.jhd-card--topic .jhd-card-title {
+  font-weight: 800;
+  line-height: 1.5;
+  font-size: 1.02rem;
+}
+.jhd-card-summary {
+  font-size: .9rem;
+  line-height: 1.8;
+  color: var(--jhd-muted);
+}
+.jhd-card-meta { font-size: .78rem; font-weight: 600; color: var(--jhd-muted); }
+
+/* ── فهرست یکپارچهٔ مقالات و پژوهش‌ها ─────────────────────────────────── */
+.jhd-type-tabs {
+  display: flex;
+  gap: 1.25rem;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--jhd-border);
+  margin: 0 0 1.25rem;
+  scrollbar-width: none;
+}
+.jhd-type-tabs::-webkit-scrollbar { display: none; }
+.jhd-type-tab {
+  position: relative;
+  flex: 0 0 auto;
+  padding: .55rem .1rem .7rem;
+  font-weight: 700;
+  font-size: .95rem;
+  color: var(--jhd-muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.jhd-type-tab:hover { color: var(--jhd-ink); }
+.jhd-type-tab.is-active { color: var(--jhd-ink); font-weight: 900; }
+.jhd-type-tab.is-active::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: -1px;
+  height: var(--jhd-rule);
+  background: var(--jhd-green);
+}
+.jhd-type-tab:focus-visible { outline: 2px solid var(--jhd-green); outline-offset: 2px; border-radius: 4px; }
+
+/* چیپ فعال در نوارهای زیربخش (موضوع/دسته) */
+.jhd-cat-strip .jhd-chip.jhd-chip--all { font-weight: 800; }
+
+/* ── صفحهٔ جزئیات مقاله: خوانایی حداکثری ─────────────────────────────── */
+.jhd-article .jhd-prose,
+.jhd-article .jhd-prose--sm {
+  font-size: var(--jhd-read-size);
+  line-height: var(--jhd-read-lh);
+  max-width: var(--jhd-measure);
+  color: var(--jhd-ink);
+}
+.jhd-article .jhd-prose p { margin-bottom: 1.1rem; }
+.jhd-article .jhd-prose h2 {
+  font-size: clamp(1.25rem, 1.1rem + .6vw, 1.5rem);
+  margin-top: 2.2rem;
+}
+.jhd-article .jhd-prose a {
+  color: var(--jhd-green);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.jhd-article .jhd-prose a:hover { color: var(--jhd-green-hover); }
+
+/* تیتر اصلی مقاله/خبر */
+.jhd-article h1,
+.jhd-article .jhd-article-title {
+  font-size: clamp(1.75rem, 1.2rem + 2vw, 2.6rem);
+  font-weight: 900;
+  line-height: 1.35;
+  letter-spacing: 0;
+  margin-bottom: .75rem;
+}
+
+/* کاهش جابه‌جایی برای کاربران حساس به حرکت */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { transition: none !important; animation: none !important; }
+}
+
+@media (max-width: 575.98px) {
+  body.jhd-public-site { font-size: 15.5px; }
+  :root { --jhd-read-size: 1rem; --jhd-read-lh: 1.95; }
+  .jhd-section-head { margin-bottom: .85rem; }
+}

@@ -184,7 +184,6 @@ foreach ([
     'news',
     'articles',
     'reports',
-    'research',
     'books',
     'lessons',
     'topics',

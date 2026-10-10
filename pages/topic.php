@@ -136,8 +136,11 @@ function topicMediaDestination(array $file): string {
     return postUrl(['slug' => (string)($file['parent_slug'] ?? ''), 'post_type' => (string)($file['post_type'] ?? '')]);
 }
 
-$allowedSections = ['all','news','articles','research','reports','other','books','lessons','media'];
-$section = in_array($_GET['section'] ?? 'all', $allowedSections, true) ? (string)($_GET['section'] ?? 'all') : 'all';
+// «مقالات» و «پژوهش‌ها» در موضوع‌ها یک بخش‌اند؛ نشانی قدیمی section=research به همان بخش می‌رود.
+$allowedSections = ['all','news','articles','reports','other','books','lessons','media'];
+$requestedSection = (string)($_GET['section'] ?? 'all');
+if ($requestedSection === 'research') $requestedSection = 'articles';
+$section = in_array($requestedSection, $allowedSections, true) ? $requestedSection : 'all';
 $sort = ($_GET['sort'] ?? 'newest') === 'oldest' ? 'oldest' : 'newest';
 $page = max(1, (int)($_GET['page'] ?? 1));
 $limit = 12;
@@ -148,25 +151,28 @@ $children = getTopicChildren((int)$topic['id']);
 $parents = getTopicBreadcrumbs((int)$topic['id']);
 $counts = [
     'news' => countPostsByTopic((int)$topic['id'], 'news', $scopeIds),
-    'articles' => countPostsByTopic((int)$topic['id'], 'article', $scopeIds),
-    'research' => countPostsByTopic((int)$topic['id'], 'research', $scopeIds),
+    'articles' => countPostsByTopic((int)$topic['id'], 'article', $scopeIds) + countPostsByTopic((int)$topic['id'], 'research', $scopeIds),
     'reports' => countPostsByTopic((int)$topic['id'], 'report', $scopeIds),
     'other' => 0,
     'books' => countBooksByTopic((int)$topic['id'], $scopeIds),
     'lessons' => countLessonsByTopic((int)$topic['id'], $scopeIds),
     'media' => 0,
 ];
-$counts['other'] = max(0, countPostsByTopic((int)$topic['id'], null, $scopeIds) - $counts['news'] - $counts['articles'] - $counts['research'] - $counts['reports']);
+$counts['other'] = max(0, countPostsByTopic((int)$topic['id'], null, $scopeIds) - $counts['news'] - $counts['articles'] - $counts['reports']);
 $db = getDB();
 try { $counts['media'] = topicMediaCount($db, $scopeIds); } catch (Throwable) { $counts['media'] = 0; }
 
-$sectionTitles = ['all'=>'همهٔ محتوا','news'=>'اخبار','articles'=>'مقالات','research'=>'پژوهش‌ها','reports'=>'گزارش‌ها','other'=>'سایر مطالب','books'=>'کتاب‌ها','lessons'=>'دروس','media'=>'ویدیوها و صوت‌ها'];
+$sectionTitles = ['all'=>'همهٔ محتوا','news'=>'اخبار','articles'=>'مقالات و پژوهش‌ها','reports'=>'گزارش‌ها','other'=>'سایر مطالب','books'=>'کتاب‌ها','lessons'=>'دروس','media'=>'ویدیوها و صوت‌ها'];
 $items = [];
 $total = 0;
-if (in_array($section, ['news','articles','research','reports'], true)) {
-    $type = ['news'=>'news','articles'=>'article','research'=>'research','reports'=>'report'][$section];
+if (in_array($section, ['news','articles','reports'], true)) {
     $total = $counts[$section];
-    $items = getPostsByTopic((int)$topic['id'], ['type'=>$type,'limit'=>$limit,'offset'=>$offset,'sort'=>$sort,'scope_ids'=>$scopeIds]);
+    if ($section === 'articles') {
+        $items = getPostsByTopic((int)$topic['id'], ['types'=>['article','research'],'limit'=>$limit,'offset'=>$offset,'sort'=>$sort,'scope_ids'=>$scopeIds]);
+    } else {
+        $type = ['news'=>'news','reports'=>'report'][$section];
+        $items = getPostsByTopic((int)$topic['id'], ['type'=>$type,'limit'=>$limit,'offset'=>$offset,'sort'=>$sort,'scope_ids'=>$scopeIds]);
+    }
 } elseif ($section === 'other') {
     $total = $counts['other'];
     $items = getPostsByTopic((int)$topic['id'], ['exclude_types'=>['news','article','research','report'],'limit'=>$limit,'offset'=>$offset,'sort'=>$sort,'scope_ids'=>$scopeIds]);
@@ -215,7 +221,7 @@ require __DIR__ . '/../includes/header.php';
       <?php if ($topicLead !== ''): ?><p class="jhd-hero-compact__lead"><?= sanitize(excerpt($topicLead, 190)) ?></p><?php endif; ?>
     </div>
     <ul class="jhd-hero-compact__stats" aria-label="آمار محتوای این موضوع<?= count($scopeIds) > 1 ? ' با زیرموضوع‌ها' : '' ?>">
-      <li><strong><?= number_format($counts['articles'] + $counts['research']) ?></strong><span>مقاله و پژوهش</span></li>
+      <li><strong><?= number_format($counts['articles']) ?></strong><span>مقاله و پژوهش</span></li>
       <li><strong><?= number_format($counts['news'] + $counts['reports']) ?></strong><span>خبر و گزارش</span></li>
       <li><strong><?= number_format($counts['books']) ?></strong><span>کتاب</span></li>
       <li><strong><?= number_format($counts['lessons']) ?></strong><span>درس</span></li>
@@ -237,7 +243,7 @@ require __DIR__ . '/../includes/header.php';
   </nav>
 
   <nav class="jhd-cat-strip mb-4 jhd-cat-strip--sticky" aria-label="فیلتر نوع محتوا">
-    <?php foreach (['all'=>'همه','news'=>'اخبار','articles'=>'مقالات','research'=>'پژوهش‌ها','reports'=>'گزارش‌ها','other'=>'سایر مطالب','books'=>'کتاب‌ها','lessons'=>'دروس','media'=>'رسانه'] as $key => $label): $badge = $key === 'all' ? array_sum($counts) : ($counts[$key] ?? 0); ?>
+    <?php foreach (['all'=>'همه','news'=>'اخبار','articles'=>'مقالات و پژوهش‌ها','reports'=>'گزارش‌ها','other'=>'سایر مطالب','books'=>'کتاب‌ها','lessons'=>'دروس','media'=>'رسانه'] as $key => $label): $badge = $key === 'all' ? array_sum($counts) : ($counts[$key] ?? 0); ?>
       <a class="jhd-chip <?= $section === $key ? 'jhd-chip--all' : '' ?>" href="<?= topicHubUrl($topic, $key, ['sort'=>$sort]) ?>"><?= sanitize($label) ?> <small>(<?= number_format($badge) ?>)</small></a>
     <?php endforeach; ?>
   </nav>
@@ -246,8 +252,7 @@ require __DIR__ . '/../includes/header.php';
     <?php
     $previews = [
         'news' => getPostsByTopic((int)$topic['id'], ['type'=>'news','limit'=>3,'scope_ids'=>$scopeIds]),
-        'articles' => getPostsByTopic((int)$topic['id'], ['type'=>'article','limit'=>3,'scope_ids'=>$scopeIds]),
-        'research' => getPostsByTopic((int)$topic['id'], ['type'=>'research','limit'=>3,'scope_ids'=>$scopeIds]),
+        'articles' => getPostsByTopic((int)$topic['id'], ['types'=>['article','research'],'limit'=>3,'scope_ids'=>$scopeIds]),
         'reports' => getPostsByTopic((int)$topic['id'], ['type'=>'report','limit'=>3,'scope_ids'=>$scopeIds]),
         'other' => getPostsByTopic((int)$topic['id'], ['exclude_types'=>['news','article','research','report'],'limit'=>3,'scope_ids'=>$scopeIds]),
         'books' => getBooksByTopic((int)$topic['id'], 3, 0, 'newest', $scopeIds),
@@ -256,7 +261,7 @@ require __DIR__ . '/../includes/header.php';
     ];
     $hasContent = array_sum($counts) > 0;
     ?>
-    <?php foreach (['news'=>'اخبار','articles'=>'مقالات','research'=>'پژوهش‌ها','reports'=>'گزارش‌ها','other'=>'سایر مطالب'] as $key => $heading): if ($previews[$key]): ?>
+    <?php foreach (['news'=>'اخبار','articles'=>'مقالات و پژوهش‌ها','reports'=>'گزارش‌ها','other'=>'سایر مطالب'] as $key => $heading): if ($previews[$key]): ?>
       <section class="mb-5"><div class="d-flex justify-content-between align-items-center mb-3"><h2 class="h4 mb-0"><?= sanitize($heading) ?></h2><a href="<?= topicHubUrl($topic, $key) ?>" class="btn btn-sm btn-outline-primary">همه (<?= number_format($counts[$key]) ?>)</a></div><?= jhd_grid_open() ?>
         <?php jhd_preload_post_topics($previews[$key]); foreach ($previews[$key] as $post) echo renderPostCard($post, ['cta'=>'مشاهده']); ?>
       <?= jhd_grid_close() ?></section>
@@ -274,7 +279,7 @@ require __DIR__ . '/../includes/header.php';
     <section>
       <div class="d-flex justify-content-between flex-wrap gap-2 align-items-center mb-4"><h2 class="h3 mb-0"><?= sanitize($sectionTitles[$section]) ?></h2><form method="get" action="<?= formUrl('topic') ?>" class="d-flex gap-2"><?= formRouteFields('topic') ?><input type="hidden" name="slug" value="<?= sanitize(jhd_topic_slug_path($topic)) ?>"><input type="hidden" name="section" value="<?= sanitize($section) ?>"><select name="sort" class="form-select form-select-sm"><option value="newest" <?= $sort === 'newest' ? 'selected' : '' ?>>تازه‌ترین</option><option value="oldest" <?= $sort === 'oldest' ? 'selected' : '' ?>>قدیمی‌ترین</option></select><button class="btn btn-sm btn-outline-secondary">مرتب‌سازی</button></form></div>
       <?php if (!$items): ?><?php echo renderEmptyState('bi-inboxes', 'هنوز محتوایی در این موضوع ثبت نشده است.', url('topics'), 'همه موضوعات'); ?>
-      <?php elseif (in_array($section, ['news','articles','research','reports','other'], true)): ?><?= jhd_grid_open() ?><?php jhd_preload_post_topics($items); foreach ($items as $post) echo renderPostCard($post, ['cta'=>'مشاهده']); ?><?= jhd_grid_close() ?>
+      <?php elseif (in_array($section, ['news','articles','reports','other'], true)): ?><?= jhd_grid_open() ?><?php jhd_preload_post_topics($items); foreach ($items as $post) echo renderPostCard($post, ['cta'=>'مشاهده']); ?><?= jhd_grid_close() ?>
       <?php elseif ($section === 'books'): ?><?= jhd_grid_open() ?><?php foreach ($items as $book) echo renderBookCard($book); ?><?= jhd_grid_close() ?>
       <?php elseif ($section === 'lessons'): ?><?= jhd_grid_open() ?><?php foreach ($items as $lesson) echo renderLessonCard($lesson); ?><?= jhd_grid_close() ?>
       <?php else: ?><?= jhd_grid_open() ?><?php foreach ($items as $file) echo renderMediaCard($file, ['url' => topicMediaDestination($file)]); ?><?= jhd_grid_close() ?><?php endif; ?>
