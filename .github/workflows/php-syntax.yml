@@ -34,7 +34,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -Ein 'META_PAGE|graph\\.facebook\\.com|facebook_(configured|connected|page_url)' api/mobile-feed.php docs/NATIVE-ANDROID-FEED.md; then
+          if grep -Eini '(facebook|meta_page|graph[.]facebook[.]com)' api/mobile-feed.php docs/NATIVE-ANDROID-FEED.md; then
             echo "The native app feed must use website content only."
             exit 1
           fi
