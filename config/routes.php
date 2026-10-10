@@ -20,6 +20,7 @@ return [
         '/index.php'            => 'index.php',
         // Read-only JSON feed for the lightweight native Android app.
         '/api/mobile-feed'      => 'api/mobile-feed.php',
+        '/api/mobile-auth'      => 'api/mobile-auth.php',
         '/about'                => 'pages/about.php',
         '/announcements'        => 'pages/announcements.php',
         '/article'              => 'pages/post.php',
