@@ -306,15 +306,15 @@ html[data-theme="dark"] .jhd-search button { color: #0d241b; }
 .jhd-search button:hover { background: var(--jhd-green-hover); }
 .jhd-header-actions { display: flex; align-items: center; gap: .35rem; flex: 0 0 auto; }
 .jhd-icon-btn {
-  width: 38px; height: 38px;
+  width: 34px; height: 34px;
   display: inline-grid;
   place-items: center;
   border: 1px solid var(--jhd-border);
-  border-radius: var(--jhd-radius-sm);
-  background: transparent;
+  border-radius: 50%;
+  background: var(--jhd-surface);
   color: var(--jhd-muted);
   cursor: pointer;
-  font-size: 1.05rem;
+  font-size: .95rem;
   transition: color .15s ease, border-color .15s ease, background-color .15s ease;
 }
 .jhd-icon-btn:hover { color: var(--jhd-green); border-color: var(--jhd-green); background: var(--jhd-green-soft); }
@@ -517,81 +517,107 @@ html[data-theme="dark"] .jhd-drawer-search button { color: #0d241b; }
 .jhd-db-notice i { color: var(--jhd-gold); flex: 0 0 auto; }
 .jhd-db-notice a { font-weight: 700; }
 
-/* ─── ۸. تابلوی معرفی برند (صفحه اصلی) ───────────────────────────────────── */
+/* ─── ۸. معرفی فشردهٔ صفحهٔ اصلی و دسترسی‌های سریع ──────────────────────── */
 .jhd-brand-board {
-  background:
-    linear-gradient(180deg, var(--jhd-green-soft) 0, var(--jhd-surface) 72%);
+  background: var(--jhd-surface);
   border-bottom: 1px solid var(--jhd-border);
-  box-shadow: inset 0 -2px 0 var(--jhd-gold);
-  padding-block: 1.35rem;
+  padding-block: 1.1rem;
 }
+.jhd-home-hero { width: 100%; max-width: 54rem; }
+.jhd-home-hero-copy { min-width: 0; }
 .jhd-board-official {
   margin: 0 0 .2rem;
-  font-size: .72rem;
-  font-weight: 800;
   color: var(--jhd-gold-text);
-  letter-spacing: .06em;
-}
-.jhd-brand-board .container {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem 1.5rem;
-  flex-wrap: wrap;
+  font-size: .74rem;
+  font-weight: 750;
 }
 .jhd-brand-board h1 {
   margin: 0;
-  font-size: clamp(1.25rem, 1.1rem + .7vw, 1.55rem);
+  font-size: clamp(1.35rem, 1.1rem + .8vw, 1.75rem);
   font-weight: 800;
+  line-height: 1.5;
 }
 .jhd-brand-board .jhd-board-slogan {
-  margin: .15rem 0 0;
+  margin: .18rem 0 0;
   color: var(--jhd-muted);
-  font-size: .92rem;
+  font-size: .9rem;
+  line-height: 1.8;
 }
-.jhd-brand-board .jhd-board-tags {
-  margin: .45rem 0 0;
-  padding: 0;
-  list-style: none;
+.jhd-home-quick-access { padding-block: 1.3rem; }
+.jhd-home-quick-links {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .55rem;
+}
+.jhd-home-quick-link {
   display: flex;
-  flex-wrap: wrap;
-  gap: .35rem .9rem;
-  font-size: .78rem;
-  color: var(--jhd-muted);
+  align-items: center;
+  gap: .55rem;
+  min-width: 0;
+  min-height: 56px;
+  padding: .55rem .65rem;
+  border: 1px solid var(--jhd-border);
+  border-radius: var(--jhd-radius);
+  background: var(--jhd-surface);
+  color: var(--jhd-ink);
+  font-size: .82rem;
+  font-weight: 700;
+  transition: border-color .18s ease, background-color .18s ease, transform .18s ease;
 }
-.jhd-brand-board .jhd-board-tags li { display: inline-flex; align-items: center; gap: .35rem; }
-.jhd-brand-board .jhd-board-tags li + li::before {
-  content: '';
-  width: 4px; height: 4px;
+.jhd-home-quick-link:hover {
+  border-color: var(--jhd-border-strong);
+  background: var(--jhd-paper);
+  color: var(--jhd-green);
+  transform: translateY(-1px);
+}
+.jhd-home-quick-link > i:first-child {
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
-  background: var(--jhd-gold);
-  margin-inline-end: .55rem;
-  order: -1;
+  background: var(--jhd-green-soft);
+  color: var(--jhd-green);
+  font-size: .95rem;
 }
-.jhd-brand-board .jhd-board-mark {
-  font-family: var(--jhd-font-display);
-  color: var(--jhd-gold);
-  font-size: 1.5rem;
-  line-height: 1;
-  flex: 0 0 auto;
+.jhd-home-quick-link > span { min-width: 0; }
+.jhd-home-quick-link > i:last-child { margin-inline-start: auto; color: var(--jhd-muted); font-size: .72rem; }
+.jhd-home-topic-links {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .5rem;
+}
+.jhd-home-topic-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  min-width: 0;
+  padding: .6rem .75rem;
+  border: 1px solid var(--jhd-border);
+  border-radius: var(--jhd-radius-sm);
+  background: var(--jhd-surface);
+  color: var(--jhd-ink);
+  font-size: .82rem;
+  font-weight: 700;
+}
+.jhd-home-topic-link:hover { border-color: var(--jhd-border-strong); color: var(--jhd-green); }
+.jhd-home-topic-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jhd-home-topic-link small { flex: 0 0 auto; color: var(--jhd-muted); font-size: .7rem; font-weight: 500; }
+.jhd-home-picks-list { display: grid; gap: .65rem; }
+@media (max-width: 767.98px) {
+  .jhd-home-quick-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .jhd-home-topic-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 575.98px) {
-  .jhd-brand-board { padding-block: .85rem; }
-  .jhd-brand-board .jhd-board-mark { display: none; }
-}
-
-/* Compact homepage utilities */
-.jhd-home-hero { display: block; width: 100%; padding: .35rem 0; }
-.jhd-home-hero-copy { position: relative; }
-.jhd-home-hero-copy::before { content: ''; position: absolute; inset-inline-start: -.7rem; inset-block: .2rem; width: 3px; border-radius: 3px; background: var(--jhd-gold); opacity: .7; }
-.jhd-home-hero-copy { min-width: 0; width: 100%; }
-.jhd-home-search { display: flex; align-items: center; gap: .4rem; max-width: 34rem; margin-top: .8rem; padding: .2rem .25rem .2rem .6rem; border: 1px solid var(--jhd-border); border-radius: 8px; background: var(--jhd-surface); }
-.jhd-home-search > i { color: var(--jhd-green); }
-.jhd-home-search input { width: 100%; min-width: 0; min-height: 34px; padding: .2rem; border: 0; outline: 0; color: var(--jhd-ink); background: transparent; font: inherit; font-size: .82rem; }
-.jhd-home-search button { display: inline-flex; min-height: 34px; align-items: center; flex: 0 0 auto; gap: .25rem; padding: .25rem .65rem; border: 0; border-radius: 6px; color: #fff; background: var(--jhd-green); font: inherit; font-size: .76rem; font-weight: 700; cursor: pointer; }
-.jhd-home-search button:hover { background: var(--jhd-green-dark); }
-@media (max-width: 700px) {
-  .jhd-home-search input { font-size: 16px; }
+  .jhd-brand-board { padding-block: .9rem; }
+  .jhd-home-quick-access { padding-block: 1rem; }
+  .jhd-home-quick-links { gap: .4rem; }
+  .jhd-home-quick-link { min-height: 52px; padding: .45rem .5rem; font-size: .77rem; }
+  .jhd-home-quick-link > i:first-child { flex-basis: 30px; width: 30px; height: 30px; }
+  .jhd-home-topic-links { gap: .4rem; }
+  .jhd-home-topic-link { padding: .52rem .58rem; font-size: .77rem; }
 }
 
 /* ─── ۹. سرصفحهٔ بخش‌ها و صفحه‌ها ────────────────────────────────────────── */
@@ -961,58 +987,6 @@ html[data-theme="dark"] .jhd-card .jhd-event-date { background: rgba(12, 28, 22,
 .jhd-context-link:hover {
   color: var(--jhd-green-hover);
   text-decoration-style: solid;
-}
-
-/* مقاله‌های صفحهٔ اصلی کمی بزرگ‌تر از ردیف‌های آرشیوی؛ عنوان و خلاصه خواناترند. */
-.jhd-home-group#articles-section .jhd-editorial-row {
-  grid-template-columns: 150px minmax(0, 1fr) auto;
-  gap: 0 1.1rem;
-  padding: 1rem;
-  margin-bottom: .7rem;
-  border: 1px solid var(--jhd-border);
-  border-radius: var(--jhd-radius);
-  background: var(--jhd-surface);
-  box-shadow: var(--jhd-shadow-1);
-}
-.jhd-home-group#articles-section .jhd-editorial-row:last-child {
-  border-bottom: 1px solid var(--jhd-border);
-}
-.jhd-home-group#articles-section .jhd-editorial-thumb {
-  width: 150px;
-  aspect-ratio: 16 / 10;
-}
-.jhd-home-group#articles-section .jhd-editorial-title {
-  font-size: 1.07rem;
-  line-height: 1.7;
-}
-.jhd-home-group#articles-section .jhd-editorial-main .jhd-card-summary {
-  font-size: .82rem;
-  line-height: 1.8;
-}
-.jhd-home-group#articles-section .jhd-editorial-cta {
-  font-size: .8rem;
-}
-
-@media (max-width: 700px) {
-  .jhd-home-group#articles-section .jhd-editorial-row {
-    grid-template-columns: 96px minmax(0, 1fr);
-    gap: 0 .8rem;
-    padding: .85rem;
-  }
-  .jhd-home-group#articles-section .jhd-editorial-thumb {
-    width: 96px;
-  }
-  .jhd-home-group#articles-section .jhd-editorial-title {
-    font-size: .98rem;
-  }
-}
-@media (max-width: 480px) {
-  .jhd-home-group#articles-section .jhd-editorial-row {
-    grid-template-columns: 88px minmax(0, 1fr);
-  }
-  .jhd-home-group#articles-section .jhd-editorial-thumb {
-    width: 88px;
-  }
 }
 
 /* ردیف سرمقاله‌ای (مقالات/پژوهش): متراکم، خوانا و بدون کارت سنگین */
@@ -1461,6 +1435,28 @@ html[data-theme="dark"] .jhd-media-play span { color: #0d241b; }
 .jhd-article-figure { margin: 0 0 1.4rem; }
 .jhd-article-figure img { width: 100%; border-radius: var(--jhd-radius-lg); border: 1px solid var(--jhd-border); }
 .jhd-article-figure figcaption { font-size: .78rem; color: var(--jhd-muted); margin-top: .45rem; text-align: center; }
+.jhd-article-toc {
+  margin: 1.2rem 0 1.5rem;
+  padding: .85rem 1rem;
+  border: 1px solid var(--jhd-border);
+  border-radius: var(--jhd-radius);
+  background: var(--jhd-soft);
+}
+.jhd-article-toc summary {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  color: var(--jhd-ink);
+  font-weight: 750;
+  cursor: pointer;
+}
+.jhd-article-toc summary i { color: var(--jhd-green); }
+.jhd-article-toc ol { display: grid; gap: .38rem; margin: .7rem 0 0; padding-inline-start: 1.35rem; }
+.jhd-article-toc li { color: var(--jhd-muted); font-size: .86rem; line-height: 1.7; }
+.jhd-article-toc__level-2 { margin-inline-start: .8rem; }
+.jhd-article-toc a { color: var(--jhd-green); text-decoration: none; }
+.jhd-article-toc a:hover { text-decoration: underline; text-underline-offset: .18em; }
+.jhd-article .jhd-prose h2[id], .jhd-article .jhd-prose h3[id] { scroll-margin-top: 7.5rem; }
 .jhd-prose {
   direction: rtl;
   text-align: right;
@@ -2037,18 +2033,20 @@ html[data-theme="dark"] .jhd-auth-page { background: var(--jhd-paper); }
   white-space: nowrap;
 }
 .jhd-search-filter-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: .8rem 1.2rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: .7rem .85rem;
   border-top: 1px solid var(--jhd-border);
   padding-top: .8rem;
 }
-.jhd-search-filter { display: flex; align-items: center; gap: .65rem; min-width: 0; }
-.jhd-search-filter label { flex: 0 0 auto; margin: 0; color: var(--jhd-muted); font-size: .82rem; font-weight: 600; }
-.jhd-search-filter .form-select { width: auto; min-width: 190px; min-height: 40px; padding-block: .35rem; font-size: .85rem; }
-.jhd-search-hint { display: inline-flex; align-items: center; gap: .35rem; margin: 0; color: var(--jhd-muted); font-size: .78rem; }
+.jhd-search-filter { display: grid; gap: .32rem; min-width: 0; }
+.jhd-search-filter label { margin: 0; color: var(--jhd-muted); font-size: .78rem; font-weight: 650; }
+.jhd-search-filter .form-select { width: 100%; min-width: 0; min-height: 42px; padding-block: .35rem; font-size: .83rem; }
+.jhd-search-hint { grid-column: 1 / -1; display: inline-flex; align-items: center; gap: .35rem; margin: 0; color: var(--jhd-muted); font-size: .76rem; }
 .jhd-search-hint i { color: var(--jhd-green); }
+.jhd-search-clear { justify-self: start; color: var(--jhd-muted); font-size: .78rem; text-decoration: underline; text-underline-offset: .18em; }
+.jhd-search-clear:hover { color: var(--jhd-green); }
 .jhd-search-results { margin-top: 1.6rem; }
 .jhd-search-results-head {
   display: flex;
@@ -2129,10 +2127,10 @@ html[data-theme="dark"] .jhd-auth-page { background: var(--jhd-paper); }
   .jhd-search-control { gap: .45rem; }
   .jhd-search-input.form-control { min-height: 46px; padding-inline-end: .7rem; }
   .jhd-search-submit { min-width: 88px; padding-inline: .7rem; }
-  .jhd-search-filter-row { align-items: stretch; flex-direction: column; gap: .55rem; }
-  .jhd-search-filter { align-items: center; justify-content: space-between; }
-  .jhd-search-filter .form-select { flex: 1 1 auto; min-width: 0; max-width: 70%; }
+  .jhd-search-filter-row { grid-template-columns: minmax(0, 1fr); gap: .65rem; }
+  .jhd-search-filter .form-select { min-width: 0; }
   .jhd-search-hint { line-height: 1.55; }
+  .jhd-search-input.form-control { font-size: 16px; }
   .jhd-search-results-head { align-items: flex-start; }
   .jhd-search-result-count { padding: .25rem .55rem; }
   .jhd-search-discovery { padding: .9rem; }
@@ -2336,14 +2334,6 @@ html[data-theme="dark"] .jhd-brand img, html[data-theme="dark"] .footer-brand im
 .rounded-xl { border-radius: var(--jhd-radius-lg) !important; }
 
 /* ─── افزوده‌های صفحهٔ درس/رسانه ─────────────────────────────────────────── */
-.jhd-icon-btn {
-  width: 34px; height: 34px;
-  display: inline-grid; place-items: center;
-  border: 1px solid var(--jhd-border); border-radius: 50%;
-  background: var(--jhd-surface); color: var(--jhd-muted);
-  font-size: .95rem; transition: color .15s, border-color .15s, background .15s;
-}
-.jhd-icon-btn:hover { color: var(--jhd-green); border-color: var(--jhd-green); background: var(--jhd-green-soft); }
 .jhd-player-head {
   display: flex; align-items: center; gap: .7rem;
   padding: .55rem .65rem; margin-bottom: .5rem;
@@ -3162,36 +3152,6 @@ html { scroll-behavior: smooth; }
 .main-footer a { transition: color .18s ease, opacity .18s ease; }
 .main-footer a:hover { color: var(--jhd-gold); }
 .main-footer h5, .main-footer h6 { letter-spacing: -0.004em; }
-
-/* صفحهٔ اصلی — موضوعات در خانه عمداً مینیمال و کم‌تعداد هستند */
-.jhd-home-topics .jhd-section-head { margin-bottom: .7rem; }
-.jhd-topic-home-grid { row-gap: .75rem !important; }
-.jhd-card--topic-home .jhd-card-media { aspect-ratio: 16 / 8; }
-.jhd-card--topic-home .jhd-card-body { padding: .62rem .72rem .68rem; gap: .2rem; }
-.jhd-card--topic-home .jhd-card-title {
-  font-size: .94rem;
-  line-height: 1.55;
-  min-height: 0;
-}
-.jhd-card--topic-home .jhd-card-meta {
-  font-size: .68rem;
-  margin-top: .05rem;
-}
-.jhd-card--topic-home .jhd-card-foot {
-  padding-top: .28rem;
-  font-size: .7rem;
-}
-.jhd-card--topic-home .btn-read-more {
-  padding: .18rem .48rem;
-}
-@media (max-width: 575.98px) {
-  .jhd-topic-home-grid { row-gap: .5rem !important; }
-  .jhd-card--topic-home .jhd-card-media { aspect-ratio: 16 / 7; }
-  .jhd-card--topic-home .jhd-card-body { padding: .5rem .58rem .55rem; }
-  .jhd-card--topic-home .jhd-card-title { font-size: .86rem; }
-  .jhd-card--topic-home .jhd-card-foot { font-size: .66rem; }
-}
-
 
 /* ── موبایل‌های خیلی باریک: هدر بدون فشردگی ────────────────────────────────
  * در 320–360px چهار آیکون ابزار کنار برند فضای مؤثر برند را بیش از حد کم می‌کنند.

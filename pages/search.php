@@ -1,6 +1,6 @@
 <?php
 /**
- * search.php — جستجوی یکپارچه در آرشیو موضوعات، نوشته‌ها، کتاب‌ها، دروس و رسانه‌ها
+ * search.php — جستجوی سراسری محتوای منتشرشده و مرور آرشیو
  */
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
@@ -9,20 +9,59 @@ require_once __DIR__ . '/../includes/auth.php';
 startPublicSession();
 
 $q = is_string($_GET['q'] ?? null) ? mb_substr(trim($_GET['q']), 0, 200) : '';
-$pageTitle = $q ? 'جستجو: ' . $q : 'جستجو در آرشیو محتوا';
-$pageDesc = $q ? 'نتایج جستجو برای «' . $q . '» در موضوعات، مقالات، گزارش‌ها، کتاب‌ها، دروس و رسانه‌های مدرسه جامعه‌الهدی.' : 'جستجو در آرشیو محتوایی مدرسه جامعه‌الهدی — موضوعات، مقالات، گزارش‌ها، کتاب‌ها، دروس، ویدیو و صوت.';
-
-$searchFilter = is_string($_GET['type'] ?? null) ? (string)$_GET['type'] : 'all';
-$allowedSearchFilters = ['all'=>'همه محتواها','topic'=>'موضوعات','article'=>'مقالات','research'=>'پژوهش‌ها','report'=>'گزارش‌ها','news'=>'اخبار','book'=>'کتاب‌ها','lesson'=>'دروس','media'=>'رسانه‌ها','audio'=>'صوت‌ها','video'=>'ویدیوها'];
+$searchFilter = is_string($_GET['type'] ?? null) ? trim($_GET['type']) : 'all';
+$allowedSearchFilters = [
+    'all' => 'همه محتواها',
+    'topic' => 'موضوعات',
+    'article' => 'مقالات',
+    'research' => 'پژوهش‌ها',
+    'report' => 'گزارش‌ها',
+    'news' => 'اخبار',
+    'announcement' => 'اطلاعیه‌ها',
+    'program' => 'برنامه‌های آموزشی',
+    'religious' => 'فعالیت‌های مذهبی',
+    'event' => 'رویدادها',
+    'speech' => 'سخنرانی‌ها',
+    'qa' => 'پرسش و پاسخ',
+    'book' => 'کتاب‌ها',
+    'lesson' => 'دروس',
+    'media' => 'رسانه‌ها',
+    'audio' => 'صوت‌ها',
+    'video' => 'ویدیوها',
+];
 if (!isset($allowedSearchFilters[$searchFilter])) $searchFilter = 'all';
-$page  = max(1, (int)($_GET['page'] ?? 1));
+
+$sortParam = is_string($_GET['sort'] ?? null) ? trim($_GET['sort']) : '';
+$searchSort = in_array($sortParam, ['relevance', 'newest'], true)
+    ? $sortParam
+    : ($q !== '' ? 'relevance' : 'newest');
+if ($q === '') $searchSort = 'newest';
+
+$page = max(1, min(100000, (int)($_GET['page'] ?? 1)));
 $limit = 12;
+$topicOptions = getTopics(['active' => 1]);
+$topicById = [];
+foreach ($topicOptions as $topicOption) {
+    $topicById[(int)($topicOption['id'] ?? 0)] = $topicOption;
+}
+$topicParam = is_string($_GET['topic'] ?? null) ? trim($_GET['topic']) : '';
+$topicId = preg_match('/^[0-9]{1,10}$/D', $topicParam) === 1 ? (int)$topicParam : 0;
+if ($topicId < 1 || !isset($topicById[$topicId])) $topicId = 0;
+$activeTopic = $topicId > 0 ? $topicById[$topicId] : null;
+$hasActiveSearch = $q !== '' || $searchFilter !== 'all' || $topicId > 0;
+
+$pageTitle = $q !== ''
+    ? 'جستجو: ' . $q
+    : ($activeTopic ? 'مطالب موضوع ' . (string)$activeTopic['name'] : ($searchFilter !== 'all' ? 'مرور ' . $allowedSearchFilters[$searchFilter] : 'جستجو در آرشیو محتوا'));
+$pageDesc = $q !== ''
+    ? 'نتایج جستجو برای «' . $q . '» در محتوای منتشرشدهٔ مدرسه جامعه‌الهدی.'
+    : 'جستجو و مرور محتوای منتشرشدهٔ مدرسه جامعه‌الهدی بر پایهٔ نوع محتوا و موضوع.';
+
 $results = [];
 $total = 0;
-
-if ($q) {
+if ($hasActiveSearch) {
     $offset = ($page - 1) * $limit;
-    $data = searchAll($q, $limit, $offset, $searchFilter);
+    $data = searchAll($q, $limit, $offset, $searchFilter, $topicId, $searchSort);
     $results = $data['results'];
     $total = $data['total'];
 }
@@ -30,13 +69,10 @@ $pages = (int)ceil($total / $limit);
 
 $breadcrumbs = [
     ['name' => 'صفحه اصلی', 'url' => url()],
-    ['name' => 'جستجو', 'url' => url('search')]
+    ['name' => 'جستجو', 'url' => url('search')],
 ];
-if ($q) {
-    $breadcrumbs[] = ['name' => $q, 'url' => url('search', ['q' => $q])];
-}
+if ($q !== '') $breadcrumbs[] = ['name' => $q, 'url' => url('search', ['q' => $q])];
 $breadcrumbsJsonLd = breadcrumbsJsonLd($breadcrumbs);
-$searchSuggestions = ['قرآن و حدیث', 'فقه و اصول', 'اخلاق اسلامی', 'پژوهش‌های علمی'];
 
 require_once __DIR__ . '/../includes/header.php';
 ?>
@@ -63,7 +99,7 @@ require_once __DIR__ . '/../includes/header.php';
         <span>جستجو در آرشیو محتوایی</span>
       </h1>
       <div class="section-divider" aria-hidden="true"></div>
-      <p class="text-muted mt-2 mb-0">در میان موضوعات، مقالات، پژوهش‌ها، کتاب‌ها، درس‌ها و رسانه‌های جامعة‌الهدی جستجو کنید.</p>
+      <p class="text-muted mt-2 mb-0">در محتوای منتشرشده جستجو کنید یا با فیلتر نوع و موضوع، آرشیو را مرور کنید.</p>
     </header>
 
     <form method="get" action="<?= sanitize(formUrl('search')) ?>" class="jhd-search-panel jhd-search-form" role="search">
@@ -79,7 +115,7 @@ require_once __DIR__ . '/../includes/header.php';
               name="q"
               class="form-control jhd-search-input"
               aria-label="عبارت جستجو در آرشیو محتوا"
-              placeholder="مثلاً: قرآن، فلسفه یا اصول فقه"
+              placeholder="عنوان یا بخشی از متن را بنویسید"
               value="<?= sanitize($q) ?>"
               maxlength="200"
               enterkeyhint="search"
@@ -94,38 +130,59 @@ require_once __DIR__ . '/../includes/header.php';
 
       <div class="jhd-search-filter-row">
         <div class="jhd-search-filter">
-          <label for="archive-search-type">جستجو در</label>
-          <select id="archive-search-type" name="type" class="form-select" aria-label="انتخاب نوع محتوا">
+          <label for="archive-search-type">نوع محتوا</label>
+          <select id="archive-search-type" name="type" class="form-select">
             <?php foreach ($allowedSearchFilters as $filterKey => $filterLabel): ?>
               <option value="<?= sanitize($filterKey) ?>" <?= $searchFilter === $filterKey ? 'selected' : '' ?>><?= sanitize($filterLabel) ?></option>
             <?php endforeach; ?>
           </select>
         </div>
-        <p class="jhd-search-hint"><i class="bi bi-info-circle" aria-hidden="true"></i> برای جستجوی گسترده، «همه محتواها» را انتخاب کنید.</p>
+        <div class="jhd-search-filter">
+          <label for="archive-search-topic">موضوع</label>
+          <select id="archive-search-topic" name="topic" class="form-select">
+            <option value="">همهٔ موضوعات</option>
+            <?php foreach ($topicOptions as $topicOption): ?>
+              <option value="<?= (int)$topicOption['id'] ?>" <?= $topicId === (int)$topicOption['id'] ? 'selected' : '' ?>><?= sanitize((string)$topicOption['name']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="jhd-search-filter">
+          <label for="archive-search-sort">مرتب‌سازی</label>
+          <select id="archive-search-sort" name="sort" class="form-select">
+            <option value="relevance" <?= $searchSort === 'relevance' ? 'selected' : '' ?>>مرتبط‌ترین</option>
+            <option value="newest" <?= $searchSort === 'newest' ? 'selected' : '' ?>>جدیدترین</option>
+          </select>
+        </div>
+        <p class="jhd-search-hint"><i class="bi bi-shield-check" aria-hidden="true"></i> پیش‌نویس‌ها و محتوای خصوصی در نتایج نمایش داده نمی‌شوند.</p>
       </div>
+      <?php if ($hasActiveSearch): ?>
+        <a class="jhd-search-clear" href="<?= sanitize(url('search')) ?>">پاک‌کردن عبارت و فیلترها</a>
+      <?php endif; ?>
     </form>
 
-    <?php if ($q): ?>
+    <?php if ($hasActiveSearch): ?>
       <section class="jhd-search-results" aria-labelledby="search-results-title" aria-live="polite">
-        <?php if ($total > 0): ?>
-          <div class="jhd-search-results-head">
-            <div>
-              <h2 id="search-results-title">نتایج جستجو</h2>
-              <p>نتایج برای «<strong><?= sanitize($q) ?></strong>» در <?= sanitize($allowedSearchFilters[$searchFilter]) ?></p>
-            </div>
-            <span class="jhd-search-result-count">
-              <strong><?= number_format($total) ?></strong>
-              <span>نتیجه</span>
-            </span>
+        <div class="jhd-search-results-head">
+          <div>
+            <h2 id="search-results-title"><?= $q !== '' ? 'نتایج جستجو' : 'محتوای منتشرشده' ?></h2>
+            <p>
+              <?php if ($q !== ''): ?>برای «<strong><?= sanitize($q) ?></strong>» در <?php endif; ?>
+              <?= sanitize($allowedSearchFilters[$searchFilter]) ?>
+              <?php if ($activeTopic): ?> · موضوع «<?= sanitize((string)$activeTopic['name']) ?>»<?php endif; ?>
+            </p>
           </div>
-        <?php else: ?>
+          <span class="jhd-search-result-count">
+            <strong><?= number_format($total) ?></strong>
+            <span>نتیجه</span>
+          </span>
+        </div>
+
+        <?php if ($total === 0): ?>
           <div class="jhd-empty-state jhd-search-empty" role="status">
             <i class="bi bi-search" aria-hidden="true"></i>
-            <h2 id="search-results-title">نتیجه‌ای برای «<?= sanitize($q) ?>» پیدا نشد</h2>
-            <p>املای واژه را بررسی کنید، عبارت کوتاه‌تری بنویسید یا همه محتواها را جستجو کنید.</p>
-            <a href="<?= sanitize(url('topics')) ?>" class="btn btn-outline-primary btn-sm">
-              مرور اطلس موضوعات <i class="bi bi-arrow-left" aria-hidden="true"></i>
-            </a>
+            <h2><?= $q !== '' ? 'نتیجه‌ای برای این عبارت پیدا نشد' : 'محتوایی با این فیلترها پیدا نشد' ?></h2>
+            <p><?= $q !== '' ? 'املای واژه را بررسی کنید، عبارت کوتاه‌تری بنویسید یا فیلترها را تغییر دهید.' : 'موضوع یا نوع محتوای دیگری انتخاب کنید یا همهٔ فیلترها را پاک کنید.' ?></p>
+            <a href="<?= sanitize(url('search')) ?>" class="btn btn-outline-primary btn-sm">پاک‌کردن فیلترها</a>
           </div>
         <?php endif; ?>
 
@@ -133,27 +190,26 @@ require_once __DIR__ . '/../includes/header.php';
           <?php jhd_preload_post_topics($results); ?>
           <?= jhd_grid_open('jhd-search-result-grid') ?>
             <?php foreach ($results as $p):
-                if ($p['target'] === 'media') {
+                if (($p['target'] ?? '') === 'media') {
                     $isAudio = ($p['media_kind'] ?? '') === 'audio';
                     $resultUrl = mediaUrl($isAudio ? 'audio' : 'video', (int)$p['id']);
                     $resultType = $isAudio ? 'audio' : 'video';
-                    // فایل صوتی/ویدیویی تصویر نیست؛ کارت رسانه باید متنی بماند.
+                    // A media file is not an image; keep the card's real-media
+                    // destination while avoiding an empty/broken image request.
                     $p['featured_image'] = '';
                 } elseif (!empty($p['media_kind'])) {
-                    // رسانهٔ قدیمی مقصد مستقل ندارد و به صفحهٔ محتوای اصلی می‌رود.
-                    $resultUrl = $p['target'] === 'lesson' ? lessonUrl($p) : postUrl($p);
+                    $resultUrl = ($p['target'] ?? '') === 'lesson' ? lessonUrl($p) : postUrl($p);
                     $resultType = (string)$p['media_kind'];
                     $p['featured_image'] = '';
-                } elseif ($p['target'] === 'topic') {
+                } elseif (($p['target'] ?? '') === 'topic') {
                     $resultUrl = topicUrl($p);
                     $resultType = 'topic';
-                    // جلد/تصویر واقعی همان رکورد؛ هیچ تصویر ساختگی ساخته نمی‌شود.
-                    $p['featured_image'] = (string)($p['cover_image'] ?? '');
-                } elseif ($p['target'] === 'book') {
+                    $p['featured_image'] = (string)($p['featured_image'] ?? '');
+                } elseif (($p['target'] ?? '') === 'book') {
                     $resultUrl = bookUrl($p);
                     $resultType = 'book';
-                    $p['featured_image'] = (string)($p['cover_image'] ?? '');
-                } elseif ($p['target'] === 'lesson') {
+                    $p['featured_image'] = (string)($p['featured_image'] ?? '');
+                } elseif (($p['target'] ?? '') === 'lesson') {
                     $resultUrl = lessonUrl($p);
                     $resultType = 'lesson';
                 } else {
@@ -164,9 +220,8 @@ require_once __DIR__ . '/../includes/header.php';
                     'type' => $resultType,
                     'url' => $resultUrl,
                     'badge' => postTypeLabel($resultType),
-                    // شناسهٔ موضوع/کتاب/درس/رسانه شناسهٔ نوشته نیست؛ چیپ موضوع را نخوان.
                     'topics' => [],
-                    'excerpt' => 120,
+                    'excerpt' => 110,
                     'cta' => 'مشاهده محتوا',
                 ]);
             endforeach; ?>
@@ -174,7 +229,8 @@ require_once __DIR__ . '/../includes/header.php';
         <?php endif; ?>
 
         <?php if ($pages > 1): ?>
-          <div class="mt-5"><?= paginate($total, $limit, $page, url('search', ['q' => $q, 'type' => $searchFilter, 'page' => '%d'])) ?></div>
+          <?php $paginationUrl = url('search', ['q' => $q, 'type' => $searchFilter, 'topic' => $topicId, 'sort' => $searchSort, 'page' => '%d']); ?>
+          <div class="mt-5"><?= paginate($total, $limit, $page, $paginationUrl) ?></div>
         <?php endif; ?>
       </section>
     <?php else: ?>
@@ -182,17 +238,19 @@ require_once __DIR__ . '/../includes/header.php';
         <div class="jhd-search-discovery-copy">
           <span class="jhd-search-discovery-icon"><i class="bi bi-compass" aria-hidden="true"></i></span>
           <div>
-            <h2 id="search-discovery-title">برای شروع، یکی از این موضوع‌ها را ببینید</h2>
-            <p>یک پیشنهاد را انتخاب کنید یا عبارت دلخواهتان را در کادر بالا بنویسید.</p>
+            <h2 id="search-discovery-title">مرور بر پایهٔ موضوع</h2>
+            <p>موضوع‌های فعال را انتخاب کنید تا محتوای منتشرشدهٔ مرتبط را ببینید.</p>
           </div>
         </div>
-        <div class="jhd-search-suggestions" aria-label="پیشنهادهای جستجو">
-          <?php foreach ($searchSuggestions as $suggestion): ?>
-            <a class="jhd-search-suggestion" href="<?= sanitize(url('search', ['q' => $suggestion])) ?>">
-              <i class="bi bi-arrow-up-left" aria-hidden="true"></i><?= sanitize($suggestion) ?>
-            </a>
-          <?php endforeach; ?>
-        </div>
+        <?php if ($topicOptions): ?>
+          <div class="jhd-search-suggestions" aria-label="موضوع‌های فعال">
+            <?php foreach (array_slice($topicOptions, 0, 6) as $topicOption): ?>
+              <a class="jhd-search-suggestion" href="<?= sanitize(url('search', ['topic' => (int)$topicOption['id']])) ?>">
+                <i class="bi bi-arrow-up-left" aria-hidden="true"></i><?= sanitize((string)$topicOption['name']) ?>
+              </a>
+            <?php endforeach; ?>
+          </div>
+        <?php endif; ?>
       </aside>
     <?php endif; ?>
   </div>

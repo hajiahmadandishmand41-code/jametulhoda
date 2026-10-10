@@ -161,9 +161,13 @@ if ($primaryTopic) {
         $breadcrumbs[] = ['name' => $bt['name'], 'url' => topicUrl($bt)];
     }
 }
-$postCanonicalPath = jhd_post_canonical_path($post);
-$postCanonicalUrl = $postCanonicalPath !== '' ? jhd_absolute_url($postCanonicalPath) : canonicalUrl(postUrl($post));
-$canonicalOverride = $postCanonicalPath !== '' ? $postCanonicalPath : postUrl($post);
+// Use the URL-mode-aware canonical also used by cards, redirects and the
+// sitemap: Pretty deployments publish the clean typed path; Query-mode hosts
+// keep the working index.php?p=… canonical rather than pointing crawlers at a
+// rewrite-only path that the server may not resolve.
+$postCanonical = postUrl($post);
+$postCanonicalUrl = jhd_absolute_url($postCanonical);
+$canonicalOverride = $postCanonical;
 $breadcrumbs[] = ['name' => $post['title'], 'url' => $postCanonicalUrl];
 $breadcrumbsJsonLd = breadcrumbsJsonLd($breadcrumbs);
 // Structured data matches the content type: a question page is a QAPage, a
@@ -189,7 +193,7 @@ require_once __DIR__ . '/../includes/header.php';
 
 <div class="jhd-section"><div class="container"><div class="row g-4">
 <div class="col-lg-8">
-<article itemscope itemtype="https://schema.org/Article">
+<article class="jhd-article" itemscope itemtype="https://schema.org/Article">
     <header class="jhd-article-head">
         <div class="d-flex flex-wrap gap-2 mb-2">
             <span class="jhd-card-badge jhd-card-badge--inline"><?= sanitize(postTypeLabel((string)$post['post_type'])) ?></span>
@@ -258,9 +262,29 @@ require_once __DIR__ . '/../includes/header.php';
     </section>
     <?php endif; ?>
 
-    <?php $articleBodyHtml = safeRichText($post['content']); ?>
-    <?php if (($post['post_type'] ?? '') === 'article') $articleBodyHtml = jhd_promote_article_headings($articleBodyHtml); ?>
-    <?php $articleBodyHtml = jhd_add_contextual_internal_links($articleBodyHtml, (int)$post['id'], 6); ?>
+    <?php
+    $articleOutline = [];
+    $articleBodyHtml = safeRichText($post['content']);
+    if (($post['post_type'] ?? '') === 'article') $articleBodyHtml = jhd_promote_article_headings($articleBodyHtml);
+    $articleBodyHtml = jhd_add_contextual_internal_links($articleBodyHtml, (int)$post['id'], 6);
+    if (($post['post_type'] ?? '') === 'article') {
+        $outline = jhd_article_outline($articleBodyHtml);
+        $articleBodyHtml = $outline['html'];
+        $articleOutline = $outline['items'];
+    }
+    ?>
+    <?php if ($articleOutline): ?>
+    <nav class="jhd-article-toc" aria-labelledby="article-toc-title">
+        <details open>
+            <summary id="article-toc-title"><i class="bi bi-list-ul" aria-hidden="true"></i><span>فهرست مطالب</span></summary>
+            <ol>
+                <?php foreach ($articleOutline as $outlineItem): ?>
+                <li class="jhd-article-toc__level-<?= (int)$outlineItem['level'] ?>"><a href="#<?= sanitize($outlineItem['id']) ?>"><?= sanitize($outlineItem['title']) ?></a></li>
+                <?php endforeach; ?>
+            </ol>
+        </details>
+    </nav>
+    <?php endif; ?>
     <div class="jhd-prose" itemprop="articleBody"><?= $articleBodyHtml ?: '<p class="text-muted">محتوایی ثبت نشده است.</p>' ?></div>
 
     <?php if (!empty($post['sources'])): ?>

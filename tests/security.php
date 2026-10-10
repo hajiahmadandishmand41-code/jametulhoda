@@ -2,6 +2,7 @@
 putenv('SESSION_DRIVER=files');
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/media.php';
+require_once __DIR__ . '/../includes/cards.php';
 require_once __DIR__ . '/../includes/auth.php';
 $checks=0;
 putenv('JHD_EMPTY_TEST=');
@@ -40,6 +41,17 @@ check(validateUpload(__DIR__.'/fixtures/video.mp4','video')['extension']==='mp4'
 $html=safeRichText('<p onclick="evil()">Hello <strong>world</strong></p><script>evil()</script><a href="javascript:alert(1)">x</a><img src="x" onerror="evil()"><svg onload="evil()"/>');
 check(!str_contains($html,'evil()') && !str_contains($html,'javascript:') && !str_contains($html,'<svg'),'rich text XSS');
 check(str_contains($html,'<strong>world</strong>'),'safe formatting retained');
+$outline = jhd_article_outline(safeRichText('<h2>بخش نخست</h2><p>متن</p><h2>بخش دوم</h2><p>متن</p><h3>زیر‌بخش</h3>'));
+check(count($outline['items']) === 3, 'long article outline includes published headings');
+check(str_contains($outline['html'], 'id="jhd-article-heading-1"') && str_contains($outline['html'], 'id="jhd-article-heading-3"'), 'article headings receive stable local anchors');
+$shortOutline = jhd_article_outline(safeRichText('<h2>یک بخش</h2><p>متن</p>'));
+check($shortOutline['items'] === [], 'short article does not get an unnecessary outline');
+$sectionHeading = jhd_section_head(['title' => 'تازه‌ترین مطالب', 'title_id' => 'home-latest-title']);
+check(str_contains($sectionHeading, '<h2 id="home-latest-title">'), 'section title_id is applied to the heading');
+$emptyTitleIdHeading = jhd_section_head(['title' => 'بخش بدون شناسه', 'title_id' => '']);
+check(!preg_match('/<h2\s+id=/', $emptyTitleIdHeading), 'empty section title_id does not emit an empty id');
+$safeTitleIdHeading = jhd_section_head(['title' => 'بخش امن', 'title_id' => 'x" onclick="alert(1)']);
+check(str_contains($safeTitleIdHeading, 'id="x&quot; onclick=&quot;alert(1)"') && !str_contains($safeTitleIdHeading, '<h2 id="x" onclick='), 'section title_id is escaped as an attribute value');
 check(persianDate('2024-03-20')==='1 فروردین 1403','Jalali new year');
 check(persianDate('2026-09-20')==='29 شهریور 1405','Jalali current date');
 $vercelBefore=getenv('VERCEL'); putenv('VERCEL');

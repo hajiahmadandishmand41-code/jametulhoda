@@ -45,15 +45,17 @@ $defaults = [
 $homepageSectionLabels = [
     'hero' => 'مطلب شاخص',
     'editor_picks' => 'برگزیدهٔ سردبیر',
-    'latest' => 'تازه‌ترین مطالب',
-    'news' => 'اخبار',
-    'articles' => 'مقالات',
-    'reports' => 'گزارش‌ها',
-    'research' => 'پژوهش‌ها',
-    'topics' => 'موضوعات',
-    'events' => 'رویدادها و برنامه‌ها',
-    'books' => 'کتابخانه دیجیتال',
-    'lessons' => 'دروس',
+    'latest' => 'فهرست تازه‌ترین مطالب',
+    'news' => 'خبرها در فهرست تازه‌ها',
+    'articles' => 'مقالات در فهرست تازه‌ها',
+    'reports' => 'گزارش‌ها در فهرست تازه‌ها',
+    'research' => 'پژوهش‌ها در فهرست تازه‌ها',
+    'topics' => 'موضوعات علمی',
+    'events' => 'رویدادها در فهرست تازه‌ها',
+    'speeches' => 'سخنرانی‌ها در فهرست تازه‌ها',
+    'qa' => 'پرسش‌وپاسخ در فهرست تازه‌ها',
+    'books' => 'کتاب‌های منتخب',
+    'lessons' => 'درس‌های منتخب',
 ];
 $homepageCfgRaw = trim((string)($sets['homepage_config'] ?? ''));
 $homepageCfg = json_decode($homepageCfgRaw, true);
@@ -231,7 +233,7 @@ $sets = array_merge($sets, $formValues);
             <section class="admin-card mb-4" aria-labelledby="admin-homepage-heading">
                 <div class="admin-card-header" id="admin-homepage-heading">چیدمان صفحهٔ اصلی</div>
                 <div class="admin-card-body">
-                    <p class="admin-settings-help">مدیر می‌تواند بخش‌های ویترین صفحهٔ اصلی را روشن/خاموش کند و مطلب شاخص را جداگانه انتخاب کند. ترتیب نمایش بخش‌ها در سایت ثابت و ویرایشی است.</p>
+                    <p class="admin-settings-help">صفحهٔ اصلی یک مطلب شاخص، برگزیده‌ها و فهرست کوتاه تازه‌ها را نمایش می‌دهد. تیک‌های نوع محتوا، موارد مجاز برای فهرست تازه‌ها را کنترل می‌کنند؛ آرشیو کامل هر بخش از ناوبری سایت در دسترس می‌ماند.</p>
                     <div class="mb-4">
                         <label class="form-label fw-bold">بخش‌های قابل نمایش در صفحهٔ اصلی</label>
                         <div class="row g-2">
