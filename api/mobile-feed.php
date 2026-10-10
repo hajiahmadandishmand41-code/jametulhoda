@@ -120,8 +120,9 @@ try {
             'summary' => mb_substr($description, 0, 520, 'UTF-8'),
             'content' => $description,
             'author' => '',
+            'collection_title' => $title,
             'created_at' => (string)($course['created_at'] ?? ''),
-            'url' => $absoluteUrl('lessons/' . rawurlencode($slug)),
+            'url' => $absoluteUrl('lessons') . '?collection=' . rawurlencode($slug),
             'image_url' => $imageUrl($course),
         ];
     }
@@ -145,7 +146,6 @@ try {
         $summary = $cleanText($lesson['summary'] ?? '', 700);
         if ($summary === '') $summary = mb_substr($content, 0, 520, 'UTF-8');
         $collection = $cleanText($lesson['collection_title'] ?? '', 120);
-        if ($collection !== '') $summary = trim($collection . ' — ' . $summary);
         $items[] = [
             'id' => 'lesson-' . (string)$lesson['id'],
             'source' => 'website',
@@ -154,6 +154,7 @@ try {
             'summary' => $summary,
             'content' => $content !== '' ? $content : $summary,
             'author' => $cleanText($lesson['teacher'] ?? '', 120),
+            'collection_title' => $collection,
             'created_at' => (string)($lesson['created_at'] ?? ''),
             'url' => $absoluteUrl('lesson/' . rawurlencode($slug)),
             'image_url' => $imageUrl($lesson),
