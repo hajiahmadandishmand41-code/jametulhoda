@@ -68,7 +68,7 @@ function ensureMembersSchema(): void {
  *
  * @return array{ok:bool,id?:int,error?:string}
  */
-function registerMember(array $data): array {
+function registerMember(array $data, bool $establishSession = true): array {
     ensureMembersSchema();
     $field = static function (string $key) use ($data): string {
         $value = $data[$key] ?? null;
@@ -130,9 +130,11 @@ function registerMember(array $data): array {
         return $generic;
     }
 
-    $user = jhd_user_by_id((int)$created['id']);
-    if ($user !== null) {
-        jhd_establish_session($user, false);
+    if ($establishSession) {
+        $user = jhd_user_by_id((int)$created['id']);
+        if ($user !== null) {
+            jhd_establish_session($user, false);
+        }
     }
     return ['ok' => true, 'id' => (int)$created['id']];
 }
