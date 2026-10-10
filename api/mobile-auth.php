@@ -266,6 +266,8 @@ if ($action === '') jhd_mobile_auth_json(['ok' => false, 'error' => 'action_requ
 
 try {
     jhd_mobile_auth_ensure_schema();
+    // Native registration shares the existing anti-brute-force table with browser auth.
+    ensureCoreAuthTables();
 
     if ($action === 'login') {
         $identifier = trim(jhd_mobile_string_field($data, 'identifier', 190));
