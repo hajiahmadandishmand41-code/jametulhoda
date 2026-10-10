@@ -69,13 +69,10 @@ if ($jhdPublicDbReady) {
                     <ul class="footer-links">
                         <li><a href="<?= url('news') ?>"><i class="bi bi-chevron-left"></i>اخبار</a></li>
                         <li><a href="<?= url('articles') ?>"><i class="bi bi-chevron-left"></i>مقالات و پژوهش</a></li>
-                        <li><a href="<?= url('reports') ?>"><i class="bi bi-chevron-left"></i>گزارش‌ها</a></li>
                         <li><a href="<?= url('books') ?>"><i class="bi bi-chevron-left"></i>کتابخانه</a></li>
                         <li><a href="<?= url('lessons') ?>"><i class="bi bi-chevron-left"></i>دروس</a></li>
-                        <li><a href="<?= url('events') ?>"><i class="bi bi-chevron-left"></i>رویدادها</a></li>
                         <li><a href="<?= url('media') ?>"><i class="bi bi-chevron-left"></i>رسانه</a></li>
                         <li><a href="<?= url('topics') ?>"><i class="bi bi-chevron-left"></i>موضوعات</a></li>
-                        <li><a href="<?= url('qa') ?>"><i class="bi bi-chevron-left"></i>پرسش و پاسخ</a></li>
                         <li><a href="<?= url('about') ?>"><i class="bi bi-chevron-left"></i>درباره ما</a></li>
                         <li><a href="<?= url('contact') ?>"><i class="bi bi-chevron-left"></i>تماس با ما</a></li>
                     </ul>

@@ -394,7 +394,6 @@ if (!$noindexSeo) {
                 <?= jhd_render_desktop_nav_item(['route'=>'articles','label'=>'مقالات و پژوهش','types'=>['article','research']], $isActiveNav, ['article','research']) ?>
                 <?= jhd_render_desktop_nav_item(['route'=>'books','label'=>'کتابخانه','types'=>[]], $isActiveNav, ['book']) ?>
                 <?= jhd_render_desktop_nav_item(['route'=>'lessons','label'=>'دروس','types'=>[]], $isActiveNav, ['lesson']) ?>
-                <?= jhd_render_desktop_nav_item(['route'=>'events','label'=>'رویدادها','types'=>['program','religious','announcement']], $isActiveNav, ['programs','announcements','religious-activities']) ?>
                 <?= jhd_render_desktop_nav_item(['route'=>'media','label'=>'رسانه','types'=>[]], $isActiveNav, ['videos','audios']) ?>
                 <li class="jhd-has-sub">
                     <a href="<?= url('topics') ?>" class="jhd-nav-link <?= $isActiveNav('topics') || $isActiveNav('topic') ? 'active' : '' ?>" <?= ($isActiveNav('topics') || $isActiveNav('topic')) ? 'aria-current="page"' : '' ?> aria-haspopup="true">موضوعات</a>
@@ -404,16 +403,6 @@ if (!$noindexSeo) {
                         <li class="jhd-subnav-all"><a href="<?= url('topics') ?>">اطلس کامل موضوعات</a></li>
                     </ul>
                     <?php endif; ?>
-                </li>
-                <li class="jhd-has-sub">
-                    <button type="button" class="jhd-nav-link jhd-nav-toggle" aria-haspopup="true" aria-expanded="false">بیشتر <i class="bi bi-chevron-down"></i></button>
-                    <ul class="jhd-subnav" role="menu">
-                        <li><a href="<?= url('reports') ?>">گزارش‌ها</a></li>
-                        <li><a href="<?= url('qa') ?>">پرسش و پاسخ</a></li>
-                        <li><a href="<?= url('about') ?>">درباره ما</a></li>
-                        <li><a href="<?= url('contact') ?>">تماس با ما</a></li>
-                        <li><a href="<?= url('speeches') ?>">سخنرانی‌ها</a></li>
-                    </ul>
                 </li>
             </ul>
         </div>
@@ -444,10 +433,8 @@ if (!$noindexSeo) {
         <a href="<?= url() ?>" class="drawer-link <?= $isActiveNav('/') ? 'active' : '' ?>"><i class="bi bi-house"></i> خانه</a>
         <?= jhd_render_drawer_nav_item(['route'=>'news','label'=>'اخبار','icon'=>'bi-newspaper','types'=>['news']], $isActiveNav) ?>
         <?= jhd_render_drawer_nav_item(['route'=>'articles','label'=>'مقالات و پژوهش','icon'=>'bi-file-text','types'=>['article','research']], $isActiveNav) ?>
-        <?= jhd_render_drawer_nav_item(['route'=>'reports','label'=>'گزارش‌ها','icon'=>'bi-card-text','types'=>['report']], $isActiveNav) ?>
         <?= jhd_render_drawer_nav_item(['route'=>'books','label'=>'کتابخانه','icon'=>'bi-book','types'=>[]], $isActiveNav) ?>
         <?= jhd_render_drawer_nav_item(['route'=>'lessons','label'=>'دروس','icon'=>'bi-mortarboard','types'=>[]], $isActiveNav) ?>
-        <?= jhd_render_drawer_nav_item(['route'=>'events','label'=>'رویدادها','icon'=>'bi-calendar-event','types'=>['program','religious','announcement']], $isActiveNav) ?>
         <?= jhd_render_drawer_nav_item(['route'=>'media','label'=>'رسانه','icon'=>'bi-play-circle','types'=>[]], $isActiveNav) ?>
 
         <div class="drawer-section">موضوعات</div>
@@ -460,8 +447,6 @@ if (!$noindexSeo) {
         </details>
 
         <div class="drawer-section">اطلاعات و تماس</div>
-        <a href="<?= url('speeches') ?>" class="drawer-link"><i class="bi bi-mic"></i> سخنرانی‌ها</a>
-        <a href="<?= url('qa') ?>" class="drawer-link"><i class="bi bi-question-circle"></i> پرسش و پاسخ</a>
         <a href="<?= url('about') ?>" class="drawer-link"><i class="bi bi-info-circle"></i> درباره جامعه‌الهدی</a>
         <a href="<?= url('contact') ?>" class="drawer-link"><i class="bi bi-envelope"></i> ارتباط با ما</a>
 

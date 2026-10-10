@@ -139,11 +139,7 @@ if ($jhdPublicDbReady) {
     $homePostTypesBySection = [
         'news' => ['news'],
         'articles' => ['article'],
-        'reports' => ['report'],
         'research' => ['research'],
-        'events' => ['event', 'program', 'religious', 'announcement'],
-        'speeches' => ['speech'],
-        'qa' => ['qa'],
     ];
     $latestTypes = [];
     foreach ($homePostTypesBySection as $sectionKey => $postTypes) {
@@ -249,38 +245,6 @@ $homeHasAnyContent =
     </div>
 </section>
 <?php endif; ?>
-
-<?php
-$homeQuickLinks = [
-    ['route' => 'news', 'label' => 'اخبار', 'icon' => 'bi-newspaper'],
-    ['route' => 'articles', 'label' => 'مقالات و پژوهش', 'icon' => 'bi-journal-text'],
-    ['route' => 'reports', 'label' => 'گزارش‌ها', 'icon' => 'bi-card-text'],
-    ['route' => 'topics', 'label' => 'موضوعات', 'icon' => 'bi-diagram-3'],
-    ['route' => 'books', 'label' => 'کتابخانه', 'icon' => 'bi-book'],
-    ['route' => 'lessons', 'label' => 'دروس', 'icon' => 'bi-mortarboard'],
-    ['route' => 'media', 'label' => 'صوت و تصویر', 'icon' => 'bi-play-circle'],
-];
-?>
-<section class="jhd-section--tight jhd-home-quick-access" aria-labelledby="home-quick-links-title">
-    <div class="container">
-        <?= jhd_section_head([
-            'eyebrow' => 'پایگاه جامعة‌الهدی',
-            'title' => 'دسترسی سریع به بخش‌ها',
-            'title_id' => 'home-quick-links-title',
-            'url' => url('search'),
-            'link' => 'جستجو در آرشیو',
-        ]) ?>
-        <nav class="jhd-home-quick-links" aria-label="بخش‌های اصلی پایگاه">
-            <?php foreach ($homeQuickLinks as $link): ?>
-            <a class="jhd-home-quick-link" href="<?= sanitize(url($link['route'])) ?>">
-                <i class="bi <?= sanitize($link['icon']) ?>" aria-hidden="true"></i>
-                <span><?= sanitize($link['label']) ?></span>
-                <i class="bi bi-arrow-left" aria-hidden="true"></i>
-            </a>
-            <?php endforeach; ?>
-        </nav>
-    </div>
-</section>
 
 <?php if (!$homeHasAnyContent): ?>
 <section class="jhd-section">

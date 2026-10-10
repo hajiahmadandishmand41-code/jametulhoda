@@ -927,9 +927,7 @@ function jhd_nav_sections(): array {
         ['route' => 'articles', 'label' => 'مقالات و پژوهش', 'icon' => 'bi-file-text', 'types' => ['article', 'research']],
         ['route' => 'books', 'label' => 'کتابخانه', 'icon' => 'bi-book', 'types' => []],
         ['route' => 'lessons', 'label' => 'دروس', 'icon' => 'bi-mortarboard', 'types' => []],
-        ['route' => 'events', 'label' => 'رویدادها', 'icon' => 'bi-calendar-event', 'types' => ['program', 'religious', 'announcement']],
         ['route' => 'media', 'label' => 'رسانه', 'icon' => 'bi-play-circle', 'types' => []],
-        ['route' => 'reports', 'label' => 'گزارش‌ها', 'icon' => 'bi-card-text', 'types' => ['report']],
         ['route' => 'topics', 'label' => 'موضوعات', 'icon' => 'bi-diagram-3', 'types' => []],
     ];
 }
