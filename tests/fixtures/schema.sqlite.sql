@@ -353,3 +353,19 @@ CREATE INDEX IF NOT EXISTS topics_slug_idx ON topics (slug);
 CREATE INDEX IF NOT EXISTS books_slug_idx ON books (slug);
 CREATE INDEX IF NOT EXISTS lessons_slug_idx ON lessons (slug);
 CREATE INDEX IF NOT EXISTS post_topics_post_idx ON post_topics (post_id, topic_id);
+
+
+CREATE TABLE IF NOT EXISTS mobile_api_tokens (
+    token_hash CHAR(64) PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    auth_version INTEGER NOT NULL,
+    family_id CHAR(32) NOT NULL,
+    token_type VARCHAR(16) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL,
+    revoked_at DATETIME NULL,
+    last_used_at DATETIME NULL
+);
+CREATE INDEX IF NOT EXISTS mobile_api_tokens_user_idx ON mobile_api_tokens(user_id);
+CREATE INDEX IF NOT EXISTS mobile_api_tokens_family_idx ON mobile_api_tokens(family_id);
+CREATE INDEX IF NOT EXISTS mobile_api_tokens_expiry_idx ON mobile_api_tokens(expires_at);

@@ -334,7 +334,7 @@ function resetLoginAttempts(PDO $db, string $key): void {
  *
  * @return array{ok:bool,user?:array,error?:string,code?:string}
  */
-function jhd_login(string $identifier, string $password, bool $remember = false): array {
+function jhd_login(string $identifier, string $password, bool $remember = false, bool $establishSession = true): array {
     // Honest failure instead of a fatal error when the database is unreachable:
     // authentication is never bypassed, it simply cannot be performed.
     $db = tryGetDB();
@@ -360,7 +360,9 @@ function jhd_login(string $identifier, string $password, bool $remember = false)
         return $result;
     }
     $user = $result['user'];
-    jhd_establish_session($user, $remember);
+    if ($establishSession) {
+        jhd_establish_session($user, $remember);
+    }
     resetLoginAttempts($db, $idKey);
     try {
         $nowSql = databaseDriver() === 'sqlite' ? "datetime('now')" : 'NOW()';

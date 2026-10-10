@@ -38,3 +38,36 @@ jobs:
             echo "The native app feed must use website content only."
             exit 1
           fi
+      - name: Add local SQLite integration coverage for mobile auth
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: curl, mbstring, dom, fileinfo, pdo_sqlite
+          coverage: none
+      - name: Set up Node.js for native auth integration test
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run mobile authentication flow against isolated SQLite
+        shell: bash
+        run: |
+          set -euo pipefail
+          db="$RUNNER_TEMP/jhd-mobile-auth.sqlite"
+          export APP_ENV=development DB_DRIVER=sqlite SQLITE_PATH="$db" SESSION_DRIVER=files JHD_PRETTY_URLS=true
+          php bin/dev-db.php "$db"
+          php -S 127.0.0.1:8081 router.php > "$RUNNER_TEMP/jhd-mobile-auth-server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 45); do
+            status="$(curl -sS -o "$RUNNER_TEMP/jhd-mobile-auth-ready.json" -w '%{http_code}' http://127.0.0.1:8081/api/mobile-auth || true)"
+            if [ "$status" = "401" ]; then ready=1; break; fi
+            sleep 1
+          done
+          if [ "$ready" != "1" ]; then
+            cat "$RUNNER_TEMP/jhd-mobile-auth-server.log"
+            echo "Local PHP server did not become ready."
+            exit 1
+          fi
+          TEST_BASE_URL=http://127.0.0.1:8081 node tests/mobile-auth-smoke.mjs
+          TEST_BASE_URL=http://127.0.0.1:8081 node tests/mobile-auth-flows.mjs

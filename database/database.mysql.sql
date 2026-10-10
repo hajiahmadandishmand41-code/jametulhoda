@@ -423,3 +423,20 @@ CREATE INDEX books_slug_idx ON books (slug);
 CREATE INDEX lessons_slug_idx ON lessons (slug);
 CREATE INDEX post_topics_post_idx ON post_topics (post_id, topic_id);
 CREATE INDEX stored_files_url_idx ON stored_files (url);
+
+
+-- Opaque native tokens: persist only token hashes and allow per-device family revocation.
+CREATE TABLE IF NOT EXISTS mobile_api_tokens (
+    token_hash CHAR(64) PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    auth_version INT NOT NULL,
+    family_id CHAR(32) NOT NULL,
+    token_type VARCHAR(16) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL,
+    revoked_at DATETIME NULL,
+    last_used_at DATETIME NULL,
+    INDEX mobile_api_tokens_user_idx (user_id),
+    INDEX mobile_api_tokens_family_idx (family_id),
+    INDEX mobile_api_tokens_expiry_idx (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
