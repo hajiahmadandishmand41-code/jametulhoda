@@ -1,10 +1,7 @@
 <?php
 /**
  * Public, read-only JSON feed used by the native Android application.
- *
- * Meta credentials are read only from server environment variables and never
- * sent to a device. Without those credentials the endpoint still serves the
- * school's published website content honestly.
+ * Only content published on the school's own website is returned.
  */
 declare(strict_types=1);
 
@@ -53,61 +50,6 @@ $imageUrl = static function (array $row) use ($absoluteUrl): string {
 };
 
 $items = [];
-$facebookConfigured = trim(env_value('META_PAGE_ID')) !== '' && trim(env_value('META_PAGE_ACCESS_TOKEN')) !== '';
-$facebookConnected = false;
-$facebookPageUrl = trim(env_value('META_PAGE_URL'));
-$facebookPageName = trim(env_value('META_PAGE_NAME', 'مدرسه جامعه‌الهدی'));
-
-if ($facebookConfigured) {
-    $pageId = trim(env_value('META_PAGE_ID'));
-    $accessToken = trim(env_value('META_PAGE_ACCESS_TOKEN'));
-    $version = trim(env_value('META_GRAPH_API_VERSION', 'v26.0'));
-    if (preg_match('/^[A-Za-z0-9._-]{1,100}$/', $pageId) &&
-        preg_match('/^v[0-9]{1,2}\.[0-9]$/', $version)) {
-        $query = http_build_query([
-            'fields' => 'id,message,created_time,permalink_url,full_picture',
-            'limit' => 15,
-        ]);
-        $graphUrl = 'https://graph.facebook.com/' . $version . '/' . rawurlencode($pageId) . '/posts?' . $query;
-        $context = stream_context_create([
-            'http' => [
-                'method' => 'GET',
-                'timeout' => 5,
-                'ignore_errors' => true,
-                'header' => "Accept: application/json\r\nAuthorization: Bearer " . $accessToken . "\r\n",
-            ],
-            'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
-        ]);
-        $responseBody = @file_get_contents($graphUrl, false, $context);
-        $graph = is_string($responseBody) ? json_decode($responseBody, true) : null;
-        if (is_array($graph) && isset($graph['data']) && is_array($graph['data']) && !isset($graph['error'])) {
-            $facebookConnected = true;
-            foreach ($graph['data'] as $post) {
-                if (!is_array($post)) continue;
-                $message = $cleanText($post['message'] ?? '', 7000);
-                $picture = trim((string)($post['full_picture'] ?? ''));
-                if ($message === '' && $picture === '') continue;
-                $firstLine = trim(strtok($message, "\n") ?: '');
-                $title = $firstLine !== '' ? mb_substr($firstLine, 0, 120, 'UTF-8') : 'پست تازه از فیسبوک';
-                $items[] = [
-                    'id' => 'facebook-' . (string)($post['id'] ?? sha1($message . ($post['created_time'] ?? ''))),
-                    'source' => 'facebook',
-                    'type' => 'facebook',
-                    'title' => $title,
-                    'summary' => mb_substr($message, 0, 520, 'UTF-8'),
-                    'content' => $message,
-                    'author' => $facebookPageName,
-                    'created_at' => (string)($post['created_time'] ?? ''),
-                    'url' => (string)($post['permalink_url'] ?? $facebookPageUrl),
-                    'image_url' => preg_match('~^https://~i', $picture) ? $picture : '',
-                ];
-            }
-        } else {
-            $graphCode = is_array($graph) ? (string)($graph['error']['code'] ?? 'unknown') : 'no_response';
-            error_log('Native feed: Meta Graph request failed (' . preg_replace('/[^A-Za-z0-9_-]/', '', $graphCode) . ').');
-        }
-    }
-}
 
 $types = ['news', 'article', 'research', 'report', 'announcement', 'event', 'program', 'speech', 'qa'];
 $posts = getPosts(['types' => $types, 'limit' => $limit, 'offset' => 0]);
@@ -186,9 +128,6 @@ jhd_mobile_json([
     'items' => $items,
     'meta' => [
         'count' => count($items),
-        'facebook_configured' => $facebookConfigured,
-        'facebook_connected' => $facebookConnected,
-        'facebook_page_url' => preg_match('~^https://(www\.)?facebook\.com/~i', $facebookPageUrl) ? $facebookPageUrl : '',
         'refreshed_at' => gmdate('c'),
     ],
 ]);
