@@ -19,7 +19,7 @@ const cases = [
   ['/events', 'رویداد'],
   ['/books', 'کتابخانه'],
   ['/lessons', 'درس'],
-  ['/research', 'پژوهش'],
+  ['/articles?type=research', 'پژوهش'],
   ['/media', 'ویدیو'],
   ['/videos', 'ویدیو'],
   ['/audios', 'صوت'],

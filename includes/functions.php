@@ -1183,6 +1183,14 @@ function countPosts(array $opts = []): int {
     $where  = ["p.status = 'published'"];
     $params = [];
     if (!empty($opts['type'])) { $where[]="p.post_type = ?"; $params[]=$opts['type']; }
+    // Several post types at once (the merged «مقالات و پژوهش» listing).
+    if (!empty($opts['types']) && is_array($opts['types'])) {
+        $types = array_values(array_filter($opts['types'], static fn($t): bool => is_string($t) && $t !== ''));
+        if ($types) {
+            $where[] = 'p.post_type IN (' . implode(',', array_fill(0, count($types), '?')) . ')';
+            foreach ($types as $t) $params[] = $t;
+        }
+    }
     if (!empty($opts['search'])) { $where[]="(p.title ILIKE ? OR p.summary ILIKE ? OR p.content ILIKE ?)"; $s='%'.$opts['search'].'%'; $params=array_merge($params,[$s,$s,$s]); }
     if (!empty($opts['cat'])) { $where[]="p.category_id = ?"; $params[]=(int)$opts['cat']; }
     if (!empty($opts['topic'])) { $where[]="EXISTS (SELECT 1 FROM post_topics pt WHERE pt.post_id=p.id AND pt.topic_id=?)"; $params[]=(int)$opts['topic']; }
@@ -1508,6 +1516,11 @@ function getPostsByTopic(int $topicId, array $opts = []): array {
         $params = [];
         $where = ["p.status='published'", topicScopeWhere('pt', 'topic_id', $scope, $params)];
         if ($type) { $where[] = 'p.post_type=?'; $params[] = $type; }
+        $types = array_values(array_filter((array)($opts['types'] ?? []), static fn($value): bool => is_string($value) && $value !== ''));
+        if ($types) {
+            $where[] = 'p.post_type IN (' . implode(',', array_fill(0, count($types), '?')) . ')';
+            foreach ($types as $t) $params[] = $t;
+        }
         $excludeTypes = array_values(array_filter((array)($opts['exclude_types'] ?? []), static fn($value): bool => is_string($value) && $value !== ''));
         if ($excludeTypes) {
             $marks = implode(',', array_fill(0, count($excludeTypes), '?'));

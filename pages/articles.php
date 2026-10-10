@@ -1,10 +1,32 @@
 <?php
 /**
- * articles.php — فهرست و آرشیو مقالات علمی و یادداشت‌های پژوهشی
+ * articles.php — بخش یکپارچهٔ «مقالات و پژوهش‌ها»
+ *
+ * مقاله‌های عمومی و پژوهش‌های علمی در یک فهرست، با فیلتر نوع:
+ *   /articles               ⇒ همه (article + research)
+ *   /articles?type=article  ⇒ فقط مقاله‌ها
+ *   /articles?type=research ⇒ فقط پژوهش‌ها
+ * جزئیات هر مطلب همچنان در نشانی نوع خودش است (/articles/<slug> یا /research/<slug>).
  */
-$pageTitle = 'مقالات علمی';
-$metaTitleOverride = 'مقالات اسلامی و علمی | فقه، قرآن، مهدویت و معارف';
-$pageDesc = 'مقالات و یادداشت‌های علمی درباره علوم اسلامی، مهدویت، فقه و اصول، قرآن، حدیث و معارف اسلامی از جامعه‌الهدی.';
+$typeLabels = [
+    'all'      => 'همه',
+    'article'  => 'مقاله',
+    'research' => 'پژوهش علمی',
+];
+$typeTypes = [
+    'all'      => ['article', 'research'],
+    'article'  => ['article'],
+    'research' => ['research'],
+];
+$requestedType = trim((string)($_GET['type'] ?? 'all'));
+$typeKey = isset($typeTypes[$requestedType]) ? $requestedType : 'all';
+$types = $typeTypes[$typeKey];
+
+$pageTitle = $typeKey === 'all' ? 'مقالات و پژوهش‌ها' : $typeLabels[$typeKey];
+$metaTitleOverride = $typeKey === 'all'
+    ? 'مقالات و پژوهش‌های علمی | فقه، قرآن، مهدویت و معارف اسلامی'
+    : $pageTitle . ' | مقالات و پژوهش‌های علمی';
+$pageDesc = 'مقالات و پژوهش‌های علمی درباره علوم اسلامی، مهدویت، فقه و اصول، قرآن، حدیث و معارف اسلامی از جامعه‌الهدی.';
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
@@ -23,21 +45,35 @@ $page = max(1, (int)($_GET['page'] ?? 1));
 $limit = 12;
 $offset = ($page - 1) * $limit;
 
-$opts = ['type' => 'article', 'limit' => $limit, 'offset' => $offset];
-if ($search) $opts['search'] = $search;
-if ($topicId) $opts['topic'] = $topicId;
+$base = ['types' => $types];
+if ($search) $base['search'] = $search;
+if ($topicId) $base['topic'] = $topicId;
 
+$opts = $base + ['limit' => $limit, 'offset' => $offset];
 $posts = getPosts($opts);
-$total = countPosts(['type' => 'article'] + ($search ? ['search' => $search] : []) + ($topicId ? ['topic' => $topicId] : []));
+$total = countPosts($base);
 $pages = (int)ceil($total / $limit);
-jhd_validate_pagination($page, $total, $limit, 'مقالات', url('articles'), 'مقالات');
+
+// Query fields that every link in this listing carries (search, topic, type).
+$keep = static function (array $extra = []) use ($search, $topicSlug, $typeKey): array {
+    $q = array_filter(['q' => $search, 'topic' => $topicSlug, 'type' => $typeKey !== 'all' ? $typeKey : ''], static fn($v) => $v !== '');
+    return $q + $extra;
+};
+
+jhd_validate_pagination($page, $total, $limit, 'مقالات', url('articles', $keep()), 'مقالات');
 $noindexSeo = ($total === 0);
 
+// Filtered views share the listing's content: point their canonical at the
+// unfiltered (or single-type) listing so search engines index one version.
+$canonicalOverride = $typeKey === 'all' ? url('articles') : url('articles', ['type' => $typeKey]);
 
 $breadcrumbs = [
     ['name' => 'صفحه اصلی', 'url' => url()],
-    ['name' => 'مقالات علمی', 'url' => url('articles')]
+    ['name' => 'مقالات و پژوهش‌ها', 'url' => url('articles')]
 ];
+if ($typeKey !== 'all') {
+    $breadcrumbs[] = ['name' => $typeLabels[$typeKey], 'url' => url('articles', ['type' => $typeKey])];
+}
 if ($topicId && !empty($t)) {
     $breadcrumbs[] = ['name' => $t['name'], 'url' => url('articles', ['topic' => $t['slug']])];
 }
@@ -61,25 +97,36 @@ require_once __DIR__ . '/../includes/header.php';
   </div>
 </div>
 
-<div class="jhd-section">
+<div class="jhd-section jhd-articles-hub">
   <div class="container">
     <!-- Page Header -->
     <?= jhd_page_head([
         'eyebrow' => 'اندیشه و پژوهش‌های دینی',
         'icon' => 'bi-file-earmark-richtext',
-        'title' => 'مقالات علمی',
-        'lead' => 'مقالات، یادداشت‌های علمی و پژوهش‌های اعضای مدرسه در معارف اسلامی',
-        'actions' => $total > 0 ? '<span class="jhd-chip"><i class="bi bi-collection"></i>' . number_format($total) . ' مقاله</span>' : '',
+        'title' => 'مقالات و پژوهش‌ها',
+        'lead' => 'مقالات، یادداشت‌های علمی و پژوهش‌های اعضای مدرسه در معارف اسلامی؛ همه در یک آرشیو.',
+        'actions' => $total > 0 ? '<span class="jhd-chip"><i class="bi bi-collection"></i>' . number_format($total) . ' مورد</span>' : '',
     ]) ?>
+
+    <!-- فیلتر نوع: یک بخش، دو نما -->
+    <nav class="jhd-type-tabs" aria-label="نوع مطلب">
+      <?php foreach ($typeLabels as $key => $label):
+        $tabQuery = array_filter(['q' => $search, 'topic' => $topicSlug, 'type' => $key !== 'all' ? $key : ''], static fn($v) => $v !== '');
+      ?>
+      <a class="jhd-type-tab<?= $key === $typeKey ? ' is-active' : '' ?>"
+         href="<?= sanitize(url('articles', $tabQuery)) ?>"
+         <?= $key === $typeKey ? 'aria-current="page"' : '' ?>><?= sanitize($label) ?></a>
+      <?php endforeach; ?>
+    </nav>
 
     <!-- Search & Filter Form -->
     <form method="get" class="mb-4" role="search">
-    <?= queryKeepFields() ?>
+    <?php if ($typeKey !== 'all'): ?><input type="hidden" name="type" value="<?= sanitize($typeKey) ?>"><?php endif; ?>
       <div class="row g-2 align-items-center">
         <div class="col-md-6 col-lg-5">
           <div class="input-group">
-            <input type="search" name="q" class="form-control" aria-label="جستجو در عنوان یا متن مقالات"
-                   placeholder="جستجو در عنوان یا متن مقالات..."
+            <input type="search" name="q" class="form-control" aria-label="جستجو در عنوان یا متن مقالات و پژوهش‌ها"
+                   placeholder="جستجو در عنوان یا متن مقالات و پژوهش‌ها..."
                    value="<?= sanitize($search) ?>">
             <?php if ($topicSlug): ?>
             <input type="hidden" name="topic" value="<?= sanitize($topicSlug) ?>">
@@ -88,7 +135,7 @@ require_once __DIR__ . '/../includes/header.php';
               <i class="bi bi-search ms-1"></i>جستجو
             </button>
             <?php if ($search || $topicSlug): ?>
-            <a href="<?= url('articles') ?>" class="btn btn-outline-secondary" title="حذف فیلترها">
+            <a href="<?= sanitize(url('articles', $keep(['q' => null, 'topic' => null]))) ?>" class="btn btn-outline-secondary" title="حذف فیلترها">
               <i class="bi bi-x-lg"></i>
             </a>
             <?php endif; ?>
@@ -106,20 +153,19 @@ require_once __DIR__ . '/../includes/header.php';
     </form>
 
     <?php if (empty($posts)): ?>
-    <?= renderEmptyState('bi-file-text', $search ? 'مقاله‌ای مطابق با جستجوی شما یافت نشد؛ عبارت دیگری را بیازمایید.' : 'هنوز مقاله‌ای در این بخش ثبت نشده است.', url('articles'), 'مشاهده همه مقالات') ?>
+    <?= renderEmptyState('bi-file-text', $search ? 'مطلبی مطابق با جستجوی شما یافت نشد؛ عبارت دیگری را بیازمایید.' : 'هنوز مطلبی در این بخش ثبت نشده است.', url('articles'), 'مشاهده همه مقالات و پژوهش‌ها') ?>
     <?php else: ?>
-    <?= renderCategoryChips(['article'], url('articles'), 'همه مقالات') ?>
     <?php jhd_preload_post_topics($posts); ?>
     <?= jhd_grid_open() ?>
       <?php foreach ($posts as $k => $p):
-        echo renderEditorialRow($p, ['index' => ($page - 1) * $limit + $k + 1, 'cta' => 'مطالعه مقاله', 'excerpt' => 120]);
+        echo renderEditorialRow($p, ['index' => ($page - 1) * $limit + $k + 1, 'cta' => $p['post_type'] === 'research' ? 'مطالعه پژوهش' : 'مطالعه مقاله', 'excerpt' => 120]);
       endforeach; ?>
     <?= jhd_grid_close() ?>
 
     <!-- صفحه‌بندی -->
     <?php if ($pages > 1): ?>
     <div class="mt-5">
-      <?= paginate($total, $limit, $page, url('articles', ['q' => $search, 'topic' => $topicSlug, 'page' => '%d'])) ?>
+      <?= paginate($total, $limit, $page, url('articles', $keep(['page' => '%d']))) ?>
     </div>
     <?php endif; ?>
     <?php endif; ?>

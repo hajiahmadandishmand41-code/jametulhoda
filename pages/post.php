@@ -144,7 +144,7 @@ $breadcrumbs = [
 $typeMap = [
     'news'         => ['label' => 'اخبار',            'url' => url('news')],
     'article'      => ['label' => 'مقالات',           'url' => url('articles')],
-    'research'     => ['label' => 'پژوهش‌ها',          'url' => url('research')],
+    'research'     => ['label' => 'مقالات و پژوهش‌ها', 'url' => url('articles', ['type' => 'research'])],
     'report'       => ['label' => 'گزارش‌ها',          'url' => url('reports')],
     'announcement' => ['label' => 'اطلاعیه‌ها',        'url' => url('announcements')],
     'program'      => ['label' => 'برنامه‌های آموزشی', 'url' => url('programs')],

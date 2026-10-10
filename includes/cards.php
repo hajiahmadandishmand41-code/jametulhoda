@@ -924,13 +924,10 @@ function jhd_post_nav(?array $prev, ?array $next): string {
 function jhd_nav_sections(): array {
     return [
         ['route' => 'news', 'label' => 'اخبار', 'icon' => 'bi-newspaper', 'types' => ['news']],
-        ['route' => 'articles', 'label' => 'مقالات', 'icon' => 'bi-file-text', 'types' => ['article']],
-        ['route' => 'research', 'label' => 'پژوهش', 'icon' => 'bi-journal-richtext', 'types' => ['research']],
+        ['route' => 'articles', 'label' => 'مقالات و پژوهش', 'icon' => 'bi-file-text', 'types' => ['article', 'research']],
         ['route' => 'books', 'label' => 'کتابخانه', 'icon' => 'bi-book', 'types' => []],
         ['route' => 'lessons', 'label' => 'دروس', 'icon' => 'bi-mortarboard', 'types' => []],
-        ['route' => 'events', 'label' => 'رویدادها', 'icon' => 'bi-calendar-event', 'types' => ['program', 'religious', 'announcement']],
         ['route' => 'media', 'label' => 'رسانه', 'icon' => 'bi-play-circle', 'types' => []],
-        ['route' => 'reports', 'label' => 'گزارش‌ها', 'icon' => 'bi-card-text', 'types' => ['report']],
         ['route' => 'topics', 'label' => 'موضوعات', 'icon' => 'bi-diagram-3', 'types' => []],
     ];
 }
