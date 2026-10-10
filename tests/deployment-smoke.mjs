@@ -81,11 +81,13 @@ const postOnlyRoutes = new Set([
   '/admin/content/gallery', '/admin/content/media',
   '/admin/posts/gallery.php', '/admin/posts/media-manage.php',
 ]);
+const bearerProtectedRoutes = new Set(['/api/mobile-auth']);
 const detailRoutesWithoutId = new Set(['/book', '/speech']);
 for (const route of routes) {
   if (route === '/php/migrate' || route === '/php/migrate.php') continue; // token-protected by design
   const expect = postOnlyRoutes.has(route) ? [405]
     : detailRoutesWithoutId.has(route) ? [404]
+    : bearerProtectedRoutes.has(route) ? [401]
     : [200];
   await hit(`GET ${route}`, route, { expect });
 }
