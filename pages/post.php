@@ -111,26 +111,10 @@ $postVideos = array_values($postVideos);
 $postAudios = getMediaFor('post', (int)$post['id'], 'audio');
 $postDocuments = getMediaFor('post', (int)$post['id'], 'document');
 
-// Topics for this post
-$postTopics = getTopicsForPost((int)$post['id']);
-$primaryTopic = $postTopics[0] ?? null;
-
-// Related content via shared topic or same type
-$related = [];
-if ($primaryTopic) {
-    $related = getPostsByTopic((int)$primaryTopic['id'], ['limit' => 4]);
-    $related = array_filter($related, fn($r) => $r['id'] != $post['id']);
-    $related = array_slice($related, 0, 3);
-}
-if (count($related) < 3) {
-    $more = getPosts(['type' => $post['post_type'], 'limit' => 6]);
-    $more = array_filter($more, fn($r) => $r['id'] != $post['id'] && !in_array($r['id'], array_column($related, 'id')));
-    $related = array_slice(array_merge($related, $more), 0, 3);
-}
-
-// Related books/lessons via same topic
-$relatedBooks = $primaryTopic ? getBooksByTopic((int)$primaryTopic['id'], 3) : [];
-$relatedLessons = $primaryTopic ? getLessonsByTopic((int)$primaryTopic['id'], 3) : [];
+// Related articles are selected by content type, without topic dependencies.
+$related = getPosts(['type' => $post['post_type'], 'limit' => 8]);
+$related = array_values(array_filter($related, static fn($row) => (int)$row['id'] !== (int)$post['id']));
+$related = array_slice($related, 0, 3);
 
 $pageTitle = $post['title'];
 $pageDesc = $post['summary'] ? excerpt($post['summary'], 160) : excerpt(strip_tags($post['content'] ?? ''), 160);
@@ -155,11 +139,6 @@ $typeMap = [
 ];
 if (isset($typeMap[$post['post_type']])) {
     $breadcrumbs[] = ['name' => $typeMap[$post['post_type']]['label'], 'url' => $typeMap[$post['post_type']]['url']];
-}
-if ($primaryTopic) {
-    foreach (getTopicBreadcrumbs((int)$primaryTopic['id']) as $bt) {
-        $breadcrumbs[] = ['name' => $bt['name'], 'url' => topicUrl($bt)];
-    }
 }
 // Use the URL-mode-aware canonical also used by cards, redirects and the
 // sitemap: Pretty deployments publish the clean typed path; Query-mode hosts
@@ -198,7 +177,6 @@ require_once __DIR__ . '/../includes/header.php';
         <div class="d-flex flex-wrap gap-2 mb-2">
             <span class="jhd-card-badge jhd-card-badge--inline"><?= sanitize(postTypeLabel((string)$post['post_type'])) ?></span>
             <?php if (!empty($post['cat_name'])): ?><a href="<?= categoryUrl($post['cat_slug']) ?>" class="jhd-chip"><?= sanitize($post['cat_name']) ?></a><?php endif; ?>
-            <?php if ($primaryTopic): ?><a href="<?= topicUrl($primaryTopic) ?>" class="jhd-chip"><i class="bi bi-tag"></i><?= sanitize($primaryTopic['name']) ?></a><?php endif; ?>
         </div>
         <h1 class="jhd-article-title" itemprop="headline"><?= sanitize($post['title']) ?></h1>
         <?php if (!empty($post['summary'])): ?><p class="jhd-article-lead" itemprop="description"><?= sanitize($post['summary']) ?></p><?php endif; ?>
@@ -320,13 +298,6 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
     <?php endif; ?>
 
-    <?php if ($postTopics): ?>
-    <section class="mt-4" aria-label="موضوعات مطلب">
-        <h2 class="h6"><i class="bi bi-diagram-3 ms-1 text-gold"></i> موضوعات مرتبط</h2>
-        <div class="jhd-cat-strip mb-0"><?php foreach ($postTopics as $t): ?><a href="<?= topicUrl($t) ?>" class="jhd-chip"><?= sanitize($t['name']) ?></a><?php endforeach; ?></div>
-    </section>
-    <?php endif; ?>
-
     <?= jhd_share_row($postCanonicalUrl, (string)$post['title']) ?>
 
     <?php
@@ -355,23 +326,7 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
     <?php endif; ?>
 
-    <?php if ($relatedBooks): ?>
-    <div class="jhd-side-card">
-        <h3><i class="bi bi-book"></i> کتاب‌های مرتبط</h3>
-        <ul class="jhd-side-list">
-        <?php foreach ($relatedBooks as $b): ?><li><a href="<?= bookUrl($b) ?>"><i class="bi bi-book ms-1 text-gold"></i><?= sanitize(mb_strimwidth($b['title'], 0, 40, '...')) ?></a></li><?php endforeach; ?>
-        </ul>
-    </div>
-    <?php endif; ?>
 
-    <?php if ($relatedLessons): ?>
-    <div class="jhd-side-card">
-        <h3><i class="bi bi-mortarboard"></i> درس‌های مرتبط</h3>
-        <ul class="jhd-side-list">
-        <?php foreach ($relatedLessons as $ls): ?><li><a href="<?= lessonUrl($ls) ?>"><i class="bi bi-mortarboard ms-1 text-gold"></i><?= sanitize(mb_strimwidth($ls['title'], 0, 40, '...')) ?></a></li><?php endforeach; ?>
-        </ul>
-    </div>
-    <?php endif; ?>
 
     <div class="jhd-side-card">
         <h3><i class="bi bi-newspaper"></i> تازه‌های مدرسه</h3>
