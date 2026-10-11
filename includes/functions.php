@@ -2402,9 +2402,10 @@ function validatedTopicIds(array $ids): array {
 // ─── Search helper (unified) ──────────────────────────────────────────────────
 
 function searchAll(string $q, int $limit=12, int $offset=0, string $filter='all', int $topicId=0, string $sort='relevance'): array {
-    $allowed = ['all','topic','media','audio','video','article','research','report','news','announcement','program','religious','event','speech','qa','book','lesson'];
+    $allowed = ['all','media','audio','video','article','research','report','news','announcement','program','religious','event','speech','qa','book','lesson'];
     $filter = in_array($filter, $allowed, true) ? $filter : 'all';
-    $topicId = max(0, $topicId);
+    // Public topic browsing is retired; keep the parameter for call compatibility but ignore it.
+    $topicId = 0;
     $sort = in_array($sort, ['relevance', 'newest'], true) ? $sort : 'relevance';
 
     // An empty phrase is useful when the visitor deliberately chooses a type or
@@ -2415,15 +2416,6 @@ function searchAll(string $q, int $limit=12, int $offset=0, string $filter='all'
     $limit = max(1, min(100, $limit));
     $offset = max(0, $offset);
     $qLike = '%' . $q . '%';
-    $scopeIds = $topicId > 0 ? getTopicScopeIds($topicId) : [];
-    $scopeSql = $scopeIds ? implode(',', array_map('intval', $scopeIds)) : '0';
-    $topicMatch = static function (string $junction, string $ownerColumn, string $ownerAlias) use ($scopeIds, $scopeSql): string {
-        if (!$scopeIds) return '1';
-        return "CASE WHEN EXISTS (SELECT 1 FROM $junction topic_filter WHERE topic_filter.$ownerColumn=$ownerAlias.id AND topic_filter.topic_id IN ($scopeSql)) THEN 1 ELSE 0 END";
-    };
-    $postTopicMatch = $topicMatch('post_topics', 'post_id', 'p');
-    $lessonTopicMatch = $topicMatch('lesson_topics', 'lesson_id', 'l');
-    $bookTopicMatch = $topicMatch('book_topics', 'book_id', 'b');
     $sources = [];
     $sourceParams = [];
     $addSource = static function (string $sql, array $params = []) use (&$sources, &$sourceParams): void {
@@ -2433,11 +2425,6 @@ function searchAll(string $q, int $limit=12, int $offset=0, string $filter='all'
 
     // Every source exposes the same columns so counts, sorting, and pagination
     // operate across the complete, published result set.
-    if (in_array($filter, ['all', 'topic'], true)) {
-        $topicMatchExpression = $scopeIds ? "CASE WHEN id IN ($scopeSql) THEN 1 ELSE 0 END" : '1';
-        $addSource("SELECT id,name AS title,slug,description AS summary,intro AS content,cover_image AS featured_image,'topic' AS post_type,created_at AS published_at,created_at,'topic' AS target,'' AS media_kind,0 AS is_featured,$topicMatchExpression AS topic_match FROM topics WHERE is_active=1");
-    }
-
     if (in_array($filter, ['all', 'media', 'audio', 'video'], true)) {
         $kindClause = in_array($filter, ['audio', 'video'], true) ? ' AND m.kind=?' : '';
         $kindParams = in_array($filter, ['audio', 'video'], true) ? [$filter] : [];
@@ -2450,26 +2437,26 @@ function searchAll(string $q, int $limit=12, int $offset=0, string $filter='all'
         // published parent row. Include it only when no equivalent media row
         // exists, and keep the destination on that public parent page.
         if ($filter !== 'video') {
-            $addSource("SELECT l.id,l.title,l.slug,l.summary,'' AS content,'' AS featured_image,'lesson' AS post_type,l.created_at AS published_at,l.created_at,'lesson' AS target,'audio' AS media_kind,0 AS is_featured,$lessonTopicMatch AS topic_match FROM lessons l WHERE l.status='published' AND l.audio_file IS NOT NULL AND l.audio_file<>'' AND NOT EXISTS(SELECT 1 FROM media_files m WHERE m.ref_type='lesson' AND m.ref_id=l.id AND m.kind='audio' AND m.file_path=l.audio_file)");
+            $addSource("SELECT l.id,l.title,l.slug,l.summary,'' AS content,'' AS featured_image,'lesson' AS post_type,l.created_at AS published_at,l.created_at,'lesson' AS target,'audio' AS media_kind,0 AS is_featured,0 AS topic_match FROM lessons l WHERE l.status='published' AND l.audio_file IS NOT NULL AND l.audio_file<>'' AND NOT EXISTS(SELECT 1 FROM media_files m WHERE m.ref_type='lesson' AND m.ref_id=l.id AND m.kind='audio' AND m.file_path=l.audio_file)");
         }
         if ($filter !== 'audio') {
-            $addSource("SELECT l.id,l.title,l.slug,l.summary,'' AS content,'' AS featured_image,'lesson' AS post_type,l.created_at AS published_at,l.created_at,'lesson' AS target,'video' AS media_kind,0 AS is_featured,$lessonTopicMatch AS topic_match FROM lessons l WHERE l.status='published' AND l.video_file IS NOT NULL AND l.video_file<>'' AND NOT EXISTS(SELECT 1 FROM media_files m WHERE m.ref_type='lesson' AND m.ref_id=l.id AND m.kind='video' AND m.file_path=l.video_file)");
-            $addSource("SELECT p.id,p.title,p.slug,p.summary,'' AS content,'' AS featured_image,p.post_type,p.published_at,p.created_at,'post' AS target,'video' AS media_kind,p.is_featured,$postTopicMatch AS topic_match FROM posts p WHERE p.status='published' AND p.featured_video IS NOT NULL AND p.featured_video<>'' AND NOT EXISTS(SELECT 1 FROM media_files m WHERE m.ref_type='post' AND m.ref_id=p.id AND m.kind='video' AND m.file_path=p.featured_video)");
+            $addSource("SELECT l.id,l.title,l.slug,l.summary,'' AS content,'' AS featured_image,'lesson' AS post_type,l.created_at AS published_at,l.created_at,'lesson' AS target,'video' AS media_kind,0 AS is_featured,0 AS topic_match FROM lessons l WHERE l.status='published' AND l.video_file IS NOT NULL AND l.video_file<>'' AND NOT EXISTS(SELECT 1 FROM media_files m WHERE m.ref_type='lesson' AND m.ref_id=l.id AND m.kind='video' AND m.file_path=l.video_file)");
+            $addSource("SELECT p.id,p.title,p.slug,p.summary,'' AS content,'' AS featured_image,p.post_type,p.published_at,p.created_at,'post' AS target,'video' AS media_kind,p.is_featured,0 AS topic_match FROM posts p WHERE p.status='published' AND p.featured_video IS NOT NULL AND p.featured_video<>'' AND NOT EXISTS(SELECT 1 FROM media_files m WHERE m.ref_type='post' AND m.ref_id=p.id AND m.kind='video' AND m.file_path=p.featured_video)");
         }
     }
 
     $postTypes = ['article','research','report','news','announcement','program','religious','event','speech','qa'];
     if ($filter === 'all') {
-        $addSource("SELECT p.id,p.title,p.slug,p.summary,p.content,p.featured_image,p.post_type,p.published_at,p.created_at,'post' AS target,'' AS media_kind,p.is_featured,$postTopicMatch AS topic_match FROM posts p WHERE p.status='published'");
+        $addSource("SELECT p.id,p.title,p.slug,p.summary,p.content,p.featured_image,p.post_type,p.published_at,p.created_at,'post' AS target,'' AS media_kind,p.is_featured,0 AS topic_match FROM posts p WHERE p.status='published'");
     } elseif (in_array($filter, $postTypes, true)) {
-        $addSource("SELECT p.id,p.title,p.slug,p.summary,p.content,p.featured_image,p.post_type,p.published_at,p.created_at,'post' AS target,'' AS media_kind,p.is_featured,$postTopicMatch AS topic_match FROM posts p WHERE p.status='published' AND p.post_type=?", [$filter]);
+        $addSource("SELECT p.id,p.title,p.slug,p.summary,p.content,p.featured_image,p.post_type,p.published_at,p.created_at,'post' AS target,'' AS media_kind,p.is_featured,0 AS topic_match FROM posts p WHERE p.status='published' AND p.post_type=?", [$filter]);
     }
 
     if (in_array($filter, ['all', 'lesson'], true)) {
-        $addSource("SELECT l.id,l.title,l.slug,l.summary,l.content,l.featured_image,'lesson' AS post_type,l.created_at AS published_at,l.created_at,'lesson' AS target,'' AS media_kind,l.is_featured,$lessonTopicMatch AS topic_match FROM lessons l WHERE l.status='published'");
+        $addSource("SELECT l.id,l.title,l.slug,l.summary,l.content,l.featured_image,'lesson' AS post_type,l.created_at AS published_at,l.created_at,'lesson' AS target,'' AS media_kind,l.is_featured,0 AS topic_match FROM lessons l WHERE l.status='published'");
     }
     if (in_array($filter, ['all', 'book'], true)) {
-        $addSource("SELECT b.id,b.title,b.slug,b.description AS summary,b.description AS content,b.cover_image AS featured_image,'book' AS post_type,b.created_at AS published_at,b.created_at,'book' AS target,'' AS media_kind,b.is_featured,$bookTopicMatch AS topic_match FROM books b WHERE b.status='published'");
+        $addSource("SELECT b.id,b.title,b.slug,b.description AS summary,b.description AS content,b.cover_image AS featured_image,'book' AS post_type,b.created_at AS published_at,b.created_at,'book' AS target,'' AS media_kind,b.is_featured,0 AS topic_match FROM books b WHERE b.status='published'");
     }
     if (!$sources) return ['total' => 0, 'results' => []];
 
