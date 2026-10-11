@@ -42,21 +42,22 @@ $defaults = [
     'social_youtube' => '',
     'social_instagram' => '',
 ];
+/*
+ * چیدمان صفحهٔ اصلی = پنج هاب. برچسب‌ها همان کلیدهایی‌اند که
+ * jhd_homepage_settings() می‌شناسد؛ کلیدهای قدیمی (گزارش‌ها، رویدادها،
+ * پرسش‌وپاسخ و …) در همان تابع به این پنج نگاشت می‌شوند، پس تنظیماتِ ذخیره‌شدهٔ
+ * نصب‌های پیشین بی‌صدا از دست نمی‌رود.
+ */
 $homepageSectionLabels = [
-    'hero' => 'مطلب شاخص',
-    'editor_picks' => 'برگزیدهٔ سردبیر',
-    'latest' => 'فهرست تازه‌ترین مطالب',
-    'news' => 'خبرها در فهرست تازه‌ها',
-    'articles' => 'مقالات در فهرست تازه‌ها',
-    'reports' => 'گزارش‌ها در فهرست تازه‌ها',
-    'research' => 'پژوهش‌ها در فهرست تازه‌ها',
-    'topics' => 'موضوعات علمی',
-    'events' => 'رویدادها در فهرست تازه‌ها',
-    'speeches' => 'سخنرانی‌ها در فهرست تازه‌ها',
-    'qa' => 'پرسش‌وپاسخ در فهرست تازه‌ها',
-    'books' => 'کتاب‌های منتخب',
-    'lessons' => 'درس‌های منتخب',
+    'hero'    => 'تابلوی اصلی: برند، تصویر و ریل پنج هاب',
+    'feature' => 'مطلب شاخص، برگزیدهٔ سردبیر و تازه‌های اخبار',
+    'lessons' => 'هاب دروس و دوره‌ها',
+    'books'   => 'هاب کتابخانهٔ دیجیتال',
+    'writing' => 'هاب نوشتارها (مقاله، پژوهش و پرسش‌وپاسخ)',
+    'media'   => 'هاب صوت و تصویر',
+    'topics'  => 'نوار موضوعات پرمحتوا (اطلس)',
 ];
+
 $homepageCfgRaw = trim((string)($sets['homepage_config'] ?? ''));
 $homepageCfg = json_decode($homepageCfgRaw, true);
 if (!is_array($homepageCfg)) $homepageCfg = [];
@@ -233,7 +234,7 @@ $sets = array_merge($sets, $formValues);
             <section class="admin-card mb-4" aria-labelledby="admin-homepage-heading">
                 <div class="admin-card-header" id="admin-homepage-heading">چیدمان صفحهٔ اصلی</div>
                 <div class="admin-card-body">
-                    <p class="admin-settings-help">صفحهٔ اصلی یک مطلب شاخص، برگزیده‌ها و فهرست کوتاه تازه‌ها را نمایش می‌دهد. تیک‌های نوع محتوا، موارد مجاز برای فهرست تازه‌ها را کنترل می‌کنند؛ آرشیو کامل هر بخش از ناوبری سایت در دسترس می‌ماند.</p>
+                    <p class="admin-settings-help">صفحهٔ اصلی پنج هاب دارد؛ هر تیک، یکی از آن‌ها را روشن یا خاموش می‌کند. حذف یک هاب از صفحهٔ اصلی، آن بخش را از سایت حذف نمی‌کند: آرشیو، ناوبری «بیشتر»، فوتر و sitemap همیشه پابرجا می‌مانند.</p>
                     <div class="mb-4">
                         <label class="form-label fw-bold">بخش‌های قابل نمایش در صفحهٔ اصلی</label>
                         <div class="row g-2">

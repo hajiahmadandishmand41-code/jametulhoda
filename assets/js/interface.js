@@ -142,7 +142,11 @@ document.querySelectorAll('[data-theme-toggle]').forEach(button => {
 // ─── 3. Accessible admin navigation drawer ────────────────────────────────────
 (function initAdminSidebar() {
     const adminMenu = document.getElementById('adminSidebar');
-    const adminToggle = document.getElementById('sidebarToggle');
+    // هر دکمه‌ای که همان کشو را باز می‌کند: همبرگرِ هدر و تبِ «منو» در نوار پایین.
+    const adminToggles = [...document.querySelectorAll('[data-admin-drawer="adminSidebar"]')];
+    const legacyToggle = document.getElementById('sidebarToggle');
+    if (legacyToggle && !adminToggles.includes(legacyToggle)) adminToggles.unshift(legacyToggle);
+    const adminToggle = adminToggles[0] || null;
     const adminClose = document.getElementById('sidebarClose');
     const adminMain = document.getElementById('adminMain');
     const adminOverlay = document.getElementById('adminSidebarOverlay');
@@ -153,7 +157,7 @@ document.querySelectorAll('[data-theme-toggle]').forEach(button => {
     let overlayCloseTimer = null;
 
     function syncAccessibility(isOpen) {
-        adminToggle.setAttribute('aria-expanded', String(isOpen));
+        adminToggles.forEach((btn) => btn.setAttribute('aria-expanded', String(isOpen)));
         if (mobileMedia.matches) {
             adminMenu.toggleAttribute('inert', !isOpen);
             adminMenu.setAttribute('aria-hidden', String(!isOpen));
@@ -210,10 +214,10 @@ document.querySelectorAll('[data-theme-toggle]').forEach(button => {
     }
 
     syncAccessibility(adminMenu.classList.contains('open'));
-    adminToggle.addEventListener('click', () => {
+    adminToggles.forEach((btn) => btn.addEventListener('click', () => {
         if (adminMenu.classList.contains('open')) close();
         else open();
-    });
+    }));
     if (adminClose) adminClose.addEventListener('click', () => close(true));
 
     document.addEventListener('keydown', (event) => {

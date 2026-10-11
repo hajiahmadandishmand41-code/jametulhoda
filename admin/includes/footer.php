@@ -1,8 +1,74 @@
   </div><!-- /.admin-content -->
 </main><!-- /.admin-main -->
 
+<?php
+/*
+ * نوار تب پایین — چهار کار پرکاربرد + منو، در فاصلهٔ انگشت شست.
+ * روی دسکتاپ با CSS نمایش داده نمی‌شود؛ اینجا هم فقط برای کارکنان ساخته
+ * می‌شود که واقعاً دسترسیِ مربوطه را دارند (تب خالی نمی‌گذاریم).
+ */
+$jhdAdminTabs = [];
+$jhdAdminTabs[] = [
+    'label' => 'داشبورد', 'icon' => 'bi-speedometer2', 'href' => adminDashboardUrl(),
+    'active' => !empty($adminDashboardActive),
+];
+$jhdAdminTabs[] = [
+    'label' => 'محتوا', 'icon' => 'bi-journal-text', 'href' => adminUrl('content'),
+    'active' => !empty($adminPostsActive) || !empty($adminNewsActive) || !empty($adminArticlesActive),
+    'can' => 'content',
+];
+if (jhd_can('content')) {
+    $jhdAdminTabs[] = [
+        'label' => 'افزودن', 'icon' => 'bi-plus-lg', 'href' => adminUrl('content/create'),
+        'active' => false, 'highlight' => true,
+    ];
+}
+$jhdAdminTabs[] = [
+    'label' => 'رسانه', 'icon' => 'bi-images', 'href' => adminUrl('uploads'),
+    'active' => !empty($adminUploadsActive) || !empty($adminVideosActive) || !empty($adminAudiosActive),
+    'can' => 'media',
+];
+if (!empty($adminUnreadMessages)) {
+    $jhdAdminTabs[] = [
+        'label' => 'پیام‌ها', 'icon' => 'bi-envelope', 'href' => adminUrl('messages'),
+        'active' => !empty($adminMessagesActive), 'count' => (int)$adminUnreadMessages, 'can' => 'messages',
+    ];
+}
+?>
+<nav class="admin-tabbar" aria-label="دسترسی سریع پنل مدیریت">
+    <?php foreach ($jhdAdminTabs as $tab): ?>
+    <?php if (!empty($tab['can']) && !jhd_can($tab['can'])) continue; ?>
+    <a class="<?= !empty($tab['active']) ? 'is-active' : '' ?><?= !empty($tab['highlight']) ? ' admin-tabbar__add' : '' ?>"
+       href="<?= sanitize($tab['href']) ?>"<?= !empty($tab['active']) ? ' aria-current="page"' : '' ?>>
+        <i class="bi <?= sanitize($tab['icon']) ?>" aria-hidden="true"></i>
+        <span><?= sanitize($tab['label']) ?><?php if (isset($tab['count'])): ?>
+            <b class="admin-tabbar__badge"><?= number_format((int)$tab['count']) ?></b><?php endif; ?></span>
+    </a>
+    <?php endforeach; ?>
+    <button type="button" id="adminTabMenu" class="admin-tabbar__menu" data-admin-drawer="adminSidebar" aria-controls="adminSidebar" aria-expanded="false" aria-label="منوی کامل پنل">
+        <i class="bi bi-grid" aria-hidden="true"></i>
+        <span>منو</span>
+    </button>
+</nav>
+
 <script src="<?= asset('vendor/bootstrap.bundle.min.js') ?>"></script>
 <script>
+// برچسب ستون را روی هر سلول می‌نویسد تا جدول روی گوشی «کارت» شود:
+// `.admin-table td::before { content: attr(data-label) }` در assets/css/admin.css.
+// تنها مرجع، خودِ <th> است؛ پس هیچ قالب فهرستی نیاز به ویرایش ندارد.
+document.querySelectorAll('table.admin-table').forEach(function (table) {
+    var heads = Array.prototype.map.call(table.querySelectorAll('thead th'), function (th) {
+        return (th.getAttribute('data-label') || th.textContent || '').trim().replace(/\s+/g, ' ');
+    });
+    table.querySelectorAll('tbody tr').forEach(function (row) {
+        Array.prototype.forEach.call(row.children, function (cell, index) {
+            if (cell.tagName !== 'TD' || cell.hasAttribute('data-label')) return;
+            if (!heads[index]) return;
+            cell.setAttribute('data-label', heads[index]);
+        });
+    });
+});
+
 // Auto dismiss alerts
 document.querySelectorAll('.alert-auto-dismiss').forEach(function(el) {
     setTimeout(function() {

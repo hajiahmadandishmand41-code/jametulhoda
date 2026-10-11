@@ -1,0 +1,433 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   admin.css — پوستهٔ پنل مدیریت جامعة‌الهدی (موبایل‌محور)
+   ───────────────────────────────────────────────────────────────────────────
+   این فایل پیش از این داخل یک بلوک <style> در admin/includes/header.php بود؛
+   جدا شدنش دو سود دارد: یک‌بار کش شدن برای همهٔ ۲۰+ صفحهٔ پنل، و داشتن یک
+   نقطهٔ واحد برای «اسکلت» مدیریت.
+
+   اصل طراحی در نسخهٔ موبایل:
+     • پنل را با انگشت اداره می‌کنیم، نه با ماوس: هر هدف‌لمسی ≥ ۴۴px.
+     • منوی کناری روی گوشی کشو می‌شود و نوار تب پایین، چهار کار پرکاربرد را
+       همیشه زیر انگشت نگه می‌دارد.
+     • جدول‌ها روی صفحهٔ کوچک «کارت» می‌شوند (هر ردیف یک کارت، هر سلول یک
+       ردیف برچسب‌دار) — بدون افقی‌کشیدن و بدون ریزشدن متن.
+     • ورودی‌ها ۱۶px هستند تا iOS روی فوکوس زوم نکند؛ چیدمان می‌پرد.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --admin-sidebar: #0f241a;
+  --admin-sidebar-hover: #183d2c;
+  --admin-sidebar-active: #23543d;
+  --admin-gold: #c9a84c;
+  --admin-green: #2d6a4f;
+  --admin-bg: #f4f6f5;
+  --admin-white: #ffffff;
+  --admin-border: #e2e8e5;
+  --admin-text: #1b2e24;
+  --admin-muted: #6b7d74;
+  --admin-unread-bg: #f5f8f6;
+  --admin-stat-green-bg: #e4f3e8;
+  --admin-stat-green: #206b3b;
+  --admin-stat-gold-bg: #fff3cd;
+  --admin-stat-gold: #856404;
+  --admin-stat-blue-bg: #dbeafe;
+  --admin-stat-blue: #1d4ed8;
+  --admin-stat-violet-bg: #e8e5ff;
+  --admin-stat-violet: #5145cd;
+  --admin-stat-teal-bg: #ccfbf1;
+  --admin-stat-teal: #0f766e;
+  --admin-stat-rose-bg: #fce7f3;
+  --admin-stat-rose: #be185d;
+}
+*, *::before, *::after { box-sizing: border-box; }
+/* پوستهٔ بدنه روی کلاس بدنهٔ پنل قفل می‌شود: admin.css بعد از design-system.css
+   لود می‌شود و اگر روزی ترتیب عوض شود، پس‌زمینهٔ سایت عمومی به پنل راه نمی‌یابد. */
+body.jhd-admin-site { font-family: 'Vazirmatn', sans-serif; background: var(--admin-bg); color: var(--admin-text); margin: 0; }
+/* Guard: the panel must never scroll sideways on phones. `clip` (not `hidden`)
+   keeps the fixed sidebar and sticky topbar working. */
+html, body { max-width: 100%; }
+body.jhd-admin-site { overflow-x: clip; }
+
+/* Sidebar */
+.admin-sidebar {
+  width: 256px; background: var(--admin-sidebar); min-height: 100vh;
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 100;
+  display: flex; flex-direction: column;
+  transition: transform .3s ease;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.15) transparent;
+}
+.sidebar-brand { padding: 18px 16px; border-bottom: 1px solid rgba(255,255,255,.08); background: rgba(0,0,0,.15); }
+.sidebar-brand img { width: 42px; height: 42px; border-radius: 50%; border: 2px solid var(--admin-gold); object-fit: contain; }
+.sidebar-brand .name { color: var(--admin-gold); font-weight: 700; font-size: .88rem; margin-right: 10px; }
+.sidebar-brand .sub { color: rgba(255,255,255,.45); font-size: .72rem; display: block; margin-right: 10px; }
+.sidebar-nav { flex: 1; padding: 12px 0; }
+.sidebar-link {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 42px;
+  padding: 8px 14px;
+  color: rgba(255,255,255,.76);
+  font-size: .84rem;
+  text-decoration: none;
+  transition: background-color .16s ease, color .16s ease, border-color .16s ease;
+  border-right: 3px solid transparent;
+  position: relative;
+  border-radius: 9px;
+}
+.sidebar-link i { flex: 0 0 20px; font-size: .96rem; width: 20px; text-align: center; color: var(--admin-gold); }
+.sidebar-link:hover { background: var(--admin-sidebar-hover); color: #fff; }
+.sidebar-link.active { background: var(--admin-sidebar-active); color: #fff; border-right-color: var(--admin-gold); font-weight: 700; }
+.sidebar-link-dashboard { margin: 0 10px 8px; }
+.sidebar-group { margin: 2px 10px 6px; border-radius: 11px; }
+.sidebar-group-summary {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 43px; padding: 8px 12px;
+  color: rgba(255,255,255,.78); font-size: .82rem; font-weight: 700;
+  border-radius: 10px; cursor: pointer; list-style: none; user-select: none;
+  transition: background-color .16s ease, color .16s ease;
+}
+.sidebar-group-summary::-webkit-details-marker { display: none; }
+.sidebar-group-summary::marker { content: ''; }
+.sidebar-group-summary:hover,
+.sidebar-group[open] > .sidebar-group-summary { background: var(--admin-sidebar-hover); color: #fff; }
+.sidebar-group-icon { flex: 0 0 20px; width: 20px; text-align: center; color: var(--admin-gold); font-size: .98rem; }
+.sidebar-group-chevron { margin-inline-start: auto; color: rgba(255,255,255,.48); font-size: .7rem; transition: transform .16s ease; }
+.sidebar-group[open] > .sidebar-group-summary .sidebar-group-chevron { transform: rotate(180deg); }
+.sidebar-group.has-active > .sidebar-group-summary { color: #fff; }
+.sidebar-group-links { padding: 3px 0 5px; }
+.sidebar-group .sidebar-link { margin-inline: 5px; min-height: 39px; padding-block: 7px; font-size: .81rem; }
+.sidebar-group .sidebar-link.active { border-right-color: var(--admin-gold); }
+.sidebar-link-badge { margin-inline-start: auto; font-size: .68rem; }
+.sidebar-footer { padding: 13px 16px; border-top: 1px solid rgba(255,255,255,.08); }
+.sidebar-footer .sidebar-site-link { display: flex; align-items: center; gap: .25rem; color: rgba(255,255,255,.72); font-size: .82rem; text-decoration: none; }
+.sidebar-footer .sidebar-site-link:hover { color: #fff; }
+
+/* Main content */
+.admin-main { margin-right: 256px; min-height: 100vh; display: flex; flex-direction: column; }
+
+/* Topbar */
+.admin-topbar {
+  background: var(--admin-white);
+  border-bottom: 1px solid var(--admin-border);
+  padding: 12px 24px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 50;
+  box-shadow: 0 1px 6px rgba(0,0,0,.03);
+}
+.topbar-title { font-weight: 700; font-size: 1rem; color: var(--admin-text); }
+.topbar-user { display: flex; align-items: center; gap: 12px; }
+.topbar-user .avatar {
+  width: 36px; height: 36px;
+  background: linear-gradient(135deg, var(--admin-green), #1b4332);
+  color: #fff; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: .88rem;
+}
+
+/* Content */
+.admin-content { flex: 1; padding: 24px; }
+
+/* Cards */
+.admin-card { background: var(--admin-white); border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.04); border: 1px solid var(--admin-border); }
+.admin-card-header { padding: 14px 20px; border-bottom: 1px solid var(--admin-border); font-weight: 700; font-size: .92rem; display: flex; align-items: center; justify-content: space-between; }
+.admin-card-body { padding: 20px; }
+
+/* Table */
+.admin-table th { background: #f8faf9; font-weight: 600; font-size: .82rem; color: var(--admin-muted); border-bottom: 2px solid var(--admin-border); }
+.admin-table td { font-size: .86rem; vertical-align: middle; }
+.admin-table tr:hover td { background: #f6fcf8; }
+
+/* Responsive */
+#sidebarToggle, #sidebarClose { display: none; }
+@media (max-width: 991px) {
+  .admin-sidebar { transform: translateX(100%); visibility: hidden; pointer-events: none; display: flex; transition: transform .24s ease, visibility .24s ease; box-shadow: -12px 0 36px rgba(0,0,0,.18); }
+  .admin-sidebar.open { transform: translateX(0); visibility: visible; pointer-events: auto; }
+  .admin-sidebar-overlay:not([hidden]) { display: block; position: fixed; inset: 0; z-index: 90; width: 100%; height: 100%; border: 0; background: rgba(7, 18, 12, .46); opacity: 0; transition: opacity .24s ease; }
+  .admin-sidebar-overlay.show { opacity: 1; }
+  .admin-main { margin-right: 0; }
+  #sidebarToggle { display: inline-flex; }
+  #sidebarClose { display: inline-flex; margin-inline-start: auto; }
+  .admin-content { padding: 16px; }
+}
+.admin-sidebar-overlay { display: none; }
+.admin-sidebar-overlay[hidden] { display: none !important; }
+/* Shared finishing touches for every administration screen. */
+.admin-content h1, .admin-content h2, .admin-content h3, .admin-content h4 { color: var(--admin-text); font-weight: 800; letter-spacing: -.02em; }
+.admin-card { border-radius: 16px; box-shadow: 0 8px 28px rgba(18, 43, 29, .055); transition: border-color .18s ease, box-shadow .18s ease; }
+.admin-card-header { min-height: 52px; background: linear-gradient(100deg, rgba(45,106,79,.045), transparent 75%); }
+.admin-table { --bs-table-color: var(--admin-text); --bs-table-bg: var(--admin-white); --bs-table-border-color: var(--admin-border); }
+.admin-table th { white-space: nowrap; }
+.admin-table td { line-height: 1.65; }
+.admin-content .form-control, .admin-content .form-select { min-height: 42px; border-radius: 9px; border-color: var(--admin-border); }
+.admin-content textarea.form-control { min-height: 120px; }
+.admin-content .form-control:focus, .admin-content .form-select:focus { border-color: var(--admin-green); box-shadow: 0 0 0 4px rgba(45,106,79,.12); }
+.admin-content .btn { border-radius: 9px; font-weight: 650; }
+.admin-content .alert { border: 0; border-radius: 12px; box-shadow: 0 3px 12px rgba(18,43,29,.06); }
+.admin-content .badge { font-weight: 650; letter-spacing: .01em; }
+.admin-content :focus-visible, .admin-sidebar :focus-visible { outline: 3px solid var(--admin-gold); outline-offset: 2px; }
+.admin-sidebar { scrollbar-gutter: stable; }
+.admin-topbar { min-height: 64px; backdrop-filter: blur(14px); }
+.admin-page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
+.admin-page-heading p { font-size: .84rem; line-height: 1.7; }
+.admin-settings-layout { align-items: flex-start; }
+.admin-settings-aside { position: sticky; top: 82px; }
+.admin-settings-help { color: var(--admin-muted); font-size: .82rem; margin-bottom: 1rem; }
+.admin-settings-logo { display: block; width: min(100%, 180px); height: 150px; object-fit: contain; padding: .6rem; margin-inline: auto; border: 1px solid var(--admin-border); border-radius: 12px; background: var(--admin-bg); }
+.admin-settings-save { box-shadow: 0 10px 25px rgba(18,43,29,.08); }
+.admin-settings-save .admin-card-body { padding: .85rem; }
+html[data-theme="dark"] .admin-settings-logo { background: #111c16; border-color: var(--admin-border); }
+@media (max-width: 991px) { .admin-settings-aside { position: static; } }
+@media (max-width: 575.98px) { .admin-page-heading { align-items: flex-start; } }
+html[data-theme="dark"] {
+  --admin-sidebar: #0b1711;
+  --admin-sidebar-hover: #183327;
+  --admin-sidebar-active: #234d38;
+  --admin-bg: #101814;
+  --admin-white: #17231c;
+  --admin-border: #2b3b31;
+  --admin-text: #e8f0eb;
+  --admin-muted: #a0b2a8;
+}
+html[data-theme="dark"] body { background: var(--admin-bg); color: var(--admin-text); }
+html[data-theme="dark"] .admin-topbar,
+html[data-theme="dark"] .admin-card { background: var(--admin-white); color: var(--admin-text); border-color: var(--admin-border); }
+html[data-theme="dark"] .admin-card-header { border-color: var(--admin-border); background: linear-gradient(100deg, rgba(92,203,163,.08), transparent 75%); }
+html[data-theme="dark"] .sidebar-group-summary:hover,
+html[data-theme="dark"] .sidebar-group[open] > .sidebar-group-summary { background: var(--admin-sidebar-hover); }
+html[data-theme="dark"] .admin-table th { background: #1d2c23; color: var(--admin-muted); }
+html[data-theme="dark"] .admin-table td { background: var(--admin-white); color: var(--admin-text); border-color: var(--admin-border); }
+html[data-theme="dark"] .admin-table tr:hover td { background: #1c2d23; }
+html[data-theme="dark"] .admin-content .form-control,
+html[data-theme="dark"] .admin-content .form-select { background-color: #111c16; color: var(--admin-text); border-color: var(--admin-border); }
+html[data-theme="dark"] .admin-content .form-control::placeholder { color: var(--admin-muted); }
+html[data-theme="dark"] .admin-content .text-muted { color: var(--admin-muted) !important; }
+
+.admin-dashboard-section { margin: 0 0 1.5rem; }
+.admin-dashboard-section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: .6rem 1rem; margin-bottom: .75rem; }
+.admin-dashboard-section-heading h2 { margin: 0 0 .12rem; font-size: 1rem; }
+.admin-dashboard-section-heading p { margin: 0; color: var(--admin-muted); font-size: .78rem; line-height: 1.65; }
+.admin-stat-copy { display: block; min-width: 0; }
+.admin-stat-note { display: block; margin-top: .2rem; color: var(--admin-muted); font-size: .7rem; line-height: 1.45; }
+.stat-icon--green { background: var(--admin-stat-green-bg); color: var(--admin-stat-green); }
+.stat-icon--gold { background: var(--admin-stat-gold-bg); color: var(--admin-stat-gold); }
+.stat-icon--blue { background: var(--admin-stat-blue-bg); color: var(--admin-stat-blue); }
+.stat-icon--violet { background: var(--admin-stat-violet-bg); color: var(--admin-stat-violet); }
+.stat-icon--teal { background: var(--admin-stat-teal-bg); color: var(--admin-stat-teal); }
+.stat-icon--rose { background: var(--admin-stat-rose-bg); color: var(--admin-stat-rose); }
+.admin-quick-group { height: 100%; }
+.admin-quick-actions { display: flex; flex-wrap: wrap; align-content: flex-start; gap: .55rem; }
+.admin-quick-action { display: inline-flex; align-items: center; justify-content: center; gap: .12rem; min-height: 42px; }
+.admin-recent-title { color: var(--admin-text) !important; }
+.admin-recent-category, .admin-recent-date { font-size: .75rem; }
+.admin-recent-message { background: var(--admin-white); color: var(--admin-text); border-color: var(--admin-border); padding: .85rem 1rem; }
+.admin-recent-message.is-unread { border-inline-start: 3px solid var(--admin-gold); background: var(--admin-unread-bg); }
+.admin-recent-message-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem; font-size: .82rem; }
+.admin-recent-message-subject { margin-top: .3rem; color: var(--admin-muted); font-size: .78rem; }
+.admin-recent-message-date { display: block; margin-top: .22rem; color: var(--admin-muted); font-size: .7rem; }
+html[data-theme="dark"] .admin-recent-message { background: var(--admin-white); color: var(--admin-text); border-color: var(--admin-border); }
+html[data-theme="dark"] .admin-recent-message.is-unread { background: var(--admin-unread-bg); }
+html[data-theme="dark"] .admin-content .badge.bg-success-subtle { background: #20392a !important; color: #94d2a5 !important; }
+html[data-theme="dark"] {
+  --admin-unread-bg: #1b2a21;
+  --admin-stat-green-bg: #20392a;
+  --admin-stat-green: #94d2a5;
+  --admin-stat-gold-bg: #3b321d;
+  --admin-stat-gold: #f4d17b;
+  --admin-stat-blue-bg: #1e324d;
+  --admin-stat-blue: #a9c7ff;
+  --admin-stat-violet-bg: #2b2547;
+  --admin-stat-violet: #c2b5ff;
+  --admin-stat-teal-bg: #173a35;
+  --admin-stat-teal: #89e0c9;
+  --admin-stat-rose-bg: #3d2428;
+  --admin-stat-rose: #f5a8b0;
+}
+@media (max-width: 575.98px) {
+  .admin-dashboard-section { margin-bottom: 1.2rem; }
+  .admin-dashboard-section-heading { align-items: flex-start; }
+  .admin-quick-actions { align-items: stretch; }
+  .admin-quick-action { flex: 1 1 8.5rem; }
+  .admin-summary-stats { gap: .8rem; }
+  .admin-summary-stats div { min-width: 4rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-sidebar, .sidebar-group-summary, .sidebar-group-chevron, .sidebar-link { transition: none !important; }
+}
+@media (max-width: 575.98px) {
+  .admin-topbar { padding: 10px 14px; }
+  .admin-content { padding: 12px; }
+  .admin-card-body { padding: 15px; }
+}
+/* ═══════════════════════════════════════════════════════════════════════════
+   لایهٔ موبایل‌محور پنل (افزوده‌شده) — از کشو تا نوار تب و جدولِ کارتی
+   ───────────────────────────────────────────────────────────────────────────
+   نقطهٔ شکست ۹۹۱.۹۸px با همان قانونِ کشوی منو در همین فایل هم‌خانواده است؛
+   بقیهٔ تغییرات (نوار تب پایین، کارت‌شدن جدول‌ها، اندازهٔ لمسی) روی گوشی‌های
+   واقعی اعمال می‌شود: ۷۶۷.۹۸px.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.admin-tabbar { display: none; }
+.admin-topbar { gap: .5rem; }
+.admin-topbar-actions { display: flex; align-items: center; gap: .4rem; }
+.admin-topbar .btn { min-height: 38px; }
+.admin-topbar .jhd-icon-btn { width: 38px; height: 38px; font-size: 1rem; }
+.admin-content .table-responsive { -webkit-overflow-scrolling: touch; }
+
+@media (max-width: 991.98px) {
+  .admin-topbar { padding-inline: 14px; }
+}
+
+@media (max-width: 767.98px) {
+  /* ۱) کشو: سرصفحه و پانویس چسبان، هدف لمسی ۴۴px+ */
+  .admin-sidebar { width: min(88vw, 340px); overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 0 0; }
+  .sidebar-brand { position: sticky; top: 0; z-index: 2; padding: 12px 12px 12px 14px; background: var(--admin-sidebar); }
+  .sidebar-brand img { width: 36px; height: 36px; }
+  .sidebar-nav { padding: 8px 8px 18px; }
+  .sidebar-link, .sidebar-group-summary { min-height: 46px; }
+  .sidebar-group .sidebar-link { min-height: 44px; }
+  .sidebar-footer { position: sticky; bottom: 0; background: var(--admin-sidebar); }
+
+  /* ۲) محتوا جا برای نوار تب پایین می‌گذارد (safe-area آیفون هم لحاظ شده) */
+  .admin-content { padding: 14px 12px calc(4.9rem + env(safe-area-inset-bottom, 0px)); }
+
+  /* ۳) نوار تب پایین: داشبورد · محتوا · افزودن · رسانه · منو */
+  .admin-tabbar {
+    /* تعداد تب‌ها با دسترسی کاربر تغییر می‌کند (پیام‌ها/افزودن)، پس ستون‌ها
+       خودکار و هم‌عرض‌اند نه repeat(5). */
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 120;
+    background: rgba(255, 255, 255, .95);
+    -webkit-backdrop-filter: saturate(1.4) blur(8px);
+    backdrop-filter: saturate(1.4) blur(8px);
+    border-top: 1px solid var(--admin-border);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  html[data-theme="dark"] .admin-tabbar { background: rgba(15, 25, 20, .95); }
+  .admin-tabbar a,
+  .admin-tabbar button {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .18rem;
+    min-height: 54px; padding: .34rem .1rem;
+    border: 0; background: none; cursor: pointer;
+    font-family: var(--jhd-font-body); font-size: .68rem; font-weight: 650; line-height: 1.2;
+    color: var(--admin-muted); text-decoration: none; position: relative;
+    transition: color .18s ease;
+  }
+  .admin-tabbar a i, .admin-tabbar button i { font-size: 1.15rem; }
+  .admin-tabbar a:active, .admin-tabbar button:active, .admin-tabbar a.is-active { color: var(--admin-green); }
+  .admin-tabbar a.is-active::after {
+    content: ""; position: absolute; top: 0; inset-inline: 22%; height: 2px;
+    border-radius: 0 0 3px 3px; background: var(--admin-green);
+  }
+  /* دکمهٔ «افزودن» — پرکاربردترین کار پنل، در وسط و با تأکید رنگی */
+  .admin-tabbar__add i {
+    width: 34px; height: 34px; display: grid; place-items: center;
+    border-radius: 50%; background: var(--admin-green); color: #fff;
+    box-shadow: 0 6px 14px rgba(45, 106, 79, .3); margin-top: -12px;
+  }
+  .admin-tabbar__add { color: var(--admin-green); }
+  .admin-tabbar__menu { font-size: .66rem; }
+  /* شمارشِ پیام‌های خوانده‌نشده — روی آیکون، تا عرض تب نشکند */
+  .admin-tabbar__badge {
+    position: absolute; top: .3rem; inset-inline-end: 50%; margin-inline-end: -1.15rem;
+    min-width: 16px; padding: 0 .22rem; border-radius: 999px;
+    background: var(--admin-gold); color: #17120a;
+    font-size: .6rem; font-weight: 800; line-height: 1.5; text-align: center;
+  }
+
+  /* ۴) فرم‌ها: ۱۶px تا iOS زوم نکند؛ لیبل بالای فیلد؛ کمک‌متن کوچک */
+  .admin-content .form-label { font-size: .78rem; margin-bottom: .3rem; }
+  .admin-content .form-control,
+  .admin-content .form-select,
+  .admin-content .input-group-text { font-size: 1rem; min-height: 46px; }
+  .admin-content textarea.form-control { min-height: 6rem; }
+  .admin-content .form-text { font-size: .74rem; line-height: 1.55; }
+  .admin-content .input-group > :not(:first-child) { margin-top: .35rem; }
+  .admin-content .btn { min-height: 42px; }
+  .admin-content .btn-sm { min-height: 38px; }
+  .admin-topbar .btn, .admin-topbar .jhd-icon-btn { min-height: 42px; }
+  .admin-topbar .jhd-icon-btn { width: 42px; height: 42px; }
+
+  /* ۵) میز عملیاتِ بالای فهرست: یک‌جا، چسبان، با فاصلهٔ انگشت */
+  .admin-content h2 { font-size: 1.16rem; }
+  .admin-content h3 { font-size: 1rem; }
+  .admin-card-body { padding: 14px 13px; }
+
+  /* ۶) جدول → کارت. برچسب هر سلول را اسکرپیتِ پایینِ پنل از روی <th> به
+     data-label می‌نویسد؛ بدون آن، ردیف فقط فشرده می‌شود و برچسب ندارد. */
+  .admin-table > thead { display: none; }
+  .admin-table, .admin-table > tbody, .admin-table > tbody > tr, .admin-table > tbody > tr > td { display: block; width: 100%; }
+  .admin-table > tbody > tr {
+    border: 1px solid var(--admin-border); border-radius: 14px;
+    background: var(--admin-white); padding: .55rem .75rem; margin-bottom: .55rem;
+    box-shadow: 0 1px 2px rgba(15, 40, 28, .05);
+  }
+  html[data-theme="dark"] .admin-table > tbody > tr { background: #14231c; border-color: #24382d; }
+  .admin-table > tbody > tr > td {
+    display: flex; align-items: center; justify-content: space-between; gap: .7rem;
+    padding: .34rem 0; border: 0 !important; background: none !important;
+    font-size: .84rem; text-align: end;
+  }
+  .admin-table > tbody > tr > td::before {
+    content: attr(data-label);
+    flex: 0 0 auto; max-width: 42%;
+    font-size: .72rem; font-weight: 700; color: var(--admin-muted); text-align: start;
+  }
+  .admin-table > tbody > tr > td:empty::before { content: none; }
+  .admin-table > tbody > tr > td:not([data-label])::before { content: none; }
+  .admin-table > tbody > tr > td > * { max-width: 62%; overflow-wrap: anywhere; }
+  .admin-table > tbody > tr > td .btn, .admin-table > tbody > tr > td .btn-sm { min-height: 36px; }
+  .admin-table > tbody > tr + tr { border-top: 0; }
+  .admin-table > tbody > tr > td:has(input[type="checkbox"]) { justify-content: flex-start; gap: .5rem; }
+
+  /* ۷) ردیف «ذخیره/انصراف» فرم‌ها (class="admin-form-bar") به پایین صفحه
+     می‌چسبد؛ برای ویرایش طولانی لازم نیست کاربر تا انتها اسکرول کند تا
+     دکمهٔ ذخیره را ببیند. */
+  .admin-content .admin-form-bar {
+    position: sticky;
+    bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+    z-index: 6;
+    background: var(--admin-white);
+    border: 1px solid var(--admin-border);
+    border-radius: 14px;
+    padding: .55rem .65rem;
+    margin-top: .8rem;
+    box-shadow: 0 -6px 18px rgba(15, 40, 28, .09);
+  }
+  .admin-content .admin-form-bar .btn { flex: 1 1 auto; }
+  html[data-theme="dark"] .admin-content .admin-form-bar { background: #14231c; border-color: #24382d; }
+
+  /* ۸) چیپ‌های فیلتر در یک ردیفِ قابل‌اسکرول، بدون شکستن چیدمان */
+  .admin-toolbar-strip {
+    display: flex; align-items: center; gap: .45rem; flex-wrap: nowrap;
+    overflow-x: auto; padding-bottom: .3rem; scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+  .admin-toolbar-strip > * { flex: 0 0 auto; }
+  .admin-toolbar-strip > .form-control { min-width: 11rem; }
+
+  /* ۹) کارت‌های خلاصهٔ داشبورد: دو ستون فشرده */
+  .admin-summary-card { padding: .9rem .95rem; gap: .7rem .9rem; }
+  .admin-summary-stats { gap: .8rem 1rem; }
+  .stat-icon { width: 38px; height: 38px; font-size: 1.05rem; }
+  .stat-value { font-size: 1.05rem; }
+
+  /* ۱۰) مودال‌ها تمام‌عرضِ انگشت‌پذیر */
+  .modal-dialog { max-width: calc(100vw - 1.2rem); margin: .6rem auto; }
+  .modal-content { border-radius: 16px; }
+}
+
+/* ۱۱) گوشی‌های خیلی باریک: برچسب بالای مقدار بنشیند تا متن نچرد */
+@media (max-width: 380px) {
+  .admin-table > tbody > tr > td { flex-direction: column; align-items: flex-start; gap: .12rem; }
+  .admin-table > tbody > tr > td > *, .admin-table > tbody > tr > td { max-width: 100%; text-align: start; }
+  .admin-table > tbody > tr > td::before { max-width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-sidebar, .admin-card, .admin-tabbar a, .admin-tabbar button { transition: none !important; }
+}

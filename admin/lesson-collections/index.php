@@ -133,7 +133,7 @@ $collections=getLessonCollections(['active'=>null]); // all
 <div class="mb-3"><label class="form-label">توضیح</label><textarea name="description" class="form-control" rows="3"><?= sanitize($editCol['description'] ?? '') ?></textarea></div>
 <div class="mb-3"><label class="form-label">کاور</label><input type="file" name="cover_image" class="form-control" accept="image/*"><?php if($editCol && $editCol['cover_image']): ?><img src="<?= imgUrl($editCol['cover_image']) ?>" style="max-width:120px;border-radius:8px;margin-top:8px"><?php endif; ?></div>
 <div class="row g-2 mb-3"><div class="col-6"><label class="form-label">ترتیب</label><input type="number" name="sort_order" class="form-control" value="<?= $editCol['sort_order'] ?? 0 ?>"></div><div class="col-6 d-flex flex-column justify-content-end gap-2"><label class="form-check"><input type="checkbox" name="is_active" class="form-check-input" <?= ($editCol['is_active']??1)?'checked':'' ?>> فعال</label><label class="form-check"><input type="checkbox" name="is_featured" class="form-check-input" <?= ($editCol['is_featured']??0)?'checked':'' ?>> ویژه</label></div></div>
-<div class="d-flex gap-2"><button class="btn btn-success flex-grow-1" type="submit"><i class="bi bi-<?= $editCol?'save':'plus-circle' ?> ms-1"></i> <?= $editCol?'ذخیره':'ایجاد' ?></button><?php if($editCol): ?><a href="<?= siteUrl('admin/lesson-collections/') ?>" class="btn btn-outline-secondary">انصراف</a><?php endif; ?></div>
+<div class="d-flex gap-2 admin-form-bar"><button class="btn btn-success flex-grow-1" type="submit"><i class="bi bi-<?= $editCol?'save':'plus-circle' ?> ms-1"></i> <?= $editCol?'ذخیره':'ایجاد' ?></button><?php if($editCol): ?><a href="<?= siteUrl('admin/lesson-collections/') ?>" class="btn btn-outline-secondary">انصراف</a><?php endif; ?></div>
 </form>
 </div>
 </div>
@@ -155,7 +155,7 @@ $collections=getLessonCollections(['active'=>null]); // all
 <div class="mb-3"><label class="form-label">عنوان جلد/بخش <span class="text-danger">*</span></label><input type="text" name="volume_title" class="form-control" value="<?= sanitize($editVol['title'] ?? '') ?>" required placeholder="مثلاً: جلد اول"></div>
 <div class="mb-3"><label class="form-label">توضیح</label><textarea name="volume_description" class="form-control" rows="2"><?= sanitize($editVol['description'] ?? '') ?></textarea></div>
 <div class="mb-3"><label class="form-label">ترتیب</label><input type="number" name="volume_sort" class="form-control" value="<?= $editVol['sort_order'] ?? 0 ?>"></div>
-<div class="d-flex gap-2"><button class="btn btn-primary flex-grow-1" type="submit"><i class="bi bi-<?= $editVol?'save':'plus-square' ?> ms-1"></i> <?= $editVol?'ذخیره':'ایجاد جلد' ?></button><?php if($editVol): ?><a href="<?= siteUrl('admin/lesson-collections/') ?>" class="btn btn-outline-secondary">انصراف</a><?php endif; ?></div>
+<div class="d-flex gap-2 admin-form-bar"><button class="btn btn-primary flex-grow-1" type="submit"><i class="bi bi-<?= $editVol?'save':'plus-square' ?> ms-1"></i> <?= $editVol?'ذخیره':'ایجاد جلد' ?></button><?php if($editVol): ?><a href="<?= siteUrl('admin/lesson-collections/') ?>" class="btn btn-outline-secondary">انصراف</a><?php endif; ?></div>
 </form>
 </div>
 </div>

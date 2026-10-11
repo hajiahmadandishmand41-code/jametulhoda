@@ -97,7 +97,7 @@ $urlBase = siteUrl('admin/books/') . '?q=' . urlencode($search) . '&page=';
     </div>
     <?php else: ?>
     <div class="table-responsive">
-      <table class="table table-hover align-middle">
+      <table class="table admin-table table-hover align-middle mb-0">
         <thead class="table-light">
           <tr>
             <th>کتاب</th>
