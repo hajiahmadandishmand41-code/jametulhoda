@@ -3477,7 +3477,6 @@ html[data-theme="dark"] .jhd-hero-compact--cover::before {
 .jhd-video-indicator { position:absolute; inset-inline-end:.75rem; inset-block-end:.75rem; display:grid; place-items:center; width:2rem; height:2rem; border-radius:50%; background:rgba(11,34,38,.85); color:white; }
 @media(max-width:575px) { .jhd-card-body { padding:1rem; } .jhd-book-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 
-.jhd-book-detail-cover { width:100%; max-width:360px; aspect-ratio:3/4; object-fit:contain; background:var(--jhd-soft); border-radius:var(--jhd-radius); box-shadow:var(--jhd-shadow-2); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * خوانندهٔ PDF داخل سایت — سریع، خوانا و کاملاً Responsive
