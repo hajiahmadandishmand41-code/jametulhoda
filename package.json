@@ -2,12 +2,17 @@
   "name": "jametulhoda-tests",
   "private": true,
   "scripts": {
+    "lint:php": "node tools/lint-php.mjs",
     "test:http": "node tests/http.mjs",
     "test:routes": "node tests/route-smoke.mjs",
-    "test:browser": "node tests/browser.mjs"
+    "test:browser": "node tests/browser.mjs",
+    "build:hero": "node tools/build-hero.mjs",
+    "test:links": "node tests/links.mjs"
   },
   "devDependencies": {
-    "@playwright/test": "1.63.0"
+    "@playwright/test": "1.63.0",
+    "php-parser": "^3.2.1",
+    "sharp": "^0.33.5"
   },
   "dependencies": {
     "@platformatic/php-node": "^1.4.0"

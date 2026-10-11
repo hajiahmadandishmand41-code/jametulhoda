@@ -118,7 +118,7 @@ unset ADMIN_PASSWORD
 آزمون‌های HTTP در دیتابیس **آزمایشی و قابل حذف** محتوا ایجاد می‌کنند؛ روی سایت واقعی اجرا نکنید.
 
 ```sh
-find . -name '*.php' -not -path './vendor/*' -not -path './node_modules/*' -print0 | xargs -0 -n1 php -l
+npm run lint:php      # پارس همهٔ PHP با tools/lint-php.mjs (به جای php -l؛ باینری PHP لازم نیست)
 php tests/security.php
 # فقط با DATABASE_URL آزمایشی، APP_ENV=development و UPLOAD_STORAGE=local:
 ALLOW_DESTRUCTIVE_TESTS=1 php tests/storage-recovery.php
@@ -127,8 +127,10 @@ npm ci
 npm run test:http
 npx playwright install chromium
 npm run test:browser
-node tests/links.mjs
+npm run test:links
 ```
+
+برای بازسازی نسخه‌های ریسپانسیو تصویرِ تابلوی اصلی (`assets/img/hero/`) پس از گذاشتن فایل منبع تازه: `npm run build:hero`.
 
 نتایج آزمون‌ها در `test-results/` تولید می‌شوند و وارد Git نمی‌شوند. تنها workflow موجود در مخزن `.github/workflows/production-e2e.yml` است که با `workflow_dispatch` و به‌صورت دستی، آزمون سرتاسری محیط زنده را اجرا می‌کند؛ بقیهٔ آزمون‌ها (`npm run test:http`، `tests/route-smoke.mjs`، `php tests/security.php`، `php tests/storage-drivers.php`) باید محلی یا در CI دلخواه اجرا شوند. وجود workflow به‌تنهایی به معنی موفق‌بودن اجرا نیست؛ وضعیت واقعی باید در Checks مربوط به commit/PR تأیید شود.
 
@@ -143,7 +145,8 @@ admin/      index.php  login.php  logout.php  change-password.php  settings.php
             banners/ messages/ lesson-collections/ includes/
 pages/      about  articles  books  book  lessons  lesson  topics  topic  search  contact …
 content/    home-intro.php
-assets/     css/  js/  img/  fonts/  vendor/
+assets/     css/design-system.css  css/admin.css  js/  img/hero/  fonts/  vendor/
+tools/      build-hero.mjs  lint-php.mjs   ← ابزار maintainer؛ بدنهٔ سایت کوچک می‌ماند
 uploads/    images/  books/  videos/  audios/  documents/  (+ audio/ video/ posts/ lessons/ …)
 database/   database.mysql.sql  database.postgres.sql  migrations/
 php/        install.php
@@ -158,6 +161,7 @@ storage/    logs/  cache/
 
 - [راهنمای نصب (InfinityFree + MySQL)](INSTALL_GUIDE_FA.md)
 - [فهرست آماده‌سازی برای محیط تولید](PRODUCTION_CHECKLIST_FA.md)
+- [سامانهٔ طراحی یکپارچه: کارت‌ها، هاب‌ها، ناوبری و پنل موبایل‌محور](DESIGN_SYSTEM_FA.md)
 - [نمونه متغیرهای محیطی بدون اسرار](.env.example)
 - [آزمون سرتاسری محیط زنده](.github/workflows/production-e2e.yml)
 - [آزمون رانندهٔ فضای ذخیره‌سازی](tests/storage-drivers.php)
