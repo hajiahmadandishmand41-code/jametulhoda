@@ -26,18 +26,15 @@ try {
   assert.equal(await page.locator('.jhd-hero-media').count(),0,'homepage omits the school-courtyard hero image');
   assert.equal(await page.locator('.jhd-home-category').count(),0,'homepage has no quick-access tiles');
   assert.equal(await page.locator('.jhd-hero-actions').count(),0,'homepage has no quick-action buttons');
-  assert.equal(await page.locator('.jhd-home-card-grid .jhd-card').count(),0,'homepage contains no content cards');
   assert.equal(await page.locator('.jhd-home-topic-links').count(),0,'homepage has no topic chips');
   assert.equal(await page.locator('.jhd-homepage .jhd-banner-section').count(),0,'homepage has no separate announcement banner');
-  const homeSections=await page.locator('.jhd-home-editorial-section').evaluateAll(sections=>sections.map(section=>({
-    heading:section.querySelector('h2')?.textContent?.trim()||'',
-    rows:section.querySelectorAll('.jhd-news-row').length,
-    hrefs:[...section.querySelectorAll('.jhd-news-row__title')].map(link=>link.getAttribute('href')||'')
-  })));
-  assert.ok(homeSections.length<=2,'homepage contains at most two editorial sections');
-  assert.ok(homeSections.every(section=>['اخبار مدرسه','مقالات و پژوهش‌ها'].includes(section.heading)),'homepage only presents news and articles');
-  assert.ok(homeSections.every(section=>section.rows<=5),'each homepage list is limited to five entries');
-  assert.ok(homeSections.every(section=>section.hrefs.every(href=>href.startsWith('/')||href.startsWith('http'))),'editorial list links are valid');
+  assert.equal(await page.locator('.jhd-homepage .jhd-home-topic-link').count(),0,'homepage renders no topic links');
+  const homeSectionIds=await page.locator('.jhd-homepage .jhd-home-section').evaluateAll(sections=>sections.map(section=>section.getAttribute('aria-labelledby')).filter(Boolean));
+  assert.ok(homeSectionIds.length<=5,'homepage uses a maximum of five curated content sections');
+  assert.ok(homeSectionIds.every(id=>['home-feature-heading','home-lessons-heading','home-books-heading','home-writing-heading','home-media-heading'].includes(id)),'homepage sections are limited to news, lessons, books, articles and media');
+  assert.ok(homeSectionIds.includes('home-feature-heading')||await page.locator('.jhd-homepage .jhd-home-section').count()===0,'news list is shown when homepage has public content');
+  assert.ok(await page.locator('.jhd-home-news .jhd-news-list').count()<=1,'school news and announcements share one list');
+  assert.ok(await page.locator('.jhd-home-news .jhd-news-row').count()<=5,'homepage news list is capped at five items');
   assert.equal(await page.locator('.jhd-home-search').count(),0,'homepage avoids a duplicate search form');
   const headerSearch=page.locator('.jhd-search #header-search');
   assert.equal(await headerSearch.isVisible(),true,'shared header search is visible on desktop');
@@ -89,7 +86,7 @@ try {
   assert.equal(await page.locator('.jhd-book-detail main').count(),0,'book detail does not nest main landmarks');
   assert.equal(await page.locator('.jhd-book-cover-panel').count(),1,'book cover appears in a single panel');
   assert.equal(await page.locator('.jhd-book-reader-callout').count(),0,'duplicate reader callout is removed');
-  assert.ok(await page.locator('.jhd-book-topics').count()<=1,'book topics are shown at most once');
+  assert.equal(await page.locator('.jhd-book-topics').count(),0,'book detail does not expose topic taxonomy');
   assert.ok(await page.locator('.jhd-book-actions').count()<=1,'book actions are grouped in one place');
   const bookToc = page.locator('details.jhd-book-toc');
   if (await bookToc.count()) {
@@ -108,6 +105,10 @@ try {
   // responsive overflow and actual browser resource/runtime errors.
   const retiredTopics=await page.goto(new URL('topics',base.endsWith('/')?base:base+'/').href,{waitUntil:'networkidle'});
   assert.equal(retiredTopics?.status(),200,'topics directory safely redirects');
+  const retiredTopicDetail=await page.goto(new URL('topic/fiqh',base.endsWith('/')?base:base+'/').href,{waitUntil:'networkidle'});
+  assert.equal(retiredTopicDetail?.status(),200,'topic detail safely redirects to articles');
+  const topicDetailTarget=new URL(page.url());
+  assert.ok(topicDetailTarget.pathname.replace(/\/+$/,'').endsWith('/articles')||topicDetailTarget.searchParams.get('p')==='articles','topic detail redirects to the articles archive');
   const redirectedTopicUrl=new URL(page.url());
   assert.ok(redirectedTopicUrl.pathname.replace(/\/+$/,'').endsWith('/articles')||redirectedTopicUrl.searchParams.get('p')==='articles','topics directory redirects to articles');
   const publicRoutes=['news','articles','reports','events','books','lessons','research','media','videos','audios','search','about','contact','qa','login'];
