@@ -39,23 +39,16 @@ $lessonJsonLd = lessonJsonLd($lesson);
 $audioUrl = $lesson['audio_file'] ? imgUrl((string)$lesson['audio_file']) : '';
 $videoUrl = $lesson['video_file'] ? imgUrl((string)$lesson['video_file']) : '';
 $pdfUrl   = $lesson['pdf_file'] ? imgUrl((string)$lesson['pdf_file']) : '';
-$lessonTopics=getTopicsForLesson((int)$lesson['id']);
 $lessonAttachments = getMediaFor('lesson', (int)$lesson['id'], 'document');
 $lessonExtraAudio = array_filter(getMediaFor('lesson', (int)$lesson['id'], 'audio'), static fn($m) => ($m['file_path'] ?? '') !== ($lesson['audio_file'] ?? ''));
 $lessonExtraVideo = array_filter(getMediaFor('lesson', (int)$lesson['id'], 'video'), static fn($m) => ($m['file_path'] ?? '') !== ($lesson['video_file'] ?? ''));
-$adjacent=getAdjacentLesson($lesson);
 
-// related via same topic or same collection
-$relatedLessons=[];
-if(!empty($lessonTopics)){
-    $relatedLessons=getLessonsByTopic((int)$lessonTopics[0]['id'],4);
-    $relatedLessons=array_filter($relatedLessons, fn($r)=>$r['id']!=$lesson['id']);
-    $relatedLessons=array_slice($relatedLessons,0,3);
-}
-if(count($relatedLessons)<3 && $lesson['collection_id']){
-    $more=getLessonsByCollection((int)$lesson['collection_id'], (int)($lesson['volume_id'] ?? 0), 10);
-    $more=array_filter($more, fn($r)=>$r['id']!=$lesson['id'] && !in_array($r['id'], array_column($relatedLessons,'id')));
-    $relatedLessons=array_slice(array_merge($relatedLessons,$more),0,3);
+// پیشنهادهای ادامهٔ مطالعه از همان مجموعهٔ آموزشی، نه از موضوعات.
+$relatedLessons = [];
+if (!empty($lesson['collection_id'])) {
+    $more = getLessonsByCollection((int)$lesson['collection_id'], (int)($lesson['volume_id'] ?? 0), 10);
+    $relatedLessons = array_values(array_filter($more, static fn($r) => (int)$r['id'] !== (int)$lesson['id']));
+    $relatedLessons = array_slice($relatedLessons, 0, 3);
 }
 
 // breadcrumbs + jsonld
@@ -222,14 +215,9 @@ require_once __DIR__.'/../includes/header.php';
           <div>
             <span class="jhd-eyebrow">ادامهٔ مسیر مطالعه</span>
             <h2 id="lesson-related-title">جستارهای وابسته به این درس</h2>
-            <p>درس‌های دیگری که بر اساس موضوع یا مجموعهٔ آموزشی این درس، برای ادامهٔ مطالعه پیشنهاد می‌شوند.</p>
+            <p>درس‌های دیگری که بر اساس مجموعهٔ آموزشی این درس، برای ادامهٔ مطالعه پیشنهاد می‌شوند.</p>
           </div>
-          <?php if ($lessonTopics): ?>
-          <a class="jhd-related-link" href="<?= sanitize(topicUrl($lessonTopics[0])) ?>">
-            مشاهده موضوع
-            <i class="bi bi-arrow-left" aria-hidden="true"></i>
-          </a>
-          <?php endif; ?>
+
         </div>
         <div class="row g-3 jhd-related-grid">
           <?php foreach ($relatedLessons as $relatedLesson): ?>
@@ -257,14 +245,7 @@ require_once __DIR__.'/../includes/header.php';
       </div>
       <?php endif; endif; ?>
 
-      <?php if ($lessonTopics): ?>
-      <div class="jhd-side-card">
-        <h3><i class="bi bi-tags" aria-hidden="true"></i> موضوعات این درس</h3>
-        <div class="jhd-cat-strip">
-          <?php foreach ($lessonTopics as $t): ?><a class="jhd-chip" href="<?= topicUrl($t) ?>"><?= sanitize($t['name']) ?></a><?php endforeach; ?>
-        </div>
-      </div>
-      <?php endif; ?>
+
 
       <?php if ($relatedLessons): ?>
       <div class="jhd-side-card">
