@@ -2408,9 +2408,8 @@ function searchAll(string $q, int $limit=12, int $offset=0, string $filter='all'
     $topicId = 0;
     $sort = in_array($sort, ['relevance', 'newest'], true) ? $sort : 'relevance';
 
-    // An empty phrase is useful when the visitor deliberately chooses a type or
-    // topic: it browses published records in that scope. A completely empty
-    // search remains the discovery state and does not scan every content table.
+    // An empty phrase is useful when the visitor deliberately chooses a content type.
+    // A completely empty search remains the discovery state and does not scan every table.
     if ($q === '' && $filter === 'all' && $topicId < 1) return ['total' => 0, 'results' => []];
 
     $limit = max(1, min(100, $limit));
@@ -2428,10 +2427,7 @@ function searchAll(string $q, int $limit=12, int $offset=0, string $filter='all'
     if (in_array($filter, ['all', 'media', 'audio', 'video'], true)) {
         $kindClause = in_array($filter, ['audio', 'video'], true) ? ' AND m.kind=?' : '';
         $kindParams = in_array($filter, ['audio', 'video'], true) ? [$filter] : [];
-        $mediaTopicMatch = $scopeIds
-            ? "CASE WHEN (p.id IS NOT NULL AND EXISTS (SELECT 1 FROM post_topics topic_filter WHERE topic_filter.post_id=p.id AND topic_filter.topic_id IN ($scopeSql))) OR (l.id IS NOT NULL AND EXISTS (SELECT 1 FROM lesson_topics topic_filter WHERE topic_filter.lesson_id=l.id AND topic_filter.topic_id IN ($scopeSql))) THEN 1 ELSE 0 END"
-            : '1';
-        $addSource("SELECT m.id,COALESCE(NULLIF(m.title,''),p.title,l.title,'رسانه') AS title,COALESCE(p.slug,l.slug) AS slug,COALESCE(p.summary,l.summary,'') AS summary,'' AS content,m.file_path AS featured_image,'media' AS post_type,COALESCE(p.published_at,l.created_at,m.created_at) AS published_at,m.created_at,'media' AS target,m.kind AS media_kind,0 AS is_featured,$mediaTopicMatch AS topic_match FROM media_files m LEFT JOIN posts p ON m.ref_type='post' AND p.id=m.ref_id LEFT JOIN lessons l ON m.ref_type='lesson' AND l.id=m.ref_id WHERE m.kind IN ('audio','video') AND ((p.status='published') OR (l.status='published'))$kindClause", $kindParams);
+        $addSource("SELECT m.id,COALESCE(NULLIF(m.title,''),p.title,l.title,'رسانه') AS title,COALESCE(p.slug,l.slug) AS slug,COALESCE(p.summary,l.summary,'') AS summary,'' AS content,m.file_path AS featured_image,'media' AS post_type,COALESCE(p.published_at,l.created_at,m.created_at) AS published_at,m.created_at,'media' AS target,m.kind AS media_kind,0 AS is_featured,0 AS topic_match FROM media_files m LEFT JOIN posts p ON m.ref_type='post' AND p.id=m.ref_id LEFT JOIN lessons l ON m.ref_type='lesson' AND l.id=m.ref_id WHERE m.kind IN ('audio','video') AND ((p.status='published') OR (l.status='published'))$kindClause", $kindParams);
 
         // Some installations still store a primary audio/video URL on the
         // published parent row. Include it only when no equivalent media row
@@ -2469,7 +2465,6 @@ function searchAll(string $q, int $limit=12, int $offset=0, string $filter='all'
             $conditions[] = "(LOWER(COALESCE(title, '')) LIKE LOWER(?) OR LOWER(COALESCE(summary, '')) LIKE LOWER(?) OR LOWER(COALESCE(content, '')) LIKE LOWER(?))";
             array_push($whereParams, $qLike, $qLike, $qLike);
         }
-        if ($topicId > 0) $conditions[] = 'topic_match=1';
         $where = $conditions ? implode(' AND ', $conditions) : '1=1';
 
         $count = $db->prepare("SELECT COUNT(*) FROM ($union) search_rows WHERE $where");
