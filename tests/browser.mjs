@@ -25,6 +25,7 @@ try {
   assert.equal(await page.locator('#home-brand-title').isVisible(),true,'homepage has a visible brand heading');
   assert.equal(await page.locator('.jhd-hero-media').count(),0,'homepage omits the school-courtyard hero image');
   assert.equal(await page.locator('.jhd-home-category').count(),0,'homepage has no quick-access tiles');
+  assert.equal(await page.locator('.jhd-hero-actions').count(),0,'homepage has no quick-action buttons');
   assert.equal(await page.locator('.jhd-home-card-grid .jhd-card').count(),0,'homepage contains no content cards');
   assert.equal(await page.locator('.jhd-home-topic-links').count(),0,'homepage has no topic chips');
   assert.equal(await page.locator('.jhd-homepage .jhd-banner-section').count(),0,'homepage has no separate announcement banner');
