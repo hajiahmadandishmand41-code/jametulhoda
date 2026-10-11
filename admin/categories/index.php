@@ -128,7 +128,7 @@ $cats = $db->query(
                         <label class="form-label">ترتیب نمایش</label>
                         <input type="number" name="sort_order" class="form-control" value="<?= $editCat['sort_order'] ?? 0 ?>" min="0">
                     </div>
-                    <div class="d-flex gap-2">
+                    <div class="d-flex gap-2 admin-form-bar">
                         <button type="submit" class="btn btn-success flex-grow-1">
                             <i class="bi bi-<?= $editCat ? 'save' : 'plus-circle' ?> ms-1"></i>
                             <?= $editCat ? 'ذخیره' : 'ایجاد' ?>

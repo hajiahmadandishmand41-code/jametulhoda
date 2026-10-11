@@ -61,7 +61,7 @@ $topics   = getTopicFlatTree();   // فهرست تختِ درختی برای ف�
         مطالب <?php if($type): ?>(<?= postTypeLabel($type) ?>)<?php endif; ?>
         <span class="badge bg-secondary ms-1"><?= number_format($total) ?></span>
     </h5>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 admin-toolbar-strip">
         <a href="<?= url('admin/news/create') ?>" class="btn btn-outline-success btn-sm"><i class="bi bi-plus-circle ms-1"></i>خبر جدید</a>
         <a href="<?= url('admin/articles/create') ?>" class="btn btn-outline-primary btn-sm"><i class="bi bi-plus-circle ms-1"></i>مقاله جدید</a>
         <a href="<?= url('admin/reports/create') ?>" class="btn btn-outline-warning btn-sm"><i class="bi bi-plus-circle ms-1"></i>گزارش جدید</a>

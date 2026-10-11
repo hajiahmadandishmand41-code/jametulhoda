@@ -107,7 +107,7 @@ $banners=$db->query("SELECT * FROM featured_banners ORDER BY sort_order, id DESC
 <div class="mb-3"><label class="form-label">لینک (اختیاری)</label><input type="text" name="link_url" class="form-control" value="<?= sanitize($edit['link_url'] ?? '') ?>" placeholder="https://... یا /مسیر-داخلی"></div>
 <div class="mb-3"><label class="form-label">متن دکمه</label><input type="text" name="button_text" class="form-control" value="<?= sanitize($edit['button_text'] ?? '') ?>" placeholder="مثلاً: مشاهده"></div>
 <div class="row g-2 mb-3"><div class="col-6"><label class="form-label">ترتیب</label><input type="number" name="sort_order" class="form-control" value="<?= $edit['sort_order'] ?? 0 ?>"></div><div class="col-6 d-flex align-items-end"><label class="form-check"><input type="checkbox" name="is_active" class="form-check-input" <?= ($edit['is_active']??1)?'checked':'' ?>> نمایش در سایت</label></div></div>
-<div class="d-flex gap-2"><button class="btn btn-success flex-grow-1" type="submit"><i class="bi bi-<?= $edit?'save':'plus-circle' ?> ms-1"></i> <?= $edit?'ذخیره':'ایجاد' ?></button><?php if($edit): ?><a href="<?= siteUrl('admin/banners/') ?>" class="btn btn-outline-secondary">انصراف</a><?php endif; ?></div>
+<div class="d-flex gap-2 admin-form-bar"><button class="btn btn-success flex-grow-1" type="submit"><i class="bi bi-<?= $edit?'save':'plus-circle' ?> ms-1"></i> <?= $edit?'ذخیره':'ایجاد' ?></button><?php if($edit): ?><a href="<?= siteUrl('admin/banners/') ?>" class="btn btn-outline-secondary">انصراف</a><?php endif; ?></div>
 </form>
 </div>
 </div>

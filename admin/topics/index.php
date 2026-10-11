@@ -145,7 +145,7 @@ flattenTopics($tree,0,$flat);
 ?>
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
 <h5 class="mb-0"><i class="bi bi-diagram-3 ms-2"></i> موضوعات (<?= count($allTopics) ?>)</h5>
-<div class="d-flex gap-2">
+<div class="d-flex gap-2 admin-toolbar-strip">
 <a href="<?= siteUrl('topics') ?>" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">اطلس در سایت <i class="bi bi-box-arrow-up-left ms-1"></i></a>
 <a href="<?= url() ?>#topics-section" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">نمایش در صفحه اصلی</a>
 </div>
@@ -192,7 +192,7 @@ flattenTopics($tree,0,$flat);
 <label class="form-check"><input type="checkbox" name="is_featured" class="form-check-input" <?= ($editTopic['is_featured']??0)?'checked':'' ?>> ویژه در صفحه اصلی</label>
 </div>
 </div>
-<div class="d-flex gap-2">
+<div class="d-flex gap-2 admin-form-bar">
 <button class="btn btn-success flex-grow-1" type="submit"><i class="bi bi-<?= $editTopic?'save':'plus-circle' ?> ms-1"></i> <?= $editTopic?'ذخیره':'ایجاد' ?></button>
 <?php if($editTopic): ?><a href="<?= siteUrl('admin/topics/') ?>" class="btn btn-outline-secondary">انصراف</a><?php endif; ?>
 </div>

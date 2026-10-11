@@ -257,7 +257,7 @@ $csrfToken        = generateCsrfToken();
 ?>
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <h5 class="mb-0"><i class="bi bi-pencil-square ms-2"></i>ویرایش: <?= sanitize(mb_strimwidth($post['title'],0,40,'...')) ?></h5>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 admin-toolbar-strip">
         <a href="<?= postUrl($post) ?>" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-success"><i class="bi bi-eye ms-1"></i>مشاهده</a>
         <a href="<?= siteUrl('admin/posts/') ?>" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-right ms-1"></i>بازگشت</a>
     </div>
