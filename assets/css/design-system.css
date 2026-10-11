@@ -4357,3 +4357,116 @@ html[data-theme="dark"] .jhd-home-intro {
   .jhd-homepage .jhd-card:not(.jhd-card--featured) .jhd-card-meta { font-size: .67rem; }
   .jhd-homepage .jhd-card:not(.jhd-card--featured) .jhd-card-foot { padding-top: .32rem; }
 }
+
+
+/* صفحهٔ نخست خلوت: هویت کوتاه و دو فهرست تحریریه‌ای، بدون کارت و دسترسی سریع */
+.jhd-homepage--editorial .container { max-width: 1000px; }
+.jhd-homepage--editorial .jhd-hero {
+  padding-block: clamp(1.15rem, .85rem + 1.3vw, 1.9rem);
+  background: var(--jhd-paper);
+  border-bottom: 1px solid var(--jhd-border);
+}
+.jhd-homepage--editorial .jhd-home-intro {
+  display: block;
+  padding: .15rem 0 .15rem 1rem;
+  border: 0;
+  border-inline-start: 3px solid var(--jhd-green);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.jhd-homepage--editorial .jhd-hero-kicker {
+  display: block;
+  margin: 0 0 .25rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--jhd-muted);
+  font-size: var(--jhd-text-xs);
+  font-weight: 650;
+}
+.jhd-homepage--editorial .jhd-hero h1 {
+  font-size: clamp(1.45rem, 1.2rem + 1.4vw, 2rem);
+  line-height: 1.45;
+  font-weight: 800;
+}
+.jhd-homepage--editorial .jhd-hero-slogan {
+  max-width: 68ch;
+  margin: .25rem 0 0;
+  color: var(--jhd-muted);
+  font-size: .9rem;
+  line-height: 1.9;
+}
+.jhd-homepage--editorial .jhd-section {
+  padding-block: clamp(1.15rem, .9rem + 1.1vw, 1.65rem);
+}
+.jhd-homepage--editorial .jhd-home-editorial-container {
+  max-width: 900px;
+  margin-inline: auto;
+}
+.jhd-homepage--editorial .jhd-home-editorial-section + .jhd-home-editorial-section {
+  border-top: 1px solid var(--jhd-border);
+}
+.jhd-homepage--editorial .jhd-section-head {
+  align-items: center;
+  justify-content: space-between;
+  gap: .85rem;
+  margin-bottom: .55rem;
+}
+.jhd-homepage--editorial .jhd-section-head h2 {
+  font-size: clamp(1.02rem, .96rem + .4vw, 1.22rem);
+  font-weight: 800;
+}
+.jhd-homepage--editorial .jhd-section-head h2 > i {
+  margin-inline-end: .35rem;
+  color: var(--jhd-green);
+  font-size: .92em;
+}
+.jhd-homepage--editorial .jhd-section-head .jhd-rule,
+.jhd-homepage--editorial .jhd-section-head::after { display: none; }
+.jhd-homepage--editorial .jhd-news-list { max-width: 100%; }
+.jhd-homepage--editorial .jhd-news-row,
+.jhd-homepage--editorial .jhd-news-row--plain {
+  grid-template-columns: 4.1rem minmax(0, 1fr);
+  gap: .8rem;
+  padding: .72rem .2rem;
+}
+.jhd-homepage--editorial .jhd-news-row time {
+  border-inline-end: 0;
+  font-size: .72rem;
+}
+.jhd-homepage--editorial .jhd-news-row__title {
+  font-size: .94rem;
+  font-weight: 650;
+  line-height: 1.75;
+}
+.jhd-homepage--editorial .jhd-news-row:hover {
+  padding-inline: .45rem;
+  border-radius: 6px;
+}
+.jhd-homepage--editorial .jhd-home-empty p {
+  margin: 0;
+  padding: 1rem 0;
+  color: var(--jhd-muted);
+  font-size: .9rem;
+}
+@media (max-width: 575.98px) {
+  .jhd-homepage--editorial .jhd-home-intro { padding-inline-start: .8rem; }
+  .jhd-homepage--editorial .jhd-hero-slogan { font-size: .82rem; }
+  .jhd-homepage--editorial .jhd-section-head {
+    align-items: center;
+    flex-direction: row;
+    gap: .5rem;
+    margin-bottom: .35rem;
+  }
+  .jhd-homepage--editorial .jhd-section-head h2 { font-size: .98rem; }
+  .jhd-homepage--editorial .jhd-section-link { font-size: .72rem; white-space: nowrap; }
+  .jhd-homepage--editorial .jhd-news-row,
+  .jhd-homepage--editorial .jhd-news-row--plain {
+    grid-template-columns: 3.2rem minmax(0, 1fr);
+    gap: .55rem;
+    padding-block: .62rem;
+  }
+  .jhd-homepage--editorial .jhd-news-row__title { font-size: .87rem; }
+}
