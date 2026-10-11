@@ -300,11 +300,10 @@ r=await api.get('/post.php?slug='+title);html=await r.text();check('edited conte
     check('gallery lifecycle fixture post deleted',r.status()===303,String(r.status()));
   } else check('gallery endpoint exposed on edit page',false,'GALLERY_ENDPOINT not found in edit page');
 }
-// Topic banner is the first content element and works even without a cover.
+// Topic taxonomy is no longer rendered publicly; legacy links redirect safely.
 {
-  const topicResponse=await api.get('/topic?slug=fiqh');
-  const topicHtml=await topicResponse.text();
-  check('topic renders banner ahead of section content',topicResponse.status()===200 && topicHtml.includes('jhd-topic-banner') && topicHtml.indexOf('jhd-topic-banner')<topicHtml.indexOf('jhd-cat-strip mb-4'),String(topicResponse.status()));
+  const topicResponse=await api.get('/topic?slug=fiqh',{maxRedirects:0});
+  check('topic detail redirects permanently to articles',topicResponse.status()===301&&String(topicResponse.headers()['location']||'').includes('/articles'),String(topicResponse.status())+' '+String(topicResponse.headers()['location']||''));
 }
 // Per spec 17: Like/View systems removed completely — ajax/like.php must be gone (404)
 r=await api.post('/ajax/like.php',{data:{post_id:Number(id)}});check('like endpoint removed (404)',r.status()===404,String(r.status()));
