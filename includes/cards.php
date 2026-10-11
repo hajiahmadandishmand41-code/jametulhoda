@@ -493,7 +493,7 @@ function renderPostCard(array $post, array $opts = []): string {
     $type = (string)($opts['type'] ?? ($post['post_type'] ?? 'post'));
     $variant = !empty($opts['featured']) ? 'featured' : (!empty($opts['compact']) ? 'compact' : 'default');
     $rawDate = (string)($post['published_at'] ?? $post['created_at'] ?? '');
-    $topics = $opts['topics'] ?? jhd_card_topics($post, $variant === 'compact' ? 1 : 2);
+    $topics = []; // topic labels are retired from public card metadata
     $author = trim((string)($post['author_name'] ?? '')) ?: trim((string)($post['speaker'] ?? ''));
 
     $meta = [];
@@ -515,7 +515,7 @@ function renderPostCard(array $post, array $opts = []): string {
         'image'       => (string)($post['featured_image'] ?? ''),
         'image_alt'   => (string)($post['featured_image_alt'] ?? $post['title'] ?? ''),
         'badge'       => (string)($opts['badge'] ?? postTypeLabel($type)),
-        'chips'       => jhd_topic_chips($topics),
+        'chips'       => '',
         'meta'        => $meta,
         'date_label'  => persianDate($rawDate),
         'date_raw'    => $rawDate,
@@ -564,13 +564,13 @@ function renderEditorialRow(array $post, array $opts = []): string {
         (int)($opts['excerpt'] ?? 105)
     );
     $rawDate = (string)($post['published_at'] ?? $post['created_at'] ?? '');
-    $topics = $opts['topics'] ?? jhd_card_topics($post, 2);
+    $topics = []; // topic labels are retired from public editorial rows
     $index = isset($opts['index']) ? max(0, (int)$opts['index']) : null;
     $image = trim((string)($post['featured_image'] ?? ''));
     $type = (string)($post['post_type'] ?? 'article');
     $badge = (string)($opts['badge'] ?? postTypeLabel($type));
     $meta = jhd_card_meta_line([
-        'chips' => jhd_topic_chips($topics),
+        'chips' => '',
         'date_label' => $rawDate !== '' ? persianDate($rawDate) : '',
         'date_raw' => $rawDate,
     ]);
