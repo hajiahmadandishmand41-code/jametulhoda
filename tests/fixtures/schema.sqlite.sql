@@ -353,3 +353,25 @@ CREATE INDEX IF NOT EXISTS topics_slug_idx ON topics (slug);
 CREATE INDEX IF NOT EXISTS books_slug_idx ON books (slug);
 CREATE INDEX IF NOT EXISTS lessons_slug_idx ON lessons (slug);
 CREATE INDEX IF NOT EXISTS post_topics_post_idx ON post_topics (post_id, topic_id);
+
+-- Mobile API: access tokens and content likes (additive; test-only mirror).
+CREATE TABLE IF NOT EXISTS api_tokens (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id      INTEGER NOT NULL,
+  token_hash   TEXT NOT NULL UNIQUE,
+  device_label TEXT NOT NULL DEFAULT '',
+  created_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_used_at TEXT NULL,
+  expires_at   TEXT NOT NULL,
+  revoked_at   TEXT NULL
+);
+CREATE INDEX IF NOT EXISTS api_tokens_user ON api_tokens(user_id);
+
+CREATE TABLE IF NOT EXISTS content_likes (
+  user_id    INTEGER NOT NULL,
+  ref_type   TEXT NOT NULL,
+  ref_id     INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, ref_type, ref_id)
+);
+CREATE INDEX IF NOT EXISTS content_likes_ref ON content_likes(ref_type, ref_id);
