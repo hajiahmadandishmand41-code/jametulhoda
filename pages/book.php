@@ -77,107 +77,122 @@ require __DIR__.'/../includes/header.php';
 </ol></nav>
 </div></div>
 
-<article class="container py-4 py-md-5">
-<div class="row g-4">
-<div class="col-lg-4">
-<div class="jhd-book-cover-panel">
-<?php if(!empty($book['cover_image'])): ?>
-<img src="<?= imgUrl($book['cover_image']) ?>" alt="جلد <?= sanitize($book['title']) ?>" class="jhd-book-detail-cover" loading="eager" width="400" height="530">
-<?php else: ?>
-<div class="p-4 border rounded-4 text-muted small">برای این کتاب تصویر جلد ثبت نشده است.</div>
-<?php endif; ?>
-<?php $bookDetailUrl = bookUrl($book); ?>
-<div class="mt-4 d-grid gap-2">
-<?php if(!empty($book['pdf_file'])): ?>
-<a href="<?= sanitize(documentReaderUrl('book', (string)$book['slug'])) ?>" class="btn btn-primary"><i class="bi bi-book ms-2"></i>مطالعه کتاب</a>
-<?php elseif(!empty($book['word_file'])): ?>
-<a href="<?= sanitize($bookDetailUrl . (str_contains($bookDetailUrl, '?') ? '&amp;' : '?') . 'download=word') ?>" class="btn btn-primary"><i class="bi bi-file-word ms-2"></i>دریافت فایل کتاب</a>
-<?php endif; ?>
-<?php if($attachments): ?>
-<section class="jhd-attachments pt-2" aria-label="فایل‌های تکمیلی کتاب">
-  <div class="jhd-attachments__head"><h2 class="jhd-attachments__title"><i class="bi bi-paperclip" aria-hidden="true"></i>فایل‌های تکمیلی کتاب</h2><p class="jhd-attachments__lead">ضمیمه‌ها و نسخه‌های قابل دریافت این کتاب</p></div>
-  <div class="jhd-files">
-  <?php foreach($attachments as $file):
-    $fileTitle = (string)($file['title'] ?: basename((string)$file['file_path']));
-    $isPdf = (bool)preg_match('~\.pdf$~i', (string)$file['file_path']);
-    $fileHref = imgUrl((string)$file['file_path']);
-    $readerHref = $isPdf ? documentReaderUrl('book', (string)$book['slug'], (int)($file['id'] ?? 0)) : '';
-    $fileSize = (string)($file['file_size'] ?? ($file['size'] ?? ''));
-  ?>
-    <?= jhd_file_row($fileTitle, $fileHref, $fileSize, 'bi-file-earmark', $isPdf ? ['reader_target' => $readerHref] : []) ?>
-  <?php endforeach; ?>
+<article class="container py-4 py-md-5 jhd-book-detail">
+<?php
+$bookDetailUrl = bookUrl($book);
+$bookDownloadPdfUrl = $bookDetailUrl . (str_contains($bookDetailUrl, '?') ? '&' : '?') . 'download=pdf';
+$bookDownloadWordUrl = $bookDetailUrl . (str_contains($bookDetailUrl, '?') ? '&' : '?') . 'download=word';
+?>
+<div class="row g-4 g-xl-5 align-items-start">
+<aside class="col-lg-4 jhd-book-sidebar" aria-label="جلد و مشخصات کتاب">
+  <div class="jhd-book-cover-panel">
+    <div class="jhd-book-cover-stage">
+      <?php if (!empty($book['cover_image'])): ?>
+      <img src="<?= sanitize(imgUrl((string)$book['cover_image'])) ?>" alt="جلد <?= sanitize($book['title']) ?>" class="jhd-book-detail-cover" loading="eager" width="400" height="530">
+      <?php else: ?>
+      <div class="jhd-book-cover-empty">
+        <i class="bi bi-book" aria-hidden="true"></i>
+        <span>جلد کتاب ثبت نشده است</span>
+      </div>
+      <?php endif; ?>
+    </div>
+
+    <?php if (!empty($book['pdf_file']) || !empty($book['word_file'])): ?>
+    <div class="jhd-book-actions" aria-label="دسترسی به فایل کتاب">
+      <?php if (!empty($book['pdf_file'])): ?>
+      <a href="<?= sanitize(documentReaderUrl('book', (string)$book['slug'])) ?>" class="btn btn-primary jhd-book-study"><i class="bi bi-book ms-1" aria-hidden="true"></i>مطالعهٔ آنلاین</a>
+      <a href="<?= sanitize($bookDownloadPdfUrl) ?>" class="btn btn-outline-primary jhd-book-download"><i class="bi bi-file-pdf ms-1" aria-hidden="true"></i>دریافت PDF</a>
+      <?php endif; ?>
+      <?php if (!empty($book['word_file'])): ?>
+      <a href="<?= sanitize($bookDownloadWordUrl) ?>" class="btn <?= !empty($book['pdf_file']) ? 'btn-outline-secondary' : 'btn-primary' ?> jhd-book-download"><i class="bi bi-file-word ms-1" aria-hidden="true"></i>دریافت Word</a>
+      <?php endif; ?>
+    </div>
+    <?php endif; ?>
   </div>
-</section>
-<?php endif; ?>
-<?php if($topics): ?>
-<div class="text-start mt-4">
-<div class="small fw-bold mb-2" style="color:var(--jhd-green)"><i class="bi bi-tags ms-1"></i> موضوعات</div>
-<div class="d-flex flex-wrap gap-2">
-<?php foreach($topics as $tp): ?><a href="<?= topicUrl($tp) ?>" class="badge rounded-pill jhd-book-topic"><?= sanitize($tp['name']) ?></a><?php endforeach; ?>
-</div>
-</div>
-<?php endif; ?>
+
+  <?php if (!empty($book['author']) || !empty($book['translator']) || !empty($book['publisher']) || !empty($book['publish_year']) || !empty($book['pages'])): ?>
+  <section class="jhd-book-metadata" aria-label="مشخصات کتاب">
+    <h2 class="jhd-book-metadata__title">مشخصات کتاب</h2>
+    <?php if (!empty($book['author'])): ?><div class="jhd-book-meta-row"><span>نویسنده</span><strong><?= sanitize($book['author']) ?></strong></div><?php endif; ?>
+    <?php if (!empty($book['translator'])): ?><div class="jhd-book-meta-row"><span>مترجم</span><strong><?= sanitize($book['translator']) ?></strong></div><?php endif; ?>
+    <?php if (!empty($book['publisher'])): ?><div class="jhd-book-meta-row"><span>ناشر</span><strong><?= sanitize($book['publisher']) ?></strong></div><?php endif; ?>
+    <?php if (!empty($book['publish_year'])): ?><div class="jhd-book-meta-row"><span>سال نشر</span><strong><?= sanitize((string)$book['publish_year']) ?></strong></div><?php endif; ?>
+    <?php if (!empty($book['pages'])): ?><div class="jhd-book-meta-row"><span>تعداد صفحات</span><strong><?= number_format((int)$book['pages']) ?></strong></div><?php endif; ?>
+  </section>
+  <?php endif; ?>
+</aside>
+
+<main class="col-lg-8 jhd-book-main" id="book-main">
+  <header class="jhd-book-heading">
+    <span class="jhd-eyebrow">کتابخانهٔ دیجیتال</span>
+    <h1 class="jhd-detail-title"><?= sanitize($book['title']) ?></h1>
+    <?php if (!empty($book['author'])): ?>
+    <p class="jhd-book-author"><i class="bi bi-person" aria-hidden="true"></i><span><?= sanitize($book['author']) ?><?= !empty($book['translator']) ? ' — ترجمهٔ ' . sanitize($book['translator']) : '' ?></span></p>
+    <?php elseif (!empty($book['translator'])): ?>
+    <p class="jhd-book-author"><i class="bi bi-translate" aria-hidden="true"></i><span>مترجم: <?= sanitize($book['translator']) ?></span></p>
+    <?php endif; ?>
+  </header>
+
+  <?php if (!empty($book['description'])): ?>
+  <section class="jhd-book-section jhd-book-introduction" aria-labelledby="book-introduction-title">
+    <h2 id="book-introduction-title" class="jhd-book-section-title"><i class="bi bi-info-circle" aria-hidden="true"></i>معرفی کتاب</h2>
+    <div class="post-content jhd-book-copy"><?= nl2br(sanitize($book['description'])) ?></div>
+  </section>
+  <?php endif; ?>
+
+  <?php if (!empty($book['toc'])): ?>
+  <details class="jhd-book-toc jhd-book-section">
+    <summary>
+      <span class="jhd-book-section-title"><i class="bi bi-list-ol" aria-hidden="true"></i>فهرست مطالب</span>
+      <i class="bi bi-chevron-down jhd-book-toc-chevron" aria-hidden="true"></i>
+    </summary>
+    <div class="jhd-book-toc-content"><?= sanitize($book['toc']) ?></div>
+  </details>
+  <?php endif; ?>
+
+  <?php if ($topics): ?>
+  <section class="jhd-book-topics jhd-book-section" aria-labelledby="book-topics-title">
+    <h2 id="book-topics-title" class="jhd-book-section-title"><i class="bi bi-diagram-3" aria-hidden="true"></i>موضوعات مرتبط</h2>
+    <div class="jhd-book-topic-list">
+      <?php foreach ($topics as $tp): ?>
+      <a href="<?= sanitize(topicUrl($tp)) ?>" class="jhd-book-topic"><?= sanitize($tp['name']) ?></a>
+      <?php endforeach; ?>
+    </div>
+  </section>
+  <?php endif; ?>
+
+  <?php if ($attachments): ?>
+  <section class="jhd-attachments jhd-book-attachments jhd-book-section" aria-label="فایل‌های تکمیلی کتاب">
+    <div class="jhd-attachments__head">
+      <h2 class="jhd-attachments__title"><i class="bi bi-paperclip" aria-hidden="true"></i>فایل‌های تکمیلی</h2>
+      <p class="jhd-attachments__lead">ضمیمه‌ها و نسخه‌های دیگر این کتاب</p>
+    </div>
+    <div class="jhd-files">
+      <?php foreach ($attachments as $file):
+        $fileTitle = (string)($file['title'] ?: basename((string)$file['file_path']));
+        $isPdf = (bool)preg_match('~\.pdf$~i', (string)$file['file_path']);
+        $fileHref = imgUrl((string)$file['file_path']);
+        $readerHref = $isPdf ? documentReaderUrl('book', (string)$book['slug'], (int)($file['id'] ?? 0)) : '';
+        $fileSize = (string)($file['file_size'] ?? ($file['size'] ?? ''));
+      ?>
+      <?= jhd_file_row($fileTitle, $fileHref, $fileSize, 'bi-file-earmark', $isPdf ? ['reader_target' => $readerHref] : []) ?>
+      <?php endforeach; ?>
+    </div>
+  </section>
+  <?php endif; ?>
+
+  <nav class="jhd-book-navigation" aria-label="پیوندهای کتاب">
+    <a href="<?= sanitize(siteUrl('books')) ?>" class="btn btn-outline-secondary"><i class="bi bi-arrow-right ms-1" aria-hidden="true"></i>بازگشت به کتابخانه</a>
+  </nav>
+</main>
 </div>
 
-<?php if(!empty($book['author']) || !empty($book['publisher'])): ?>
-<div class="mt-4 p-3 rounded-4 jhd-book-metadata">
-<?php if(!empty($book['author'])): ?><div class="d-flex justify-content-between small py-1"><span class="text-muted">نویسنده</span><strong><?= sanitize($book['author']) ?></strong></div><?php endif; ?>
-<?php if(!empty($book['translator'])): ?><div class="d-flex justify-content-between small py-1"><span class="text-muted">مترجم</span><strong><?= sanitize($book['translator']) ?></strong></div><?php endif; ?>
-<?php if(!empty($book['publisher'])): ?><div class="d-flex justify-content-between small py-1"><span class="text-muted">ناشر</span><strong><?= sanitize($book['publisher']) ?></strong></div><?php endif; ?>
-<?php if(!empty($book['publish_year'])): ?><div class="d-flex justify-content-between small py-1"><span class="text-muted">سال نشر</span><strong><?= sanitize($book['publish_year']) ?></strong></div><?php endif; ?>
-<?php if(!empty($book['pages'])): ?><div class="d-flex justify-content-between small py-1"><span class="text-muted">تعداد صفحات</span><strong><?= (int)$book['pages'] ?></strong></div><?php endif; ?>
-</div>
-<?php endif; ?>
-</div>
-
-<div class="col-lg-8">
-<span class="jhd-eyebrow">کتابخانه دیجیتال</span>
-<h1 class="jhd-detail-title"><?= sanitize($book['title']) ?></h1>
-<?php if(!empty($book['author'])): ?><p class="text-muted mb-3"><i class="bi bi-person ms-1"></i> <?= sanitize($book['author']) ?><?= !empty($book['translator']) ? ' — ترجمهٔ '.sanitize($book['translator']) : '' ?></p><?php endif; ?>
-
-<?php if(!empty($book['pdf_file'])): ?>
-<section class="mb-4 jhd-reader-callout">
-  <div><span class="jhd-eyebrow">مرکز مطالعه</span><h2 class="h5 mb-1">مطالعهٔ کتاب</h2><p class="text-muted mb-0">خواندن کتاب در صفحهٔ اختصاصی مطالعه انجام می‌شود.</p></div>
-  <a class="btn btn-primary" href="<?= sanitize(documentReaderUrl('book', (string)$book['slug'])) ?>"><i class="bi bi-book ms-2"></i>مطالعه کتاب</a>
-</section>
-<?php endif; ?>
-
-<?php if(!empty($book['description'])): ?>
-<section class="mb-4">
-<h2 class="h6 fw-bold" style="color:var(--jhd-green)"><i class="bi bi-info-circle ms-2"></i> معرفی کتاب</h2>
-<div class="post-content jhd-book-copy"><?= nl2br(sanitize($book['description'])) ?></div>
-</section>
-<?php endif; ?>
-
-<?php if(!empty($book['toc'])): ?>
-<section class="mb-4 p-3 p-md-4 rounded-4 jhd-book-toc">
-<h2 class="h6 fw-bold mb-3" style="color:var(--jhd-green)"><i class="bi bi-list-ol ms-2"></i> فهرست مطالب</h2>
-<div class="jhd-book-toc-content"><?= sanitize($book['toc']) ?></div>
-</section>
-<?php endif; ?>
-
-<?php if($topics): ?>
-<section class="mb-4">
-<h2 class="h6 fw-bold" style="color:var(--jhd-green)"><i class="bi bi-diagram-3 ms-2"></i> پیوندهای داخلی</h2>
-<div class="d-flex flex-wrap gap-2">
-<?php foreach($topics as $tp): ?><a href="<?= topicUrl($tp) ?>" class="btn btn-sm btn-outline-secondary rounded-pill"><?= sanitize($tp['name']) ?></a><?php endforeach; ?>
-</div>
-</section>
-<?php endif; ?>
-
-<div class="d-flex flex-wrap gap-2 mt-4">
-<a href="<?= siteUrl('books') ?>" class="btn btn-outline-secondary"><i class="bi bi-arrow-right ms-1"></i> بازگشت به کتابخانه</a>
-<?php if($topics): $firstTopic=$topics[0]; ?><a href="<?= topicUrl($firstTopic) ?>" class="btn btn-outline-primary">مشاهده در موضوع <?= sanitize($firstTopic['name']) ?></a><?php endif; ?>
-</div>
-</div>
-</div>
-
-<?php if($related): ?>
-<section class="mt-5">
-<h2 class="h5 fw-bold mb-3" style="color:var(--jhd-green)"><i class="bi bi-collection ms-2"></i> کتاب‌های مرتبط</h2>
-<?= jhd_grid_open() ?>
-<?php foreach($related as $rb) echo renderBookCard($rb); ?>
-</div>
+<?php if ($related): ?>
+<section class="jhd-book-related jhd-book-section" aria-labelledby="book-related-title">
+  <h2 id="book-related-title" class="jhd-book-section-title"><i class="bi bi-collection" aria-hidden="true"></i>کتاب‌های مرتبط</h2>
+  <?= jhd_grid_open() ?>
+  <?php foreach ($related as $rb) echo renderBookCard($rb); ?>
+  <?= jhd_grid_close() ?>
 </section>
 <?php endif; ?>
 </article>
