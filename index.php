@@ -1,10 +1,19 @@
 <?php
 /**
- * index.php — صفحهٔ اصلی پورتال علمی جامعة‌الهدی
+ * index.php — صفحهٔ اصلی پایگاه «جامعة‌الهدی»: پنج هاب، یک هویت
  *
- * A compact editorial homepage: one real feature, a deduplicated latest feed,
- * a few published topics, and direct links to the existing public archives.
- * Detail and archive routes remain independent of the homepage layout.
+ * ساختار بازچینی‌شدهٔ ۱۴۰۵: صفحه از «ده ستونِ هم‌شکلِ فهرست مطلب» به پنج هاب
+ * هدفمند تبدیل شده است — دروس، کتابخانه، نوشتارها، رسانه و اخبار/مطلب شاخص —
+ * که هرکدام درِ همان آرشیو مستقلی است که در ناوبری و فوتر باقی است. فهرست‌های
+ * مجزای گزارش‌ها، رویدادها، پرسش‌وپاسخ و سخنرانی‌ها از صفحهٔ اول حذف شد؛
+ * محتوایشان در `/reports`، `/events`، `/qa` و `/speeches` بدون تغییر خدمت
+ * می‌کند و پیوندهایشان از ناوبری «بیشتر»، فوتر و sitemap زنده است.
+ *
+ * سه قانون این صفحه است:
+ *   ۱) هیچ رکوردی دو بار نمایش داده نمی‌شود ($homeUsedPosts + dedupe).
+ *   ۲) هیچ تصویر ساختگی تولید نمی‌شود؛ بدون رسانه، کادر جایگزین متنی می‌آید.
+ *   ۳) هیچ کوئری بی‌مصرف اجرا نمی‌شود؛ شمارش‌ها از همان داده‌های خوانده‌شده
+ *      ساخته می‌شوند، نه با COUNT(*) جداگانه.
  */
 /*
  * Homepage identity.
@@ -97,151 +106,235 @@ $GLOBALS['JHD_PUBLIC_DB_READY'] = $jhdPublicDbReady;
 $homeConfig = jhd_homepage_settings();
 $homeSections = $homeConfig['sections'];
 
+/*
+ * دادهٔ صفحهٔ اصلی در همین یک بلوک خوانده می‌شود و هر رکورد پس از پذیرش
+ * «رزرو» می‌گردد؛ بنابراین یک مطلب نه دو بار به‌عنوان شاخص و خبر می‌آید و نه
+ * میان دو هاب تکرار می‌شود. $homeUsedPosts هر آنچه نمایش داده شده را نگه
+ * می‌دارد تا `jhd_preload_post_topics()` یک‌باره و بدون کوئری تکراری (N+1)
+ * موضوعات را بار کند.
+ */
+$homeUsedPosts = [];
+$featurePost = null;
+$newsItems = [];
+$sidePicks = [];
+$collections = [];
+$featuredLessons = [];
+$latestBooks = [];
+$writingRows = [];
+$writingCards = [];
+$mediaItems = [];
+$featuredTopics = [];
+$specialBanner = null;
+
 if ($jhdPublicDbReady) {
-    // Anonymous GETs get no session at all (see startPublicSession): that is
-    // where the second PostgreSQL connection, the two CREATE TABLE statements
-    // and the `SELECT … FOR UPDATE` session row lock used to come from.
+    // درخواست‌های ناشناس نشست نمی‌سازند (startPublicSession)؛ همان جایی که
+    // اتصال دوم، دو CREATE TABLE و قفل ردیف نشست پیش از این هزینه داشت.
     startPublicSession();
 
-    // The home page uses a small, deduplicated editorial feed. Each displayed
-    // story is reserved before the next section is built, so the same record
-    // cannot be repeated as both a feature and a recent item.
-    $heroPost = null;
-    if (!empty($homeSections['hero'])) {
-        $heroPost = $homeConfig['hero_post_id'] > 0
+    if (!empty($homeSections['feature'])) {
+        $featurePost = $homeConfig['hero_post_id'] > 0
             ? (getPostsByIds([$homeConfig['hero_post_id']])[0] ?? null)
             : null;
-        if (!$heroPost) {
-            $heroPost = getPosts(['featured' => 1, 'limit' => 1])[0]
+        if (!$featurePost) {
+            $featurePost = getPosts(['featured' => 1, 'limit' => 1])[0]
                 ?? getPosts(['type' => 'news', 'limit' => 1])[0]
                 ?? getPosts(['type' => 'article', 'limit' => 1])[0]
                 ?? getPosts(['limit' => 1])[0]
                 ?? null;
         }
-    }
-    $heroId = (int)($heroPost['id'] ?? 0);
-    $heroTopic = null;
-    $acceptedHomepagePosts = $heroPost ? [$heroPost] : [];
+        if ($featurePost) $homeUsedPosts[] = $featurePost;
 
-    // Only explicitly featured published records are labelled as editor picks.
-    $featuredSide = [];
-    if (!empty($homeSections['editor_picks'])) {
-        $featuredCandidates = array_values(array_filter(
+        $newsCandidates = getPosts(['types' => ['news', 'announcement'], 'limit' => 12, 'sort' => 'newest']);
+        $newsItems = jhd_homepage_unique_posts($newsCandidates, $homeUsedPosts, 5);
+
+        // «برگزیدهٔ سردبیر» فقط تیکِ واقعاً خوردهٔ مدیر است، نه هر مطلب تازه.
+        $pickCandidates = array_values(array_filter(
             getPosts(['featured' => 1, 'limit' => 8]),
-            static fn(array $post): bool => (int)$post['id'] !== $heroId
+            static fn(array $post): bool => $featurePost === null || (int)$post['id'] !== (int)$featurePost['id']
         ));
-        $featuredSide = jhd_homepage_unique_posts($featuredCandidates, $acceptedHomepagePosts, 3);
+        $sidePicks = jhd_homepage_unique_posts($pickCandidates, $homeUsedPosts, 3);
     }
 
-    // Existing homepage settings now control which published post types enter
-    // one chronological feed, instead of creating a long stack of duplicate
-    // category-specific sections.
-    $homePostTypesBySection = [
-        'news' => ['news'],
-        'articles' => ['article'],
-        'research' => ['research'],
-    ];
-    $latestTypes = [];
-    foreach ($homePostTypesBySection as $sectionKey => $postTypes) {
-        if (!empty($homeSections[$sectionKey])) $latestTypes = array_merge($latestTypes, $postTypes);
-    }
-    $latest = [];
-    if (!empty($homeSections['latest']) && $latestTypes) {
-        $latestCandidates = getPosts([
-            'types' => array_values(array_unique($latestTypes)),
-            'limit' => 24,
-            'sort' => 'newest',
-        ]);
-        $latest = jhd_homepage_unique_posts($latestCandidates, $acceptedHomepagePosts, 4);
+    if (!empty($homeSections['lessons'])) {
+        $collections = jhd_home_lesson_collections(4);
+        try {
+            $stmt = $db->prepare(
+                "SELECT l.*, c.title AS collection_title, c.slug AS collection_slug
+                 FROM lessons l
+                 LEFT JOIN lesson_collections c ON c.id = l.collection_id
+                 WHERE l.status = 'published' AND l.is_featured = 1
+                 ORDER BY l.sort_order ASC, l.id DESC LIMIT 3"
+            );
+            $stmt->execute();
+            $featuredLessons = $stmt->fetchAll();
+        } catch (Throwable) {
+            $featuredLessons = [];
+        }
     }
 
-    $featuredTopics = [];
+    if (!empty($homeSections['books'])) {
+        // قفسهٔ منتخب: نخست کتاب‌های شاخص و در صورت کمبود، تازه‌ترین‌ها — تا
+        // هاب کتابخانه هیچ‌گاه تک‌کارتِ تنها روی صفحه نماند. حذف تکراری بر
+        // پایهٔ شناسه، چون هر دو کوئری یک رکورد را هم می‌بینند.
+        $bookCandidates = array_merge(getBooks(['featured' => 1, 'limit' => 4]), getBooks(['limit' => 6]));
+        $seenBooks = [];
+        foreach ($bookCandidates as $bookRow) {
+            $bookId = (int)($bookRow['id'] ?? 0);
+            if ($bookId < 1 || isset($seenBooks[$bookId])) continue;
+            $seenBooks[$bookId] = true;
+            $latestBooks[] = $bookRow;
+            if (count($latestBooks) >= 4) break;
+        }
+    }
+
+    if (!empty($homeSections['writing'])) {
+        $writingCandidates = jhd_homepage_unique_posts(
+            getPosts(['types' => ['article', 'research'], 'limit' => 10, 'sort' => 'newest']),
+            $homeUsedPosts,
+            6
+        );
+        $writingRows = array_slice($writingCandidates, 0, 4);
+        $writingCards = array_slice($writingCandidates, 4, 2);
+    }
+
+    if (!empty($homeSections['media'])) {
+        $mediaItems = array_merge(jhd_home_media('video', 2), jhd_home_media('audio', 2));
+    }
+
     if (!empty($homeSections['topics'])) {
         try {
-            // Counts and topic links come only from active topics with published posts.
-            $stmt = $db->query("SELECT t.*, COUNT(DISTINCT p.id) AS post_count FROM topics t LEFT JOIN post_topics pt ON pt.topic_id=t.id LEFT JOIN posts p ON p.id=pt.post_id AND p.status='published' WHERE t.is_active=1 GROUP BY t.id HAVING COUNT(DISTINCT p.id)>0 ORDER BY t.is_featured DESC, t.sort_order ASC, post_count DESC LIMIT 6");
+            // فقط موضوعات فعالی که دست‌کم یک مطلب منتشرشده دارند؛ پیوند
+            // به موضوع خالی، پیوند مرده است.
+            $stmt = $db->query(
+                "SELECT t.*, COUNT(DISTINCT p.id) AS post_count
+                 FROM topics t
+                 LEFT JOIN post_topics pt ON pt.topic_id = t.id
+                 LEFT JOIN posts p ON p.id = pt.post_id AND p.status = 'published'
+                 WHERE t.is_active = 1
+                 GROUP BY t.id
+                 HAVING COUNT(DISTINCT p.id) > 0
+                 ORDER BY t.is_featured DESC, t.sort_order ASC, post_count DESC
+                 LIMIT 8"
+            );
             $featuredTopics = $stmt->fetchAll();
         } catch (Throwable) {
             $featuredTopics = [];
         }
     }
 
-    $latestBooks = !empty($homeSections['books']) ? getBooks(['featured' => 1, 'limit' => 2]) : [];
-    $latestLessons = [];
-    if (!empty($homeSections['lessons'])) {
-        try {
-            $stmt = $db->prepare("SELECT l.*, c.title AS collection_title, c.slug AS collection_slug FROM lessons l LEFT JOIN lesson_collections c ON c.id=l.collection_id WHERE l.status='published' AND l.is_featured=1 ORDER BY l.sort_order ASC, l.id DESC LIMIT 2");
-            $stmt->execute();
-            $latestLessons = $stmt->fetchAll();
-        } catch (Throwable) {
-            $latestLessons = [];
-        }
-    }
-
     $specialBanner = getActiveBanner();
-    // NOTE: five COUNT(*) queries (posts/topics/books/lessons/media) used to run
-    // here into $homeCounts/$homeContentTotal. Neither variable is rendered
-    // anywhere on this page, so they were five full table scans per homepage
-    // request with no consumer. Removed.
-} else {
-    // The public shell and archive links stay useful even before the database is ready.
-    $heroPost = null; $heroTopic = null; $featuredSide = []; $latest = [];
-    $featuredTopics = []; $latestBooks = []; $latestLessons = [];
-    $specialBanner = null;
 }
+
 jhd_preload_post_topics(array_merge(
-    $heroPost ? [$heroPost] : [], $featuredSide, $latest
+    $featurePost ? [$featurePost] : [],
+    $newsItems,
+    $sidePicks,
+    $writingRows,
+    $writingCards
 ));
-if ($heroPost) $heroTopic = jhd_card_topics($heroPost, 1)[0] ?? null;
+
+/*
+ * پنج هاب، پنج درِ ورود. شمارش‌ها فقط از همان داده‌ای ساخته می‌شود که در بالا
+ * خوانده شد؛ برای نمایش هیچ کوئری COUNT(*) اضافه‌ای اجرا نمی‌شود.
+ */
+$heroTiles = [];
+if (!empty($homeSections['lessons'])) {
+    $lessonMeta = $collections
+        ? number_format(count($collections)) . ' دورهٔ فعال'
+        : 'درس‌های فقه، اصول، عقاید و زبان عربی';
+    $heroTiles[] = ['href' => url('lessons'), 'title' => 'دروس و دوره‌ها', 'meta' => $lessonMeta, 'icon' => 'bi-mortarboard'];
+}
+if (!empty($homeSections['books'])) {
+    $heroTiles[] = ['href' => url('books'), 'title' => 'کتابخانهٔ دیجیتال', 'meta' => $latestBooks
+        ? number_format(count($latestBooks)) . ' کتاب منتخبِ تازه'
+        : 'متون، شروح و رساله‌ها با متن خوانا', 'icon' => 'bi-book'];
+}
+if (!empty($homeSections['writing'])) {
+    $heroTiles[] = ['href' => url('articles'), 'title' => 'نوشتارها و پژوهش', 'meta' => 'مقاله، پژوهش و پاسخ به پرسش‌ها', 'icon' => 'bi-pencil-square'];
+}
+if (!empty($homeSections['media'])) {
+    $heroTiles[] = ['href' => url('media'), 'title' => 'صوت و تصویر', 'meta' => 'سخنرانی، درس‌گفتار و مستند', 'icon' => 'bi-play-btn'];
+}
+$heroTiles[] = ['href' => url('news'), 'title' => 'اخبار مدرسه', 'meta' => 'جشن‌ها، امتحانات و اطلاعیه‌ها', 'icon' => 'bi-megaphone'];
+
+$homeHasAnyContent = $featurePost || $newsItems || $sidePicks || $collections || $featuredLessons
+    || $latestBooks || $writingRows || $mediaItems || $featuredTopics;
+
 require_once __DIR__ . '/includes/header.php';
-$homeHasAnyContent =
-    (!empty($homeSections['hero']) && $heroPost)
-    || (!empty($homeSections['editor_picks']) && $featuredSide)
-    || (!empty($homeSections['latest']) && $latest)
-    || (!empty($homeSections['topics']) && $featuredTopics)
-    || (!empty($homeSections['books']) && $latestBooks)
-    || (!empty($homeSections['lessons']) && $latestLessons);
 ?>
 
-<!-- ─── ۱. تابلوی فشردهٔ برند ─────────────────────────────────────────────── -->
-<section class="jhd-brand-board" aria-labelledby="home-brand-title">
+<!-- ─── . تابلوی اصلی: هویت، تصویر درست و پنج هاب ───────────────────────── -->
+<section class="jhd-hero" aria-labelledby="home-brand-title">
     <div class="container">
-        <div class="jhd-home-hero">
-            <div class="jhd-home-hero-copy">
-                <p class="jhd-board-official">پایگاه رسمی علمی، آموزشی و پژوهشی</p>
-                <h1 id="home-brand-title"><?= sanitize($siteName) ?></h1>
-                <p class="jhd-board-slogan">مرکزی برای آموزش، پژوهش و گسترش معارف قرآنی و اهل‌بیت</p>
+        <div class="jhd-hero-grid">
+            <div class="jhd-hero-copy">
+                <p class="jhd-hero-kicker"><i class="bi bi-mosque" aria-hidden="true"></i>پایگاه رسمی علمی، آموزشی و پژوهشی</p>
+                <h1 id="home-brand-title">
+                    <?= sanitize($siteName) ?>
+                    <span class="jhd-hero-display" lang="ar">«طَلَبُ الْعِلْمِ فَرِيضَةٌ عَلَی کُلِّ مُسْلِمٍ»</span>
+                </h1>
+                <p class="jhd-hero-slogan"><?= sanitize($siteSlogan) ?></p>
+                <div class="jhd-hero-actions">
+                    <a class="btn btn-primary" href="<?= sanitize(url('lessons')) ?>">
+                        <i class="bi bi-mortarboard me-1" aria-hidden="true"></i>آغاز یادگیری
+                    </a>
+                    <a class="btn btn-outline-primary" href="<?= sanitize(url('books')) ?>">کتابخانه</a>
+                    <a class="btn btn-outline-primary" href="<?= sanitize(url('about')) ?>">دربارهٔ مدرسه</a>
+                </div>
             </div>
+
+            <figure class="jhd-hero-media">
+                <?= jhd_picture(
+                    'img/hero/hero-hawza',
+                    [640, 960, 1280],
+                    'صحن و رواق مدرسهٔ علمیه با کاشی‌کاری فیروزه‌ای و قفسه‌های کتاب',
+                    ['eager' => true, 'ratio' => 1.6, 'sizes' => '(min-width: 992px) 46vw, 100vw']
+                ) ?>
+                <span class="jhd-hero-media__tag"><i class="bi bi-geo-alt" aria-hidden="true"></i><?= sanitize(SITE_ADDRESS) ?></span>
+                <figcaption>
+                    <i class="bi bi-camera-reels" aria-hidden="true"></i>
+                    <span>صحنِ مدرسه؛ جایی که درس، کتاب و بحث کنار هم نشسته‌اند</span>
+                </figcaption>
+            </figure>
         </div>
+
+        <nav class="jhd-hub-rail jhd-hub-rail--grid" aria-label="بخش‌های اصلی پایگاه">
+            <?php foreach ($heroTiles as $tile): ?>
+            <?= jhd_hub_tile((string)$tile['href'], (string)$tile['title'], (string)$tile['meta'], (string)$tile['icon']) ?>
+            <?php endforeach; ?>
+        </nav>
     </div>
 </section>
 
 <?php if (!empty($specialBanner)): ?>
-<section class="jhd-section--tight jhd-section--paper" aria-label="اعلان ویژه">
-    <div class="container d-flex flex-wrap align-items-center justify-content-between gap-2">
-        <div class="d-flex align-items-center gap-2 flex-wrap">
-            <span class="badge bg-warning text-dark px-2 py-1"><i class="bi bi-megaphone ms-1" aria-hidden="true"></i>اعلان ویژه</span>
-            <span class="fw-bold"><?= sanitize($specialBanner['title']) ?></span>
-            <?php if (!empty($specialBanner['content'])): ?>
-            <span class="d-none d-md-inline text-muted small">— <?= sanitize(excerpt($specialBanner['content'], 90)) ?></span>
+<section class="jhd-section--tight jhd-banner-section" aria-label="اعلان ویژه">
+    <div class="container">
+        <div class="jhd-banner-strip">
+            <span class="jhd-banner-strip__label"><i class="bi bi-megaphone" aria-hidden="true"></i>اعلان ویژه</span>
+            <span class="jhd-banner-strip__text">
+                <strong><?= sanitize($specialBanner['title']) ?></strong>
+                <?php if (!empty($specialBanner['content'])): ?>
+                <span class="d-none d-md-inline">— <?= sanitize(excerpt($specialBanner['content'], 110)) ?></span>
+                <?php endif; ?>
+            </span>
+            <?php
+            $bannerLink = trim((string)($specialBanner['link'] ?? ''));
+            $bannerHref = '';
+            $bannerExternal = false;
+            if (str_starts_with($bannerLink, '/') && !str_starts_with($bannerLink, '//') && !str_contains($bannerLink, '\\') && !preg_match('/[\x00-\x20]/', $bannerLink)) {
+                $bannerHref = jhd_web_path(ltrim($bannerLink, '/'));
+            } else {
+                $bannerHref = safeExternalUrl($bannerLink);
+                $bannerExternal = $bannerHref !== '';
+            }
+            ?>
+            <?php if ($bannerHref !== ''): ?>
+            <a class="jhd-banner-strip__cta" href="<?= sanitize($bannerHref) ?>"<?= $bannerExternal ? ' target="_blank" rel="noopener noreferrer"' : '' ?>>
+                <?= sanitize($specialBanner['link_text'] ?: 'مشاهدهٔ جزئیات') ?>
+                <i class="bi bi-arrow-left" aria-hidden="true"></i>
+            </a>
             <?php endif; ?>
         </div>
-        <?php
-        $bannerLink = trim((string)($specialBanner['link'] ?? ''));
-        $bannerHref = '';
-        $bannerExternal = false;
-        if (str_starts_with($bannerLink, '/') && !str_starts_with($bannerLink, '//') && !str_contains($bannerLink, '\\') && !preg_match('/[\x00-\x20]/', $bannerLink)) {
-            $bannerHref = jhd_web_path(ltrim($bannerLink, '/'));
-        } else {
-            $bannerHref = safeExternalUrl($bannerLink);
-            $bannerExternal = $bannerHref !== '';
-        }
-        ?>
-        <?php if ($bannerHref !== ''): ?>
-        <a href="<?= sanitize($bannerHref) ?>" class="btn btn-sm btn-outline-primary fw-bold"<?= $bannerExternal ? ' target="_blank" rel="noopener noreferrer"' : '' ?>>
-            <?= sanitize($specialBanner['link_text'] ?: 'مشاهده جزئیات') ?> <i class="bi bi-arrow-left ms-1" aria-hidden="true"></i>
-        </a>
-        <?php endif; ?>
     </div>
 </section>
 <?php endif; ?>
@@ -249,63 +342,195 @@ $homeHasAnyContent =
 <?php if (!$homeHasAnyContent): ?>
 <section class="jhd-section">
     <div class="container">
-        <?= renderEmptyState('bi-journal-bookmark', 'هنوز محتوایی در این پایگاه منتشر نشده است؛ پس از انتشار مطالب، تازه‌ترین موارد در همین صفحه نمایش داده می‌شوند.', url('about'), 'آشنایی با جامعة‌الهدی') ?>
+        <?= renderEmptyState(
+            'bi-journal-bookmark',
+            $jhdPublicDbReady
+                ? 'هنوز محتوایی منتشر نشده است؛ به‌محض انتشار نخستین مطلب، همین صفحه پر می‌شود.'
+                : 'برای راه‌اندازی پایگاه، دیتابیس را پیکربندی و `php bin/migrate.php` را اجرا کنید.',
+            url('about'),
+            'آشنایی با جامعة‌الهدی'
+        ) ?>
     </div>
 </section>
 <?php endif; ?>
 
-<?php if (!empty($homeSections['hero']) && $heroPost): $showFeaturedSide = !empty($homeSections['editor_picks']) && !empty($featuredSide); ?>
-<section class="jhd-section jhd-home-featured" aria-labelledby="home-featured-heading">
+<?php if ($featurePost || $sidePicks || $newsItems): ?>
+<!-- ─── ۲. شاخصِ سردبیر و تازۀ خبرها ─────────────────────────────────────── -->
+<section class="jhd-section" aria-labelledby="home-feature-heading">
     <div class="container">
-        <?= jhd_section_head(['title' => 'مطلب شاخص', 'title_id' => 'home-featured-heading', 'icon' => 'bi-stars']) ?>
+        <?= jhd_section_head([
+            'eyebrow' => 'انتخاب سردبیر',
+            'title' => 'مطلب شاخص و تازه‌های پایگاه',
+            'title_id' => 'home-feature-heading',
+            'icon' => 'bi-stars',
+            'url' => url('news'),
+            'link' => 'همهٔ اخبار',
+        ]) ?>
         <div class="row g-4">
-            <div class="<?= $showFeaturedSide ? 'col-lg-8' : 'col-12' ?>">
-                <?= renderPostCard($heroPost, ['featured' => true, 'col' => 'col-12', 'cta' => 'مطالعهٔ کامل', 'excerpt' => 145, 'eager' => true, 'no_gallery' => true, 'topics' => $heroTopic ? [$heroTopic] : []]) ?>
+            <?php if ($featurePost): ?>
+            <div class="col-12 <?= $sidePicks || $newsItems ? 'col-lg-8' : 'col-12' ?>">
+                <?= renderPostCard($featurePost, [
+                    'featured' => true,
+                    'col' => 'col-12',
+                    'cta' => 'مطالعهٔ کامل',
+                    'excerpt' => 150,
+                    'eager' => true,
+                ]) ?>
             </div>
-            <?php if ($showFeaturedSide): ?>
-            <aside class="col-lg-4" aria-label="برگزیده‌های سردبیر">
+            <?php endif; ?>
+            <?php if ($sidePicks || $newsItems): ?>
+            <aside class="col-12 col-lg-4" aria-label="برگزیده‌ها و اخبار">
                 <div class="jhd-side-card h-100">
-                    <h3><i class="bi bi-bookmark-star" aria-hidden="true"></i> برگزیدهٔ سردبیر</h3>
+                    <h3><i class="bi bi-bookmark-star" aria-hidden="true"></i> برگزیده و خبرها</h3>
+                    <?php if ($sidePicks): ?>
                     <div class="jhd-home-picks-list">
-                        <?php foreach ($featuredSide as $side): ?><?= renderMiniItem($side, ['excerpt' => 0]) ?><?php endforeach; ?>
+                        <?php foreach ($sidePicks as $pick): ?><?= renderMiniItem($pick, ['excerpt' => 0]) ?><?php endforeach; ?>
                     </div>
+                    <?php endif; ?>
+                    <?php if ($newsItems): ?>
+                    <div class="<?= $sidePicks ? 'mt-3 pt-2 border-top' : '' ?>">
+                        <?= jhd_news_list(array_slice($newsItems, 0, 3), ['hide_type' => true]) ?>
+                    </div>
+                    <?php endif; ?>
+                    <a class="jhd-section-link mt-2" href="<?= sanitize(url('news')) ?>">
+                        آرشیو اخبار <i class="bi bi-arrow-left" aria-hidden="true"></i>
+                    </a>
                 </div>
             </aside>
             <?php endif; ?>
         </div>
     </div>
 </section>
-<?php elseif (!empty($homeSections['editor_picks']) && $featuredSide): ?>
-<section class="jhd-section jhd-section--paper" aria-labelledby="home-picks-heading">
+<?php endif; ?>
+
+<?php if (!empty($homeSections['lessons']) && ($collections || $featuredLessons)): ?>
+<!-- ─── ۳. هاب دروس — مرکز ثقل یک مدرسه ──────────────────────────────────── -->
+<section class="jhd-section jhd-section--paper" aria-labelledby="home-lessons-heading">
     <div class="container">
-        <?= jhd_section_head(['title' => 'برگزیدهٔ سردبیر', 'title_id' => 'home-picks-heading', 'icon' => 'bi-bookmark-star']) ?>
-        <?= jhd_grid_open('jhd-home-picks-grid') ?>
-            <?php foreach ($featuredSide as $side): ?><?= renderMiniItem($side, ['col' => 'col-12 col-sm-6 col-lg-4', 'excerpt' => 0]) ?><?php endforeach; ?>
+        <?= jhd_section_head([
+            'eyebrow' => 'مدرسه',
+            'title' => 'دروس و دوره‌ها',
+            'title_id' => 'home-lessons-heading',
+            'icon' => 'bi-mortarboard',
+            'url' => url('lessons'),
+            'link' => 'همهٔ دوره‌ها و درس‌ها',
+        ]) ?>
+        <div class="row g-4">
+            <?php if ($collections): ?>
+            <div class="col-12 col-lg-5">
+                <div class="jhd-hub-grid jhd-hub-grid--one">
+                    <?php foreach ($collections as $collection): ?>
+                    <?= jhd_hub_tile(
+                        collectionUrl($collection),
+                        (string)$collection['title'],
+                        number_format((int)($collection['lesson_count'] ?? 0)) . ' درس منتشرشده',
+                        'bi-collection',
+                        ['wide' => true]
+                    ) ?>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+            <?php if ($featuredLessons): ?>
+            <div class="col-12 <?= $collections ? 'col-lg-7' : 'col-12' ?>">
+                <?= jhd_grid_open() ?>
+                <?php foreach ($featuredLessons as $lesson): ?>
+                <?= renderLessonCard($lesson, [
+                    'col' => $collections ? 'col-12' : 'col-12 col-sm-6 col-xl-4',
+                    'excerpt' => 78,
+                    'minimal' => true,
+                ]) ?>
+                <?php endforeach; ?>
+                <?= jhd_grid_close() ?>
+            </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</section>
+<?php endif; ?>
+
+<?php if (!empty($homeSections['books']) && $latestBooks): ?>
+<!-- ─── ۴. هاب کتابخانه ──────────────────────────────────────────────────── -->
+<section class="jhd-section" aria-labelledby="home-books-heading">
+    <div class="container">
+        <?= jhd_section_head([
+            'eyebrow' => 'قفسهٔ دیجیتال',
+            'title' => 'کتاب‌های منتخب',
+            'title_id' => 'home-books-heading',
+            'icon' => 'bi-book-half',
+            'url' => url('books'),
+            'link' => 'ورود به کتابخانه',
+        ]) ?>
+        <?= jhd_grid_open() ?>
+        <?php foreach ($latestBooks as $book): ?>
+        <?= renderBookCard($book, ['col' => JHD_CARD_COL, 'excerpt' => 84]) ?>
+        <?php endforeach; ?>
         <?= jhd_grid_close() ?>
     </div>
 </section>
 <?php endif; ?>
 
-<?php if (!empty($homeSections['latest']) && $latest): ?>
-<section class="jhd-section" aria-labelledby="home-latest-heading">
+<?php if (!empty($homeSections['writing']) && ($writingRows || $writingCards)): ?>
+<!-- ─── ۵. هاب نوشتارها: مقاله، پژوهش و پرسش‌وپاسخ ───────────────────────── -->
+<section class="jhd-section jhd-section--paper" aria-labelledby="home-writing-heading">
     <div class="container">
         <?= jhd_section_head([
-            'eyebrow' => 'تازه‌های پایگاه',
-            'title' => 'تازه‌ترین مطالب',
-            'title_id' => 'home-latest-heading',
-            'icon' => 'bi-clock-history',
-            'url' => url('search'),
-            'link' => 'جستجو در آرشیو',
+            'eyebrow' => 'تولید علم',
+            'title' => 'نوشتارها و پژوهش‌ها',
+            'title_id' => 'home-writing-heading',
+            'icon' => 'bi-pencil-square',
+            'url' => url('articles'),
+            'link' => 'آرشیو مقالات و پژوهش‌ها',
         ]) ?>
-        <?= jhd_grid_open('jhd-home-latest-grid') ?>
-            <?php foreach ($latest as $item): ?><?= renderPostCard($item, ['col' => 'col-12 col-sm-6 col-xl-3', 'excerpt' => 88, 'cta' => 'مشاهده مطلب']) ?><?php endforeach; ?>
+        <div class="row g-4">
+            <?php if ($writingRows): ?>
+            <div class="col-12 <?= $writingCards ? 'col-lg-7' : 'col-12' ?>">
+                <?= jhd_card_list($writingRows, static fn(array $post, int $i): string => renderEditorialRow($post, [
+                    'excerpt' => 108,
+                    'index' => $i + 1,
+                    'cta' => 'مطالعهٔ نوشتار',
+                    'eager' => $i === 0,
+                ]), ['grid_class' => 'jhd-home-writing-list']) ?>
+            </div>
+            <?php endif; ?>
+            <?php if ($writingCards): ?>
+            <div class="col-12 <?= $writingRows ? 'col-lg-5' : 'col-12' ?>">
+                <?= jhd_grid_open() ?>
+                <?php foreach ($writingCards as $card): ?>
+                <?= renderPostCard($card, ['col' => 'col-12', 'excerpt' => 96, 'cta' => 'مطالعهٔ کامل']) ?>
+                <?php endforeach; ?>
+                <?= jhd_grid_close() ?>
+            </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</section>
+<?php endif; ?>
+
+<?php if (!empty($homeSections['media']) && $mediaItems): ?>
+<!-- ─── ۶. هاب رسانه: صوت و تصویر ────────────────────────────────────────── -->
+<section class="jhd-section" aria-labelledby="home-media-heading">
+    <div class="container">
+        <?= jhd_section_head([
+            'eyebrow' => 'کتابخانهٔ چندرسانه‌ای',
+            'title' => 'صوت و تصویر',
+            'title_id' => 'home-media-heading',
+            'icon' => 'bi-play-btn',
+            'url' => url('media'),
+            'link' => 'نگارخانهٔ کامل',
+        ]) ?>
+        <?= jhd_grid_open() ?>
+        <?php foreach ($mediaItems as $media): ?>
+        <?= renderMediaCard($media, ['col' => JHD_CARD_COL, 'cta' => $media['kind'] === 'audio' ? 'پخش صوت' : 'تماشا و دانلود']) ?>
+        <?php endforeach; ?>
         <?= jhd_grid_close() ?>
     </div>
 </section>
 <?php endif; ?>
 
 <?php if (!empty($homeSections['topics']) && $featuredTopics): ?>
-<section class="jhd-section jhd-section--paper" aria-labelledby="home-topics-heading">
+<!-- ─── ۷. اطلس موضوعی — پل میان همهٔ هاب‌ها ──────────────────────────────── -->
+<section class="jhd-section jhd-section--tight" aria-labelledby="home-topics-heading">
     <div class="container">
         <?= jhd_section_head([
             'eyebrow' => 'اطلس موضوعی',
@@ -313,7 +538,7 @@ $homeHasAnyContent =
             'title_id' => 'home-topics-heading',
             'icon' => 'bi-diagram-3',
             'url' => url('topics'),
-            'link' => 'همهٔ موضوعات',
+            'link' => 'اطلس کامل موضوعات',
         ]) ?>
         <nav class="jhd-home-topic-links" aria-label="موضوعات پرمحتوا">
             <?php foreach ($featuredTopics as $topic): ?>
@@ -327,23 +552,15 @@ $homeHasAnyContent =
 </section>
 <?php endif; ?>
 
-<?php if ((!empty($homeSections['books']) && $latestBooks) || (!empty($homeSections['lessons']) && $latestLessons)): ?>
-<section class="jhd-section" aria-labelledby="home-learning-heading">
-    <div class="container">
-        <?= jhd_section_head([
-            'eyebrow' => 'منابع و آموزش',
-            'title' => 'کتابخانه و درس‌های منتخب',
-            'title_id' => 'home-learning-heading',
-            'icon' => 'bi-mortarboard',
-            'url' => url('books'),
-            'link' => 'ورود به کتابخانه',
-        ]) ?>
-        <?= jhd_grid_open('jhd-home-collections-grid') ?>
-            <?php if (!empty($homeSections['books'])): foreach ($latestBooks as $book): ?><?= renderBookCard($book, ['col' => 'col-12 col-sm-6 col-xl-3', 'excerpt' => 72]) ?><?php endforeach; endif; ?>
-            <?php if (!empty($homeSections['lessons'])): foreach ($latestLessons as $lesson): ?><?= renderLessonCard($lesson, ['minimal' => true, 'col' => 'col-12 col-sm-6 col-xl-3', 'excerpt' => 72]) ?><?php endforeach; endif; ?>
-        <?= jhd_grid_close() ?>
-    </div>
-</section>
+<?php if ($homeHasAnyContent): ?>
+<?= jhd_cta_band([
+    'title' => 'یک قدم تا کلاسِ درس',
+    'text' => 'برای شرکت در دروس، دریافت مجوز کتابخانه یا پرسش دربارهٔ فعالیت‌های علمی مدرسه با ما در تماس باشید.',
+    'actions' => [
+        ['label' => 'ارتباط با ما', 'url' => url('contact'), 'style' => 'primary'],
+        ['label' => 'دربارهٔ مدرسه و اساتید', 'url' => url('about'), 'style' => 'outline-light'],
+    ],
+]) ?>
 <?php endif; ?>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

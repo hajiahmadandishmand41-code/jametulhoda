@@ -42,6 +42,18 @@ if ($jhdPublicDbReady) {
     $siteEmail      = SITE_EMAIL;
 }
 ?>
+<?php
+/*
+ * پنج هاب اصلی + چهار بخش پرتردد، آن‌طور که در ناوبری بالایی تعریف شده‌اند.
+ * دو پیوند «دربارهٔ مدرسه» و «تماس با ما» همیشه اضافه می‌شوند؛ پس ستون فوتر
+ * ثابت می‌ماند حتی اگر registry ناوبری کوتاه‌تر شود.
+ */
+$jhdNavSections = jhd_nav_sections();
+$footerSections = array_merge(
+    $jhdNavSections['primary'],
+    array_slice($jhdNavSections['more'], 0, 4)
+);
+?>
 <footer class="main-footer" role="contentinfo">
     <div class="footer-top">
         <div class="container">
@@ -63,18 +75,19 @@ if ($jhdPublicDbReady) {
                     <?php endif; ?>
                 </div>
 
-                <!-- لینک‌های اصلی -->
+                <!--
+                    پیوندهای اصلی از همان jhd_nav_sections() که نوار بالا و
+                    کشوی موبایل می‌سازند؛ اگر روزی هابی جابه‌جا شود، هر سه
+                    ناوبری با هم جابه‌جا می‌شوند و پیوند یتیم نمی‌ماند.
+                -->
                 <div class="col-lg-3 col-md-6">
                     <h5 class="footer-title">پیوندهای اصلی</h5>
                     <ul class="footer-links">
-                        <li><a href="<?= url('news') ?>"><i class="bi bi-chevron-left"></i>اخبار</a></li>
-                        <li><a href="<?= url('articles') ?>"><i class="bi bi-chevron-left"></i>مقالات و پژوهش</a></li>
-                        <li><a href="<?= url('books') ?>"><i class="bi bi-chevron-left"></i>کتابخانه</a></li>
-                        <li><a href="<?= url('lessons') ?>"><i class="bi bi-chevron-left"></i>دروس</a></li>
-                        <li><a href="<?= url('media') ?>"><i class="bi bi-chevron-left"></i>رسانه</a></li>
-                        <li><a href="<?= url('topics') ?>"><i class="bi bi-chevron-left"></i>موضوعات</a></li>
-                        <li><a href="<?= url('about') ?>"><i class="bi bi-chevron-left"></i>درباره ما</a></li>
-                        <li><a href="<?= url('contact') ?>"><i class="bi bi-chevron-left"></i>تماس با ما</a></li>
+                        <?php foreach ($footerSections as $footerSection): ?>
+                        <li><a href="<?= sanitize(url((string)$footerSection['route'])) ?>"><i class="bi bi-chevron-left" aria-hidden="true"></i><?= sanitize((string)$footerSection['label']) ?></a></li>
+                        <?php endforeach; ?>
+                        <li><a href="<?= sanitize(url('about')) ?>"><i class="bi bi-chevron-left" aria-hidden="true"></i>دربارهٔ مدرسه</a></li>
+                        <li><a href="<?= sanitize(url('contact')) ?>"><i class="bi bi-chevron-left" aria-hidden="true"></i>تماس با ما</a></li>
                     </ul>
                 </div>
 

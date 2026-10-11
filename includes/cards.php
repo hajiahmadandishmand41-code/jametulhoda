@@ -109,17 +109,20 @@ function jhd_preload_post_images(array $posts): void {
     if (!$ids) return;
 
     $cache =& jhd_post_images_cache();
+    foreach ($ids as $id) {
+        $cache[$id] = $cache[$id] ?? [];
+        $loaded[$id] = true;
+    }
+    $marks = implode(',', array_fill(0, count($ids), '?'));
+    // ترتیب دستی مدیر در گالری (`post_images.sort_order`) باید در پیش‌نمایش
+    // عمومی هم رعایت شود؛ نصبی که مهاجرت را اجرا نکرده، با همان کوئری بدون
+    // ستون ترتیب پاسخ می‌گیرد (بدون خطای ۵۰۰ روی میزبان اشتراکی).
     try {
-        $marks = implode(',', array_fill(0, count($ids), '?'));
         $stmt = getDB()->prepare(
             "SELECT post_id, image_path, alt_text FROM post_images
-             WHERE post_id IN ($marks) ORDER BY post_id ASC, id ASC"
+             WHERE post_id IN ($marks) ORDER BY post_id ASC, sort_order ASC, id ASC"
         );
         $stmt->execute(array_values($ids));
-        foreach ($ids as $id) {
-            $cache[$id] = $cache[$id] ?? [];
-            $loaded[$id] = true;
-        }
         foreach ($stmt->fetchAll() as $row) {
             $pid = (int)$row['post_id'];
             $cache[$pid][] = [
@@ -128,9 +131,21 @@ function jhd_preload_post_images(array $posts): void {
             ];
         }
     } catch (Throwable) {
-        foreach ($ids as $id) {
-            $cache[$id] = $cache[$id] ?? [];
-            $loaded[$id] = true;
+        try {
+            $stmt = getDB()->prepare(
+                "SELECT post_id, image_path, alt_text FROM post_images
+                 WHERE post_id IN ($marks) ORDER BY post_id ASC, id ASC"
+            );
+            $stmt->execute(array_values($ids));
+            foreach ($stmt->fetchAll() as $row) {
+                $pid = (int)$row['post_id'];
+                $cache[$pid][] = [
+                    'path' => (string)($row['image_path'] ?? ''),
+                    'alt'  => (string)($row['alt_text'] ?? ''),
+                ];
+            }
+        } catch (Throwable) {
+            // حافظهٔ خالیِ بارگذاری‌شده یعنی «تصویری نیست»؛ فهرست بی‌وقفه رندر می‌شود.
         }
     }
 }
@@ -152,7 +167,7 @@ function jhd_card_image_set(array $post): array {
         } else {
             try {
                 $stmt = getDB()->prepare(
-                    'SELECT image_path, alt_text FROM post_images WHERE post_id = ? ORDER BY id ASC'
+                    'SELECT image_path, alt_text FROM post_images WHERE post_id = ? ORDER BY sort_order ASC, id ASC'
                 );
                 $stmt->execute([$id]);
                 $rows = array_map(static fn(array $row): array => [
@@ -161,8 +176,20 @@ function jhd_card_image_set(array $post): array {
                 ], $stmt->fetchAll());
                 $cache[$id] = $rows;
             } catch (Throwable) {
-                $rows = [];
-                $cache[$id] = [];
+                try {
+                    $stmt = getDB()->prepare(
+                        'SELECT image_path, alt_text FROM post_images WHERE post_id = ? ORDER BY id ASC'
+                    );
+                    $stmt->execute([$id]);
+                    $rows = array_map(static fn(array $row): array => [
+                        'path' => (string)($row['image_path'] ?? ''),
+                        'alt'  => (string)($row['alt_text'] ?? ''),
+                    ], $stmt->fetchAll());
+                    $cache[$id] = $rows;
+                } catch (Throwable) {
+                    $rows = [];
+                    $cache[$id] = [];
+                }
             }
         }
     }
@@ -187,6 +214,20 @@ function jhd_card_image_set(array $post): array {
         $seen[$path] = true;
         $out[] = ['path' => $path, 'alt' => (string)($row['alt'] ?? $post['title'] ?? '')];
     }
+
+    /*
+     * تصویر اصلی (posts.featured_image) همیشه اول می‌آید، حتی اگر sort_orderِ
+     * گالری آن را در جای دیگری گذاشته باشد: همان تصویری که در کارت، og:image و
+     * صفحهٔ مطلب «شاخص» شمرده می‌شود.
+     */
+    if ($featured !== '' && count($out) > 1) {
+        foreach ($out as $index => $row) {
+            if ($row['path'] === $featured && $index > 0) {
+                array_unshift($out, array_splice($out, $index, 1)[0]);
+                break;
+            }
+        }
+    }
     return $out;
 }
 
@@ -206,11 +247,18 @@ function jhd_card_gallery(array $images, string $title, string $badge = '', bool
         $overlay = ($extra > 0 && $index === count($shown) - 1)
             ? '<span class="jhd-card-gallery__more" aria-hidden="true"><strong>+' . jhd_persian_digits($extra) . '</strong><span>تصویر دیگر</span></span>'
             : '';
-        $cells .= '<button type="button" class="jhd-gallery__cell jhd-card-gallery__cell" data-index="' . $index . '" aria-label="نمایش تصویر ' . jhd_persian_digits($index + 1) . ' از ' . jhd_persian_digits($count) . '">'
+        /*
+         * سلول‌ها پیوند به خودِ تصویرند، نه دکمهٔ بی‌عمل: بدون JavaScript هم
+         * «مشاهدهٔ تصویر» کار می‌کند (باز شدن فایل اصلی) و درون کارت، که
+         * `overflow: hidden` دارد، هیچ گرهٔ interactive تودرتو تولید نمی‌شود.
+         */
+        $cells .= '<a class="jhd-gallery__cell jhd-card-gallery__cell" href="' . sanitize($src) . '"'
+            . ' data-jhd-lightbox-open data-index="' . $index . '"'
+            . ' aria-label="نمایش تصویر ' . jhd_persian_digits($index + 1) . ' از ' . jhd_persian_digits($count) . '">'
             . '<img src="' . sanitize($src) . '" alt="' . sanitize((string)($image['alt'] ?? $title)) . '"'
             . ($eager ? ' loading="eager" fetchpriority="high"' : ' loading="lazy"')
             . ' decoding="async" width="800" height="500">'
-            . $overlay . '</button>';
+            . $overlay . '</a>';
     }
     if ($cells === '') return '';
 
@@ -225,7 +273,7 @@ function jhd_card_gallery(array $images, string $title, string $badge = '', bool
         . '<div class="jhd-card-gallery__grid">' . $cells . '</div>'
         . '<span class="jhd-card-gallery__count"><i class="bi bi-images" aria-hidden="true"></i>' . jhd_persian_digits($count) . ' تصویر</span>'
         . ($badge !== '' ? '<span class="jhd-card-badge">' . sanitize($badge) . '</span>' : '')
-        . '<div class="jhd-lightbox" data-jhd-lightbox="' . $uid . '" role="dialog" aria-modal="true" aria-label="' . sanitize($title) . '" hidden>'
+        . '<div class="jhd-lightbox" data-jhd-lightbox="' . $uid . '" role="dialog" aria-modal="true" aria-label="' . sanitize($title) . '" tabindex="-1" hidden>'
         . '<div class="jhd-lightbox__backdrop" data-jhd-lightbox-close></div>'
         . '<div class="jhd-lightbox__frame">'
         . '<div class="jhd-lightbox__top"><span class="jhd-lightbox__counter" data-jhd-lightbox-counter></span><div class="jhd-lightbox__tools">'
@@ -237,7 +285,7 @@ function jhd_card_gallery(array $images, string $title, string $badge = '', bool
         . '<button type="button" class="jhd-lightbox__nav jhd-lightbox__nav--next" data-jhd-lightbox-next title="تصویر بعدی" aria-label="تصویر بعدی"><i class="bi bi-chevron-left" aria-hidden="true"></i></button>'
         . '<div class="jhd-lightbox__thumbs" data-jhd-lightbox-thumbs></div>'
         . '</div></div></div>'
-        . '<script type="application/json" data-jhd-gallery-data="' . $uid . '">'
+        . '<script type="application/json" data-jhd-lightbox-data="' . $uid . '">'
         . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP)
         . '</script>';
     return $html;
@@ -871,12 +919,14 @@ function jhd_gallery(array $images, array $opts = []): string {
         $overlay = ($extra > 0 && $index === count($shown) - 1)
             ? '<span class="jhd-gallery__more" aria-hidden="true"><strong>+' . jhd_persian_digits($extra) . '</strong><span>تصویر دیگر</span></span>'
             : '';
-        $html .= '<button type="button" class="jhd-gallery__cell" data-index="' . $index . '" aria-label="نمایش تصویر ' . jhd_persian_digits($index + 1) . ' از ' . jhd_persian_digits($count) . '">'
+        $html .= '<a class="jhd-gallery__cell" href="' . sanitize($item['src']) . '"'
+            . ' data-jhd-lightbox-open data-index="' . $index . '"'
+            . ' aria-label="نمایش تصویر ' . jhd_persian_digits($index + 1) . ' از ' . jhd_persian_digits($count) . '">'
             . '<img src="' . sanitize($item['src']) . '" alt="' . sanitize($item['alt']) . '" loading="lazy" decoding="async" width="800" height="600">'
-            . $overlay . '<span class="jhd-gallery__zoom" aria-hidden="true"><i class="bi bi-arrows-angle-expand"></i></span></button>';
+            . $overlay . '<span class="jhd-gallery__zoom" aria-hidden="true"><i class="bi bi-arrows-angle-expand"></i></span></a>';
     }
     $html .= '</div>';
-    $html .= '<div class="jhd-lightbox" data-jhd-lightbox="' . $uid . '" role="dialog" aria-modal="true" aria-label="' . sanitize($title) . '" hidden>'
+    $html .= '<div class="jhd-lightbox" data-jhd-lightbox="' . $uid . '" role="dialog" aria-modal="true" aria-label="' . sanitize($title) . '" tabindex="-1" hidden>'
         . '<div class="jhd-lightbox__backdrop" data-jhd-lightbox-close></div><div class="jhd-lightbox__frame">'
         . '<div class="jhd-lightbox__top"><span class="jhd-lightbox__counter" data-jhd-lightbox-counter></span><div class="jhd-lightbox__tools">'
         . '<a class="jhd-lightbox__tool" data-jhd-lightbox-download href="' . sanitize($items[0]['src']) . '" download title="دانلود تصویر" aria-label="دانلود تصویر"><i class="bi bi-download" aria-hidden="true"></i></a>'
@@ -885,10 +935,132 @@ function jhd_gallery(array $images, array $opts = []): string {
         . '<figure class="jhd-lightbox__figure"><img data-jhd-lightbox-image src="" alt=""><figcaption data-jhd-lightbox-caption></figcaption></figure>'
         . '<button type="button" class="jhd-lightbox__nav jhd-lightbox__nav--next" data-jhd-lightbox-next title="تصویر بعدی" aria-label="تصویر بعدی"><i class="bi bi-chevron-left" aria-hidden="true"></i></button>'
         . '<div class="jhd-lightbox__thumbs" data-jhd-lightbox-thumbs></div></div></div>';
-    $html .= '<script type="application/json" data-jhd-gallery-data="' . $uid . '">'
+    $html .= '<script type="application/json" data-jhd-lightbox-data="' . $uid . '">'
         . json_encode($items, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP)
         . '</script>';
     return $html;
+}
+
+/**
+ * قاب تصویر responsive برای تصویر ثابتِ بسته‌بندی‌شده در مخزن (هیرو و بنرها).
+ *
+ * فایل‌های آپلودی در مرورگر کوچک می‌شوند (assets/js/upload-optimize.js) و
+ * ابعادشان برای سرور نامعلوم است؛ اما تصویر هیرو از پیش با
+ * `tools/build-hero.mjs` تولید شده، پس این تابع می‌تواند `<picture>` با WebP
+ * و JPEG در سه عرض واقعی بسازد. `$base` بدون پسوند و نسبت به `assets/` است
+ * (همان قراردادی که `asset()` دارد)، مثلاً `img/hero/hero-hawza`.
+ */
+function jhd_picture(string $base, array $widths, string $alt, array $opts = []): string
+{
+    $widths = array_values(array_filter(array_map('intval', $widths), static fn(int $w): bool => $w > 0));
+    if (!$widths) return '';
+    sort($widths);
+    $eager  = !empty($opts['eager']);
+    $ratio  = (float)($opts['ratio'] ?? 1.6);          // 16:10 — همان نسبت قاب
+    $sizes  = (string)($opts['sizes'] ?? '(min-width: 992px) 46vw, 100vw');
+    $class  = trim((string)($opts['class'] ?? ''));
+    $max    = (int)max($widths);
+    $srcset = static function (string $ext) use ($base, $widths): string {
+        $parts = [];
+        foreach ($widths as $width) {
+            $parts[] = asset(sprintf('%s-%d.%s', $base, $width, $ext)) . ' ' . $width . 'w';
+        }
+        return implode(', ', $parts);
+    };
+    $webp = $srcset('webp');
+    $jpeg = $srcset('jpg');
+
+    $html = '<picture>';
+    $html .= '<source type="image/webp" srcset="' . sanitize($webp) . '" sizes="' . sanitize($sizes) . '">';
+    $html .= '<source type="image/jpeg" srcset="' . sanitize($jpeg) . '" sizes="' . sanitize($sizes) . '">';
+    $html .= '<img src="' . sanitize(asset(sprintf('%s-%d.jpg', $base, $max))) . '"'
+        . ' width="' . $max . '" height="' . (int)round($max / $ratio) . '"'
+        . ' alt="' . sanitize($alt) . '"'
+        . ' loading="' . ($eager ? 'eager' : 'lazy') . '"'
+        . ' fetchpriority="' . ($eager ? 'high' : 'auto') . '"'
+        . ' decoding="async"'
+        . ($class !== '' ? ' class="' . sanitize($class) . '"' : '')
+        . '>';
+    return $html . '</picture>';
+}
+
+/**
+ * کاشی هاب — درِ ورود به یک مجموعهٔ کامل (دروس، کتابخانه، رسانه، نوشتارها).
+ * یک تابع هم ریل بالای صفحهٔ اصلی و هم شبکهٔ «محورهای اصلی» را می‌سازد؛ پس
+ * شکل، فاصله و تایپوگرافی همهٔ هاب‌ها یکی است و در یک‌جا مدرن می‌شود.
+ */
+function jhd_hub_tile(string $href, string $title, string $meta, string $icon, array $opts = []): string
+{
+    $wide = !empty($opts['wide']);
+    $body = '<span class="jhd-hub-tile__body"><strong>' . sanitize($title) . '</strong>'
+        . ($meta !== '' ? '<small>' . sanitize($meta) . '</small>' : '')
+        . '</span>';
+    $iconHtml = $wide ? '' : '<span class="jhd-hub-tile__icon" aria-hidden="true"><i class="bi ' . sanitize($icon) . '"></i></span>';
+    return '<a class="jhd-hub-tile' . ($wide ? ' jhd-hub-tile--wide' : '') . '" href="' . sanitize($href) . '">'
+        . $iconHtml . $body
+        . '<i class="bi bi-arrow-left jhd-hub-tile__arrow" aria-hidden="true"></i>'
+        . '</a>';
+}
+
+/**
+ * فهرست فشردهٔ خبری: یک ردیف = یک مطلب، تاریخ شمسی در ستون نخست.
+ * برای بخش‌هایی که «تاریخ» مهم‌تر از تصویر است (اخبار و اطلاعیه‌ها)؛ کارت
+ * تصویردار آنجا شلوغی است و ارتفاع بی‌دلیل می‌گیرد.
+ */
+function jhd_news_list(array $items, array $opts = []): string
+{
+    if (!$items) return '';
+    $showType = empty($opts['hide_type']);
+    $html = '<div class="jhd-news-list">';
+    foreach ($items as $item) {
+        $type = (string)($item['post_type'] ?? 'post');
+        $href = (string)($item['url'] ?? postUrl($item, $type));
+        $title = trim((string)($item['title'] ?? ''));
+        if ($title === '') continue;
+        $rawDate = (string)($item['published_at'] ?? $item['created_at'] ?? '');
+        $parts = $rawDate !== '' ? persianDateParts($rawDate) : null;
+        $meta = trim((string)($item['cat_name'] ?? ''));
+        $html .= '<article class="jhd-news-row' . ($showType ? '' : ' jhd-news-row--plain') . '">';
+        $html .= $parts
+            ? '<time datetime="' . sanitize($rawDate) . '">'
+                . '<strong>' . jhd_persian_digits((int)$parts['day']) . '</strong>'
+                . '<span>' . sanitize((string)$parts['month']) . '</span></time>'
+            : '<span class="jhd-news-row__meta" aria-hidden="true">•</span>';
+        $html .= '<span class="jhd-news-row__body">'
+            . '<a class="jhd-news-row__title" href="' . sanitize($href) . '">' . sanitize($title) . '</a>'
+            . ($meta !== '' ? '<span class="jhd-news-row__meta">' . sanitize($meta) . '</span>' : '')
+            . '</span>';
+        $html .= $showType ? '<span class="jhd-news-row__type">' . sanitize(postTypeLabel($type)) . '</span>' : '';
+        $html .= '</article>';
+    }
+    return $html . '</div>';
+}
+
+/**
+ * نوار پایانی صفحهٔ اصلی: یک دعوت کوتاه و دو پیوند. تنها «تبلیغ» مجاز این
+ * صفحه است؛ پس هیچ کارت ساختگی یا محتوای نمونه‌ای در آن نیست.
+ */
+function jhd_cta_band(array $opts): string
+{
+    $actions = '';
+    foreach ((array)($opts['actions'] ?? []) as $action) {
+        $label = trim((string)($action['label'] ?? ''));
+        $href  = (string)($action['url'] ?? '');
+        if ($label === '' || $href === '') continue;
+        $style = (string)($action['style'] ?? 'primary');
+        $actions .= '<a class="btn btn-' . sanitize($style) . '" href="' . sanitize($href) . '"'
+            . (!empty($action['external']) ? ' target="_blank" rel="noopener noreferrer"' : '') . '>'
+            . sanitize($label) . '</a>';
+    }
+    if ($actions === '') return '';
+    $title = trim((string)($opts['title'] ?? ''));
+    $text  = trim((string)($opts['text'] ?? ''));
+    return '<section class="jhd-section jhd-section--tight" aria-label="' . sanitize($title !== '' ? $title : 'دعوت') . '">'
+        . '<div class="container"><div class="jhd-cta-band"><div>'
+        . ($title !== '' ? '<h2>' . sanitize($title) . '</h2>' : '')
+        . ($text !== '' ? '<p>' . sanitize($text) . '</p>' : '')
+        . '</div><div class="jhd-cta-band__actions">' . $actions . '</div>'
+        . '</div></div></section>';
 }
 
 /** ارقام فارسی برای شماره‌گذاری گالری. */
@@ -921,14 +1093,35 @@ function jhd_post_nav(?array $prev, ?array $next): string {
     return $html . '</nav>';
 }
 
+/**
+ * ناوبری اصلی سایت — تنها مرجع هدر، کشوی موبایل و ستون «پیوندهای اصلی» فوتر.
+ *
+ * قانون: در نوار بالا حداکثر شش مقصد دیده می‌شود («خانه» + پنج هاب). بقیهٔ
+ * بخش‌ها به گروه «بیشتر» و فوتر رفته‌اند؛ نه لینکی می‌شکند، نه ناوبری به
+ * فهرست دوازده‌تایی تبدیل می‌شود. هر آیتم می‌تواند `extra_active` داشته باشد
+ * تا زیربخش‌هایش (مثلاً `/videos` زیر «رسانه») همان آیتم را روشن نگه دارند.
+ */
 function jhd_nav_sections(): array {
     return [
-        ['route' => 'news', 'label' => 'اخبار', 'icon' => 'bi-newspaper', 'types' => ['news']],
-        ['route' => 'articles', 'label' => 'مقالات و پژوهش', 'icon' => 'bi-file-text', 'types' => ['article', 'research']],
-        ['route' => 'books', 'label' => 'کتابخانه', 'icon' => 'bi-book', 'types' => []],
-        ['route' => 'lessons', 'label' => 'دروس', 'icon' => 'bi-mortarboard', 'types' => []],
-        ['route' => 'media', 'label' => 'رسانه', 'icon' => 'bi-play-circle', 'types' => []],
-        ['route' => 'topics', 'label' => 'موضوعات', 'icon' => 'bi-diagram-3', 'types' => []],
+        'primary' => [
+            ['route' => 'lessons',  'label' => 'دروس',          'icon' => 'bi-mortarboard',   'types' => [],                  'extra_active' => ['lesson']],
+            ['route' => 'books',    'label' => 'کتابخانه',      'icon' => 'bi-book',          'types' => [],                  'extra_active' => ['book']],
+            ['route' => 'articles', 'label' => 'نوشتارها',      'icon' => 'bi-pencil-square', 'types' => ['article','research'], 'extra_active' => ['research', 'reports', 'qa', 'post', 'article']],
+            ['route' => 'media',    'label' => 'صوت و تصویر',   'icon' => 'bi-play-btn',      'types' => [],                  'extra_active' => ['videos', 'audios', 'speeches', 'video', 'audio']],
+            ['route' => 'news',     'label' => 'اخبار',         'icon' => 'bi-newspaper',     'types' => ['news'],            'extra_active' => ['announcements', 'events', 'programs', 'religious-activities']],
+        ],
+        'more' => [
+            ['route' => 'topics',                'label' => 'اطلس موضوعات',          'icon' => 'bi-diagram-3',        'types' => []],
+            ['route' => 'research',              'label' => 'پژوهش‌ها',               'icon' => 'bi-journal-richtext', 'types' => ['research']],
+            ['route' => 'speeches',              'label' => 'سخنرانی‌ها',             'icon' => 'bi-mic',              'types' => ['speech']],
+            ['route' => 'events',                'label' => 'رویدادها و برنامه‌ها',    'icon' => 'bi-calendar-event',   'types' => ['event', 'program']],
+            ['route' => 'religious-activities',  'label' => 'فعالیت‌های مذهبی',        'icon' => 'bi-moon-stars',       'types' => ['religious']],
+            ['route' => 'announcements',         'label' => 'اطلاعیه‌ها',              'icon' => 'bi-megaphone',        'types' => ['announcement']],
+            ['route' => 'qa',                    'label' => 'پرسش و پاسخ',            'icon' => 'bi-patch-question',   'types' => ['qa']],
+            ['route' => 'reports',               'label' => 'گزارش‌های مدرسه',        'icon' => 'bi-card-text',        'types' => ['report']],
+            ['route' => 'about',                 'label' => 'دربارهٔ مدرسه',           'icon' => 'bi-info-circle',      'types' => []],
+            ['route' => 'contact',               'label' => 'تماس با ما',              'icon' => 'bi-envelope',         'types' => []],
+        ],
     ];
 }
 
@@ -996,6 +1189,9 @@ function jhd_render_desktop_nav_item(array $section, callable $isActiveNav, arra
     $route = (string)$section['route'];
     $label = (string)$section['label'];
     $children = $section['children'] ?? jhd_section_children($section);
+    // «فعال بودن» یک هاب می‌تواند از چند مسیر فرعی بیاید؛ registry خودش
+    // آن‌ها را می‌گوید تا هدرِ هر صفحه این جدول را دوباره تکرار نکند.
+    $extraActive = array_values(array_unique(array_merge($extraActive, (array)($section['extra_active'] ?? []))));
     $active = $isActiveNav($route);
     foreach ($extraActive as $r) {
         if ($isActiveNav($r)) $active = true;
@@ -1024,6 +1220,9 @@ function jhd_render_drawer_nav_item(array $section, callable $isActiveNav): stri
     $icon = (string)($section['icon'] ?? 'bi-dot');
     $children = $section['children'] ?? jhd_section_children($section);
     $active = $isActiveNav($route) ? ' active' : '';
+    foreach ((array)($section['extra_active'] ?? []) as $extra) {
+        if ($isActiveNav($extra)) { $active = ' active'; break; }
+    }
     $href = sanitize(url($route));
     if (!$children) {
         return '<a href="' . $href . '" class="drawer-link' . $active . '"><i class="bi ' . sanitize($icon) . '"></i> ' . sanitize($label) . '</a>';
@@ -1050,7 +1249,12 @@ function renderCategoryChips(array $types, string $allUrl, string $allLabel = '�
     return $html . '</nav>';
 }
 
-function jhd_render_topic_tree_nav(array $nodes, string $mode = 'desktop'): string {
+/**
+ * درخت موضوع را برای دو مقصد می‌سازد: زیرمنوی دسکتاپ (عناصر <li>) و کشوی
+ * موبایل (لینک/جزئیات). `$depth` فقط برای کشو معنا دارد و فاصلهٔ تورفتگی را
+ * کنترل می‌کند (`.drawer-topic.depth-1…2`).
+ */
+function jhd_render_topic_tree_nav(array $nodes, string $mode = 'desktop', int $depth = 0): string {
     $html = '';
     foreach ($nodes as $node) {
         $children = $node['children'] ?? [];
@@ -1060,7 +1264,7 @@ function jhd_render_topic_tree_nav(array $nodes, string $mode = 'desktop'): stri
             if ($mode === 'drawer') {
                 $html .= '<details class="jhd-acc"><summary>' . $name . '</summary><div class="jhd-acc-body">';
                 $html .= '<a class="drawer-link" href="' . $href . '">نمای کلی «' . $name . '»</a>';
-                $html .= jhd_render_topic_tree_nav($children, 'drawer');
+                $html .= jhd_render_topic_tree_nav($children, 'drawer', $depth + 1);
                 $html .= '</div></details>';
             } else {
                 $html .= '<li class="jhd-has-sub"><a href="' . $href . '">' . $name . '</a><ul class="jhd-subnav jhd-subnav-nested">';
@@ -1071,7 +1275,7 @@ function jhd_render_topic_tree_nav(array $nodes, string $mode = 'desktop'): stri
             }
         } else {
             $html .= $mode === 'drawer'
-                ? '<a class="drawer-link drawer-topic depth-0" href="' . $href . '">' . $name . '</a>'
+                ? '<a class="drawer-link drawer-topic depth-' . $depth . '" href="' . $href . '">' . $name . '</a>'
                 : '<li><a href="' . $href . '">' . $name . '</a></li>';
         }
     }
@@ -1138,12 +1342,4 @@ function jhd_listing_toolbar(array $opts): string {
     if ($chips !== '') $html .= '<nav class="jhd-cat-strip mb-0" aria-label="فیلترها">' . $chips . '</nav>';
     if ($extra !== '') $html .= $extra;
     return $html . '</div>';
-}
-
-/** کارت آمار کوچک (داشبوردها). */
-function jhd_stat_card(string $icon, string $value, string $label, string $url): string {
-    return '<a class="jhd-stat" href="' . sanitize($url) . '">'
-        . '<i class="bi ' . sanitize($icon) . '" aria-hidden="true"></i>'
-        . '<span><strong>' . sanitize($value) . '</strong><span>' . sanitize($label) . '</span></span>'
-        . '</a>';
 }

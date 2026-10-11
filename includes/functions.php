@@ -1732,21 +1732,25 @@ function clearSettingCache(): void {
  * در MySQL و PostgreSQL هر دو قابل مدیریت باشد.
  */
 function jhd_homepage_settings(): array {
+    /*
+     * صفحهٔ اصلی روی پنج «هاب» بسته شده است: دروس، کتابخانه، نوشتارها، رسانه و
+     * اخبار/شاخص. فهرست‌های موضوعیِ پراکندهٔ پیشین (گزارش‌ها، رویدادها،
+     * پرسش‌وپاسخ، سخنرانی‌ها و …) از صفحهٔ اول حذف شدند؛ محتوایشان در همان
+     * آرشیوهای مستقل باقی است و از ناوبری و فوتر قابل دسترسی است.
+     *
+     * کلیدهای قدیمی `homepage_config` در دیتابیسِ نصب‌های موجود مانده‌اند؛
+     * JHD_HOME_LEGACY_KEYS آن‌ها را به ساختار تازه نگاشت می‌کند تا پس از این
+     * بازچینی، تنظیمات هیچ مدیری بی‌صدا خراب نشود.
+     */
     $defaults = [
         'sections' => [
-            'hero' => true,
-            'editor_picks' => true,
-            'latest' => true,
-            'news' => true,
-            'articles' => true,
-            'reports' => true,
-            'research' => true,
-            'topics' => true,
-            'events' => true,
-            'books' => true,
+            'hero'    => true,
+            'feature' => true,
             'lessons' => true,
-            'speeches' => true,
-            'qa' => true,
+            'books'   => true,
+            'writing' => true,
+            'media'   => true,
+            'topics'  => true,
         ],
         'hero_post_id' => 0,
     ];
@@ -1755,13 +1759,90 @@ function jhd_homepage_settings(): array {
     $cfg = json_decode($raw, true);
     if (!is_array($cfg)) return $defaults;
 
+    $stored = is_array($cfg['sections'] ?? null) ? $cfg['sections'] : [];
+    $legacy = jhd_homepage_legacy_keys();
     foreach ($defaults['sections'] as $key => $enabled) {
-        if (array_key_exists($key, $cfg['sections'] ?? [])) {
-            $defaults['sections'][$key] = (bool)$cfg['sections'][$key];
+        if (array_key_exists($key, $stored)) {
+            $defaults['sections'][$key] = (bool)$stored[$key];
+            continue;
         }
+        // سازگاری عقب‌رو: اگر فقط کلید قدیمی هست، با OR معنایشان نگاشت می‌شود
+        $mapped = false;
+        $anyLegacy = false;
+        foreach ($legacy[$key] as $legacyKey) {
+            if (!array_key_exists($legacyKey, $stored)) continue;
+            $anyLegacy = true;
+            $mapped = $mapped || !empty($stored[$legacyKey]);
+        }
+        if ($anyLegacy) $defaults['sections'][$key] = $mapped;
     }
     $defaults['hero_post_id'] = max(0, (int)($cfg['hero_post_id'] ?? 0));
     return $defaults;
+}
+
+/** نگاشت کلیدهای قدیمی چیدمان صفحهٔ اصلی به پنج هاب تازه. */
+function jhd_homepage_legacy_keys(): array {
+    return [
+        'hero'    => ['hero'],
+        'feature' => ['editor_picks', 'latest', 'news', 'events'],
+        'lessons' => ['lessons'],
+        'books'   => ['books'],
+        'writing' => ['articles', 'research', 'reports', 'qa', 'speeches'],
+        'media'   => ['media'],
+        'topics'  => ['topics'],
+    ];
+}
+
+/**
+ * دوره‌های فعال درسی با شمار درس‌های منتشرشده — ستون فقرات هاب «دروس».
+ * یک کوئری، بدون N+1؛ در دسترس‌نبودن دیتابیس فهرست خالی می‌دهد نه خطا.
+ */
+function jhd_home_lesson_collections(int $limit = 4): array {
+    if (!jhd_db_ready()) return [];
+    $limit = max(1, min(12, $limit));
+    try {
+        $stmt = getDB()->prepare(
+            "SELECT c.id, c.title, c.slug, c.description, c.cover_image, c.is_featured,
+                    COUNT(l.id) AS lesson_count
+             FROM lesson_collections c
+             LEFT JOIN lessons l ON l.collection_id = c.id AND l.status = 'published'
+             WHERE c.is_active = 1
+             GROUP BY c.id, c.title, c.slug, c.description, c.cover_image, c.is_featured
+             ORDER BY c.is_featured DESC, c.sort_order ASC, lesson_count DESC, c.id DESC
+             LIMIT $limit"
+        );
+        $stmt->execute();
+        return $stmt->fetchAll();
+    } catch (Throwable) {
+        return [];
+    }
+}
+
+/**
+ * تازه‌ترین رسانهٔ منتشرشده (ویدیو یا صوت) برای هاب رسانه.
+ * فقط فایل‌های متصل به مطلب منتشرشده؛ پیوند به صفحهٔ خود رسانه می‌رود تا
+ * پخش‌کننده و اشتراک‌گذاری همان چیزی باشد که در آرشیو دیده می‌شود.
+ */
+function jhd_home_media(string $kind, int $limit = 2): array {
+    $kind = $kind === 'audio' ? 'audio' : 'video';
+    $limit = max(1, min(8, $limit));
+    if (!jhd_db_ready()) return [];
+    try {
+        $stmt = getDB()->prepare(
+            "SELECT m.id, m.kind, m.file_path, COALESCE(NULLIF(m.title, ''), p.title) AS title,
+                    p.slug AS post_slug, p.post_type AS post_type, p.featured_image AS thumbnail,
+                    p.speaker, COALESCE(p.published_at, m.created_at) AS published_at
+             FROM media_files m
+             JOIN posts p ON p.id = m.ref_id AND m.ref_type = 'post'
+             WHERE m.kind = ? AND p.status = 'published'
+             ORDER BY m.created_at DESC, m.id DESC
+             LIMIT $limit"
+        );
+        $stmt->execute([$kind]);
+        return $stmt->fetchAll();
+    } catch (Throwable) {
+        return [];
+    }
 }
 
 /**

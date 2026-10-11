@@ -118,6 +118,7 @@ $siteLogo   = SITE_LOGO_PATH;
 $currentPath = current_path();
 $isLoggedIn = $isAdminLoggedIn; // backward compatible for existing templates
 
+
 /*
  * Title.
  *
@@ -200,6 +201,20 @@ $isActiveNav = function (string $route) use ($currentPath): bool {
     if ($route === '/') return $currentPath === '/' || $currentPath === '';
     return str_starts_with($currentPath, '/' . trim($route, '/'));
 };
+
+/*
+ * هر سه ناوبری (نوار دسکتاپ، کشوی موبایل، ستون پیوندهای فوتر) از یک registry
+ * می‌آیند: jhd_nav_sections(). گروه «بیشتر» هم‌زمان با یک هاب روشن نمی‌شود،
+ * چون مسیرهای `/topic/…` (مفرد) در جدول بالا با `…/topics` جور نمی‌شوند و
+ * صفحهٔ موضوع بی‌نشانک می‌ماند.
+ */
+$navSections = jhd_nav_sections();
+$navMoreActive = $isActiveNav('topic');
+foreach ($navSections['more'] as $navSection) {
+    $navRoute = (string)($navSection['route'] ?? '');
+    if ($navRoute !== '' && $isActiveNav($navRoute)) { $navMoreActive = true; break; }
+}
+unset($navRoute);
 ?>
 <!doctype html>
 <html lang="fa" dir="rtl">
@@ -385,24 +400,28 @@ if (!$noindexSeo) {
         </div>
     </div>
 
-    <!-- ناوبری اصلی: یک ردیف، از عرض متوسط به بالا -->
+    <!--
+        ناوبری اصلی: «خانه» + پنج هاب، و یک گروه «بیشتر».
+        فهرست از jhd_nav_sections() می‌آید؛ همین جدول کشوی موبایل و ستون
+        پیوندهای فوتر را هم تغذیه می‌کند، پس سه ناوبری هرگز از هم جدا نمی‌شوند.
+    -->
     <nav class="jhd-navbar-desktop d-none d-lg-block" aria-label="ناوبری اصلی">
         <div class="container">
             <ul class="jhd-nav-list mb-0">
                 <li><a href="<?= url() ?>" class="jhd-nav-link <?= $isActiveNav('/') ? 'active' : '' ?>" <?= $isActiveNav('/') ? 'aria-current="page"' : '' ?>>خانه</a></li>
-                <?= jhd_render_desktop_nav_item(['route'=>'news','label'=>'اخبار','types'=>['news']], $isActiveNav) ?>
-                <?= jhd_render_desktop_nav_item(['route'=>'articles','label'=>'مقالات و پژوهش','types'=>['article','research']], $isActiveNav, ['article','research']) ?>
-                <?= jhd_render_desktop_nav_item(['route'=>'books','label'=>'کتابخانه','types'=>[]], $isActiveNav, ['book']) ?>
-                <?= jhd_render_desktop_nav_item(['route'=>'lessons','label'=>'دروس','types'=>[]], $isActiveNav, ['lesson']) ?>
-                <?= jhd_render_desktop_nav_item(['route'=>'media','label'=>'رسانه','types'=>[]], $isActiveNav, ['videos','audios']) ?>
-                <li class="jhd-has-sub">
-                    <a href="<?= url('topics') ?>" class="jhd-nav-link <?= $isActiveNav('topics') || $isActiveNav('topic') ? 'active' : '' ?>" <?= ($isActiveNav('topics') || $isActiveNav('topic')) ? 'aria-current="page"' : '' ?> aria-haspopup="true">موضوعات</a>
-                    <?php if ($navTopicTree): ?>
-                    <ul class="jhd-subnav" role="menu">
+                <?php foreach ($navSections['primary'] as $navSection): ?>
+                <?= jhd_render_desktop_nav_item($navSection, $isActiveNav) ?>
+                <?php endforeach; ?>
+                <li class="jhd-has-sub jhd-nav-more">
+                    <a href="<?= url('topics') ?>" class="jhd-nav-link <?= $navMoreActive ? 'active' : '' ?>" aria-haspopup="true"<?= $navMoreActive ? ' aria-current="page"' : '' ?>>بیشتر</a>
+                    <ul class="jhd-subnav jhd-subnav--align-end" role="menu">
+                        <?php if ($navTopicTree): ?>
                         <?= jhd_render_topic_tree_nav($navTopicTree, 'desktop') ?>
-                        <li class="jhd-subnav-all"><a href="<?= url('topics') ?>">اطلس کامل موضوعات</a></li>
+                        <?php endif; ?>
+                        <?php foreach ($navSections['more'] as $navSection): ?>
+                        <li><a href="<?= sanitize(url((string)$navSection['route'])) ?>"><?= sanitize((string)$navSection['label']) ?></a></li>
+                        <?php endforeach; ?>
                     </ul>
-                    <?php endif; ?>
                 </li>
             </ul>
         </div>
@@ -429,26 +448,32 @@ if (!$noindexSeo) {
     </div>
 
     <div class="jhd-drawer-body">
-        <div class="drawer-section">ناوبری اصلی</div>
+        <div class="drawer-section">هاب‌های اصلی</div>
         <a href="<?= url() ?>" class="drawer-link <?= $isActiveNav('/') ? 'active' : '' ?>"><i class="bi bi-house"></i> خانه</a>
-        <?= jhd_render_drawer_nav_item(['route'=>'news','label'=>'اخبار','icon'=>'bi-newspaper','types'=>['news']], $isActiveNav) ?>
-        <?= jhd_render_drawer_nav_item(['route'=>'articles','label'=>'مقالات و پژوهش','icon'=>'bi-file-text','types'=>['article','research']], $isActiveNav) ?>
-        <?= jhd_render_drawer_nav_item(['route'=>'books','label'=>'کتابخانه','icon'=>'bi-book','types'=>[]], $isActiveNav) ?>
-        <?= jhd_render_drawer_nav_item(['route'=>'lessons','label'=>'دروس','icon'=>'bi-mortarboard','types'=>[]], $isActiveNav) ?>
-        <?= jhd_render_drawer_nav_item(['route'=>'media','label'=>'رسانه','icon'=>'bi-play-circle','types'=>[]], $isActiveNav) ?>
+        <?php foreach ($navSections['primary'] as $navSection): ?>
+        <?= jhd_render_drawer_nav_item($navSection, $isActiveNav) ?>
+        <?php endforeach; ?>
 
         <div class="drawer-section">موضوعات</div>
         <details class="jhd-acc" <?= ($isActiveNav('topics') || $isActiveNav('topic')) ? 'open' : '' ?>>
-            <summary><i class="bi bi-diagram-3"></i> موضوعات</summary>
+            <summary><i class="bi bi-diagram-3"></i> اطلس موضوعات</summary>
             <div class="jhd-acc-body">
-                <a href="<?= url('topics') ?>" class="drawer-link drawer-all"><i class="bi bi-grid-3x3-gap"></i> اطلس کامل موضوعات</a>
+                <a href="<?= url('topics') ?>" class="drawer-link drawer-all"><i class="bi bi-grid-3x3-gap"></i> همهٔ موضوعات</a>
                 <?= jhd_render_topic_tree_nav($navTopicTree, 'drawer') ?>
             </div>
         </details>
 
-        <div class="drawer-section">اطلاعات و تماس</div>
-        <a href="<?= url('about') ?>" class="drawer-link"><i class="bi bi-info-circle"></i> درباره جامعه‌الهدی</a>
-        <a href="<?= url('contact') ?>" class="drawer-link"><i class="bi bi-envelope"></i> ارتباط با ما</a>
+        <div class="drawer-section">بخش‌های بیشتر</div>
+        <details class="jhd-acc"<?= $navMoreActive ? ' open' : '' ?>>
+            <summary><i class="bi bi-grid"></i> همهٔ بخش‌ها</summary>
+            <div class="jhd-acc-body">
+                <?php foreach ($navSections['more'] as $navSection): ?>
+                <a href="<?= sanitize(url((string)$navSection['route'])) ?>" class="drawer-link">
+                    <i class="bi <?= sanitize((string)$navSection['icon']) ?>"></i> <?= sanitize((string)$navSection['label']) ?>
+                </a>
+                <?php endforeach; ?>
+            </div>
+        </details>
 
         <div class="drawer-section">حساب کاربری</div>
         <?php if ($isAdminLoggedIn): ?>
