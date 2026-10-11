@@ -65,7 +65,6 @@ $breadcrumbs = [
 $breadcrumbsJsonLd = breadcrumbsJsonLd($breadcrumbs);
 $bookJsonLd = bookJsonLd($book);
 
-$topics = getTopicsForBook((int)$book['id']);
 $attachments = getMediaFor('book', (int)$book['id'], 'document');
 $related = getRelatedBooks((int)$book['id'], 6);
 require __DIR__.'/../includes/header.php';
@@ -148,17 +147,6 @@ $bookDownloadWordUrl = $bookDetailUrl . (str_contains($bookDetailUrl, '?') ? '&'
     </summary>
     <div class="jhd-book-toc-content"><?= sanitize($book['toc']) ?></div>
   </details>
-  <?php endif; ?>
-
-  <?php if ($topics): ?>
-  <section class="jhd-book-topics jhd-book-section" aria-labelledby="book-topics-title">
-    <h2 id="book-topics-title" class="jhd-book-section-title"><i class="bi bi-diagram-3" aria-hidden="true"></i>موضوعات مرتبط</h2>
-    <div class="jhd-book-topic-list">
-      <?php foreach ($topics as $tp): ?>
-      <a href="<?= sanitize(topicUrl($tp)) ?>" class="jhd-book-topic"><?= sanitize($tp['name']) ?></a>
-      <?php endforeach; ?>
-    </div>
-  </section>
   <?php endif; ?>
 
   <?php if ($attachments): ?>
