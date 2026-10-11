@@ -423,3 +423,31 @@ CREATE INDEX books_slug_idx ON books (slug);
 CREATE INDEX lessons_slug_idx ON lessons (slug);
 CREATE INDEX post_topics_post_idx ON post_topics (post_id, topic_id);
 CREATE INDEX stored_files_url_idx ON stored_files (url);
+
+-- Mobile API: access tokens and content likes (additive; nothing is deleted).
+-- Bearer tokens for the Android app: only the sha256 hash is ever stored.
+CREATE TABLE IF NOT EXISTS api_tokens (
+  id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id      INT NOT NULL,
+  token_hash   VARCHAR(64) NOT NULL,
+  device_label VARCHAR(120) NOT NULL DEFAULT '',
+  created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_used_at DATETIME NULL,
+  expires_at   DATETIME NOT NULL,
+  revoked_at   DATETIME NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY api_tokens_hash (token_hash),
+  KEY api_tokens_user (user_id),
+  KEY api_tokens_expiry (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Content likes with a uniqueness constraint: one row per (user, content).
+-- Counts always come from COUNT(*) and cannot be forged by clients.
+CREATE TABLE IF NOT EXISTS content_likes (
+  user_id    INT NOT NULL,
+  ref_type   VARCHAR(20) NOT NULL,
+  ref_id     INT NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, ref_type, ref_id),
+  KEY content_likes_ref (ref_type, ref_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

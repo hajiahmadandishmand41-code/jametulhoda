@@ -1,0 +1,84 @@
+name: Mobile API tests
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-api-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mobile-api:
+    name: Lint and mobile API contract tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: curl, mbstring, dom, fileinfo, pdo_sqlite, sqlite3, zip, gd
+          coverage: none
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: PHP syntax check (all files)
+        run: node tools/lint-php.mjs
+
+      - name: Build the throwaway SQLite database
+        env:
+          APP_ENV: development
+          DB_DRIVER: sqlite
+          SQLITE_PATH: /tmp/jametulhoda-mobile.sqlite
+          SESSION_DRIVER: files
+          UPLOAD_STORAGE: local
+        run: |
+          rm -f /tmp/jametulhoda-mobile.sqlite
+          php bin/dev-db.php
+          # Seed media URLs must resolve so download/pipeline checks are real.
+          mkdir -p uploads/images uploads/audios uploads/videos uploads/documents
+          cp tests/fixtures/image.png uploads/images/seed-cover.png
+          cp tests/fixtures/audio.mp3 uploads/audios/seed-audio.mp3
+          cp tests/fixtures/video.mp4 uploads/videos/seed-video.mp4
+          cp tests/fixtures/image.png uploads/documents/seed-doc.pdf
+
+      - name: Serve the site
+        env:
+          APP_ENV: development
+          DB_DRIVER: sqlite
+          SQLITE_PATH: /tmp/jametulhoda-mobile.sqlite
+          SESSION_DRIVER: files
+          UPLOAD_STORAGE: local
+          SITE_URL: http://127.0.0.1:8080
+        run: |
+          php -S 127.0.0.1:8080 router.php > /tmp/php-server.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null http://127.0.0.1:8080/api/mobile/health; then echo "server up"; break; fi
+            sleep 1
+          done
+
+      - name: Run mobile API contract tests
+        env:
+          TEST_BASE_URL: http://127.0.0.1:8080
+        run: node tests/mobile-api.mjs
+
+      - name: Upload server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-api-log
+          path: /tmp/php-server.log
+          if-no-files-found: ignore
+          retention-days: 7

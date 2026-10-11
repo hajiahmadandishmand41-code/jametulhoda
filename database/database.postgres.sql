@@ -418,4 +418,32 @@ CREATE INDEX IF NOT EXISTS topics_slug_idx ON topics (slug);
 CREATE INDEX IF NOT EXISTS books_slug_idx ON books (slug);
 CREATE INDEX IF NOT EXISTS lessons_slug_idx ON lessons (slug);
 CREATE INDEX IF NOT EXISTS post_topics_post_idx ON post_topics (post_id, topic_id);
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- API موبایل: توکن‌های دسترسی و لایک محتوا (additive؛ هیچ داده‌ای حذف نمی‌شود)
+-- ═══════════════════════════════════════════════════════════════════════════
+-- توکن‌های Bearer اپ اندروید. خود توکن هرگز ذخیره نمی‌شود؛ فقط hash آن.
+CREATE TABLE IF NOT EXISTS api_tokens (
+  id           BIGSERIAL PRIMARY KEY,
+  user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash   VARCHAR(64) NOT NULL UNIQUE,
+  device_label VARCHAR(120) NOT NULL DEFAULT '',
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_used_at TIMESTAMPTZ NULL,
+  expires_at   TIMESTAMPTZ NOT NULL,
+  revoked_at   TIMESTAMPTZ NULL
+);
+CREATE INDEX IF NOT EXISTS api_tokens_user ON api_tokens(user_id);
+CREATE INDEX IF NOT EXISTS api_tokens_expiry ON api_tokens(expires_at);
+
+-- لایک محتوا با قید یکتایی: هر کاربر هر محتوا را فقط یک‌بار می‌پسندد؛
+-- شمارنده همیشه از COUNT(*) می‌آید و قابل جعل نیست.
+CREATE TABLE IF NOT EXISTS content_likes (
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  ref_type   VARCHAR(20) NOT NULL,
+  ref_id     INTEGER NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, ref_type, ref_id)
+);
+CREATE INDEX IF NOT EXISTS content_likes_ref ON content_likes(ref_type, ref_id);
 COMMIT;
