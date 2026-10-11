@@ -24,30 +24,19 @@ try {
   assert.equal(await page.locator('.jhd-home-intro').isVisible(),true,'homepage introduction is visible');
   assert.equal(await page.locator('#home-brand-title').isVisible(),true,'homepage has a visible brand heading');
   assert.equal(await page.locator('.jhd-hero-media').count(),0,'homepage omits the school-courtyard hero image');
-  const categoryLinks=page.locator('.jhd-home-category');
-  assert.equal(await categoryLinks.count(),5,'homepage presents five concise category shortcuts');
-  const categoryRoutes=await categoryLinks.evaluateAll(links=>links.map(link=>{
-    const url=new URL(link.href);
-    const queryRoute=url.searchParams.get('p');
-    return url.pathname.replace(/\/+$/,'')+(queryRoute?'/'+queryRoute:'');
-  }));
-  for (const route of ['news','articles','books','lessons','media']) {
-    assert.ok(categoryRoutes.some(path=>path.endsWith('/'+route)),`homepage categories include ${route}`);
-  }
-  const homeCards=await page.locator('.jhd-home-card-grid .jhd-card').evaluateAll(cards=>cards.map(card=>{
-    const rect=card.getBoundingClientRect();
-    return {top:Math.round(rect.top),width:Math.round(rect.width),height:Math.round(rect.height)};
-  }));
-  assert.ok(homeCards.length>=3,'homepage presents several content cards');
-  const cardRows=Object.values(homeCards.reduce((rows,card)=>{
-    (rows[card.top] ||= []).push(card);
-    return rows;
-  },{}));
-  const firstCardRow=cardRows[0];
-  assert.ok(firstCardRow.length>=2,'homepage lays out multiple cards in a desktop row');
-  for (const row of cardRows.filter(cards=>cards.length>1)) {
-    assert.ok(row.every(card=>Math.abs(card.height-row[0].height)<=1),'cards in every row have a consistent height');
-  }
+  assert.equal(await page.locator('.jhd-home-category').count(),0,'homepage has no quick-access tiles');
+  assert.equal(await page.locator('.jhd-home-card-grid .jhd-card').count(),0,'homepage contains no content cards');
+  assert.equal(await page.locator('.jhd-home-topic-links').count(),0,'homepage has no topic chips');
+  assert.equal(await page.locator('.jhd-homepage .jhd-banner-section').count(),0,'homepage has no separate announcement banner');
+  const homeSections=await page.locator('.jhd-home-editorial-section').evaluateAll(sections=>sections.map(section=>({
+    heading:section.querySelector('h2')?.textContent?.trim()||'',
+    rows:section.querySelectorAll('.jhd-news-row').length,
+    hrefs:[...section.querySelectorAll('.jhd-news-row__title')].map(link=>link.getAttribute('href')||'')
+  })));
+  assert.ok(homeSections.length<=2,'homepage contains at most two editorial sections');
+  assert.ok(homeSections.every(section=>['اخبار مدرسه','مقالات و پژوهش‌ها'].includes(section.heading)),'homepage only presents news and articles');
+  assert.ok(homeSections.every(section=>section.rows<=5),'each homepage list is limited to five entries');
+  assert.ok(homeSections.every(section=>section.hrefs.every(href=>href.startsWith('/')||href.startsWith('http'))),'editorial list links are valid');
   assert.equal(await page.locator('.jhd-home-search').count(),0,'homepage avoids a duplicate search form');
   const headerSearch=page.locator('.jhd-search #header-search');
   assert.equal(await headerSearch.isVisible(),true,'shared header search is visible on desktop');
@@ -116,7 +105,11 @@ try {
   // Audit every requested public route in a real browser, not just the landing page.
   // Route smoke checks status/canonical metadata; this layer checks visible content,
   // responsive overflow and actual browser resource/runtime errors.
-  const publicRoutes=['news','articles','reports','events','books','lessons','research','media','videos','audios','topics','search','about','contact','qa','login'];
+  const retiredTopics=await page.goto(new URL('topics',base.endsWith('/')?base:base+'/').href,{waitUntil:'networkidle'});
+  assert.equal(retiredTopics?.status(),200,'topics directory safely redirects');
+  const redirectedTopicUrl=new URL(page.url());
+  assert.ok(redirectedTopicUrl.pathname.replace(/\/+$/,'').endsWith('/articles')||redirectedTopicUrl.searchParams.get('p')==='articles','topics directory redirects to articles');
+  const publicRoutes=['news','articles','reports','events','books','lessons','research','media','videos','audios','search','about','contact','qa','login'];
   const pageViewportAudit=[];
   for (const route of publicRoutes) {
     const response=await page.goto(new URL(route,base.endsWith('/')?base:base+'/').href,{waitUntil:'networkidle'});
