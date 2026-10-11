@@ -2,7 +2,7 @@
 /**
  * news.php — صفحه اخبار مدرسه علمیه جامعه‌الهدی
  */
-$pageTitle = 'اخبار';
+$pageTitle = 'اخبار مدرسه و اطلاعیه‌ها';
 $metaTitleOverride = 'اخبار جامعه‌الهدی | اخبار مدرسه علمیه و رویدادها';
 $pageDesc = 'تازه‌ترین اخبار، اطلاعیه‌ها، گزارش‌ها و رویدادهای مدرسه جامعه‌الهدی در حوزه آموزش، فرهنگ و علوم اسلامی.';
 require_once __DIR__ . '/../includes/header.php';
@@ -12,11 +12,11 @@ $page   = max(1, (int)($_GET['page'] ?? 1));
 $limit  = POSTS_PER_PAGE;
 $offset = ($page - 1) * $limit;
 
-$opts = ['type' => 'news', 'limit' => $limit, 'offset' => $offset];
+$opts = ['types' => ['news', 'announcement'], 'limit' => $limit, 'offset' => $offset];
 if ($search) $opts['search'] = $search;
 
 $posts = getPosts($opts);
-$total = countPosts(array_merge(['type' => 'news'], $search ? ['search' => $search] : []));
+$total = countPosts(array_merge(['types' => ['news', 'announcement']], $search ? ['search' => $search] : []));
 $pages = (int)ceil($total / $limit);
 jhd_validate_pagination($page, $total, $limit, 'اخبار', url('news'), 'اخبار');
 $noindexSeo = ($total === 0);
@@ -39,7 +39,7 @@ $noindexSeo = ($total === 0);
         <?= jhd_page_head([
     'eyebrow' => 'اطلاع‌رسانی و رویدادها',
     'icon' => 'bi-newspaper',
-    'title' => 'اخبار مدرسه',
+    'title' => 'اخبار مدرسه و اطلاعیه‌ها',
     'lead' => 'تازه‌ترین اخبار، اطلاعیه‌ها و رویدادهای جاری مدرسه جامعه‌الهدی',
 ]) ?>
 
@@ -56,7 +56,7 @@ $noindexSeo = ($total === 0);
             </div>
         </form>
 
-        <?= renderCategoryChips(['news'], url('news'), 'همه اخبار') ?>
+        <!-- اخبار و اطلاعیه‌ها در همین آرشیو ادغام شده‌اند. -->
         <?php if ($search): ?>
         <div class="alert alert-info mb-4">
             نتایج جستجو برای «<strong><?= sanitize($search) ?></strong>» — <?= number_format($total) ?> نتیجه یافت شد.
