@@ -90,11 +90,9 @@ if ($jhdPublicDbReady) {
     startPublicSession();
     $isAdminLoggedIn = isLoggedIn();
     $isMemberLoggedIn = isMemberLoggedIn();
-    $navTopicTree = getTopicTree();
 } else {
     $isAdminLoggedIn = false;
     $isMemberLoggedIn = false;
-    $navTopicTree = [];
 }
 
 /*
@@ -209,7 +207,7 @@ $isActiveNav = function (string $route) use ($currentPath): bool {
  * صفحهٔ موضوع بی‌نشانک می‌ماند.
  */
 $navSections = jhd_nav_sections();
-$navMoreActive = $isActiveNav('topic');
+$navMoreActive = false;
 foreach ($navSections['more'] as $navSection) {
     $navRoute = (string)($navSection['route'] ?? '');
     if ($navRoute !== '' && $isActiveNav($navRoute)) { $navMoreActive = true; break; }
@@ -411,11 +409,8 @@ if (!$noindexSeo) {
                 <?= jhd_render_desktop_nav_item($navSection, $isActiveNav) ?>
                 <?php endforeach; ?>
                 <li class="jhd-has-sub jhd-nav-more">
-                    <a href="<?= url('topics') ?>" class="jhd-nav-link <?= $navMoreActive ? 'active' : '' ?>" aria-haspopup="true"<?= $navMoreActive ? ' aria-current="page"' : '' ?>>بیشتر</a>
+                    <a href="<?= url('about') ?>" class="jhd-nav-link <?= $navMoreActive ? 'active' : '' ?>" aria-haspopup="true"<?= $navMoreActive ? ' aria-current="page"' : '' ?>>بیشتر</a>
                     <ul class="jhd-subnav jhd-subnav--align-end" role="menu">
-                        <?php if ($navTopicTree): ?>
-                        <?= jhd_render_topic_tree_nav($navTopicTree, 'desktop') ?>
-                        <?php endif; ?>
                         <?php foreach ($navSections['more'] as $navSection): ?>
                         <li><a href="<?= sanitize(url((string)$navSection['route'])) ?>"><?= sanitize((string)$navSection['label']) ?></a></li>
                         <?php endforeach; ?>
@@ -451,15 +446,6 @@ if (!$noindexSeo) {
         <?php foreach ($navSections['primary'] as $navSection): ?>
         <?= jhd_render_drawer_nav_item($navSection, $isActiveNav) ?>
         <?php endforeach; ?>
-
-        <div class="drawer-section">موضوعات</div>
-        <details class="jhd-acc" <?= ($isActiveNav('topics') || $isActiveNav('topic')) ? 'open' : '' ?>>
-            <summary><i class="bi bi-diagram-3"></i> اطلس موضوعات</summary>
-            <div class="jhd-acc-body">
-                <a href="<?= url('topics') ?>" class="drawer-link drawer-all"><i class="bi bi-grid-3x3-gap"></i> همهٔ موضوعات</a>
-                <?= jhd_render_topic_tree_nav($navTopicTree, 'drawer') ?>
-            </div>
-        </details>
 
         <div class="drawer-section">بخش‌های بیشتر</div>
         <details class="jhd-acc"<?= $navMoreActive ? ' open' : '' ?>>
