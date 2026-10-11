@@ -50,8 +50,12 @@ if (str_contains($path, '..') || str_contains($path, "\0") || str_contains($path
 // runtime bundle. Return the exact token directly for this one URL only.
 // This exact-match exception runs before the application route table and does
 // not alter any other PHP route.
-if ($path === '/google2b2831df6b773d4d.html') {
-    $verification = 'google-site-verification: google2b2831df6b773d4d.html';
+$googleVerificationFiles = [
+    '/google2b2831df6b773d4d.html',
+    '/google97f50af38e91f609.html',
+];
+if (in_array($path, $googleVerificationFiles, true)) {
+    $verification = 'google-site-verification: ' . ltrim($path, '/');
     http_response_code(200);
     header('Content-Type: text/plain; charset=utf-8');
     header('Cache-Control: public, max-age=3600');
