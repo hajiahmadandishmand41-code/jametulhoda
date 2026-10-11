@@ -9,7 +9,7 @@ $isHomePage = (($currentPage ?? '') === 'index.php')
 <?php
 /**
  * footer.php - فوتر عمومی سایت جامع جامعه‌الهدی
- * ساده و حرفه‌ای: برند + معرفی، لینک‌های اصلی، موضوعات، ارتباط با ما، کپی‌رایت.
+ * ساده و حرفه‌ای: برند + معرفی، پیوندهای اصلی، ارتباط با ما و کپی‌رایت.
  */
 $jhdPublicDbReady = array_key_exists('JHD_PUBLIC_DB_READY', $GLOBALS)
     ? (bool)$GLOBALS['JHD_PUBLIC_DB_READY']
@@ -23,7 +23,6 @@ $siteSlogan = SITE_SLOGAN;
 $siteLogo   = SITE_LOGO_PATH;
 
 if ($jhdPublicDbReady) {
-    $footerTopics  = getTopics(['limit' => 8]);
     $aboutShort    = getSetting('about_short', 'مدرسه علمیه جامعة‌الهدی یکی از مراکز علوم و معارف اسلامی در کابل، افغانستان است.');
     $socialTelegram = getSetting('social_telegram');
     $socialYoutube  = getSetting('social_youtube');
@@ -32,7 +31,6 @@ if ($jhdPublicDbReady) {
     $sitePhone     = getSetting('phone', SITE_PHONE);
     $siteEmail     = getSetting('email', SITE_EMAIL);
 } else {
-    $footerTopics   = [];
     $aboutShort     = 'مدرسه علمیه جامعة‌الهدی یکی از مراکز علوم و معارف اسلامی در کابل، افغانستان است.';
     $socialTelegram = '';
     $socialYoutube  = '';
@@ -59,7 +57,7 @@ $footerSections = array_merge(
         <div class="container">
             <div class="row g-4">
                 <!-- برند و معرفی -->
-                <div class="col-lg-4 col-md-6">
+                <div class="col-lg-5 col-md-6">
                     <div class="footer-brand">
                         <?php if ($siteLogo): ?><img src="<?= imgUrl($siteLogo) ?>" width="40" height="41" alt="نشان <?= sanitize($siteName) ?>"><?php endif; ?>
                         <h5><?= sanitize($siteName) ?></h5>
@@ -80,7 +78,7 @@ $footerSections = array_merge(
                     کشوی موبایل می‌سازند؛ اگر روزی هابی جابه‌جا شود، هر سه
                     ناوبری با هم جابه‌جا می‌شوند و پیوند یتیم نمی‌ماند.
                 -->
-                <div class="col-lg-3 col-md-6">
+                <div class="col-lg-4 col-md-6">
                     <h5 class="footer-title">پیوندهای اصلی</h5>
                     <ul class="footer-links">
                         <?php foreach ($footerSections as $footerSection): ?>
@@ -89,21 +87,6 @@ $footerSections = array_merge(
                         <li><a href="<?= sanitize(url('about')) ?>"><i class="bi bi-chevron-left" aria-hidden="true"></i>دربارهٔ مدرسه</a></li>
                         <li><a href="<?= sanitize(url('contact')) ?>"><i class="bi bi-chevron-left" aria-hidden="true"></i>تماس با ما</a></li>
                     </ul>
-                </div>
-
-                <!-- موضوعات -->
-                <div class="col-lg-2 col-md-6">
-                    <h5 class="footer-title">موضوعات</h5>
-                    <?php if ($footerTopics): ?>
-                    <ul class="footer-posts">
-                        <?php foreach ($footerTopics as $ft): ?>
-                        <li><a class="footer-post-title" href="<?= topicUrl($ft) ?>"><?= sanitize((string)$ft['name']) ?></a></li>
-                        <?php endforeach; ?>
-                        <li><a class="footer-post-title text-gold" href="<?= url('topics') ?>">اطلس کامل ←</a></li>
-                    </ul>
-                    <?php else: ?>
-                    <p class="footer-text">موضوعی منتشر نشده است.</p>
-                    <?php endif; ?>
                 </div>
 
                 <!-- ارتباط با ما -->

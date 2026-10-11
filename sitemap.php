@@ -58,7 +58,7 @@ $sitemapAllowed = static function (string $url) use ($origin, $sitemapDenyPrefix
         parse_str($queryString, $query);
         $route = $query['p'] ?? null;
         $publicQueryRoutes = [
-            'news', 'articles', 'reports', 'research', 'books', 'lessons', 'topics',
+            'news', 'articles', 'reports', 'research', 'books', 'lessons',
             'media', 'videos', 'audios', 'speeches', 'events', 'programs',
             'announcements', 'religious-activities', 'qa', 'about', 'contact',
             'article', 'report', 'event', 'announcement', 'program', 'religious', 'speech',
@@ -148,7 +148,6 @@ if ($db !== null) {
 
         $lessonCount = (int)$db->query("SELECT COUNT(*) FROM lessons WHERE status = 'published'")->fetchColumn();
         $bookCount = (int)$db->query("SELECT COUNT(*) FROM books WHERE status = 'published'")->fetchColumn();
-        $topicCount = (int)$db->query("SELECT COUNT(*) FROM topics WHERE is_active = 1 AND COALESCE(slug, '') <> ''")->fetchColumn();
         $mediaCounts = $db->query("
             SELECT m.kind, COUNT(DISTINCT m.id) AS total
             FROM media_files m
@@ -161,7 +160,6 @@ if ($db !== null) {
 
         $landingHasContent['lessons'] = $lessonCount > 0;
         $landingHasContent['books'] = $bookCount > 0;
-        $landingHasContent['topics'] = $topicCount > 0;
         $landingHasContent['media'] = false;
         $landingHasContent['videos'] = false;
         $landingHasContent['audios'] = false;
@@ -185,7 +183,6 @@ foreach ([
     'articles',
     'books',
     'lessons',
-    'topics',
     'media',
     'about',
     'contact',

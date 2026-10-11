@@ -29,7 +29,13 @@ const publicPaths=['/','/index.php',
  '/sitemap.xml','/sitemap.php','/robots.txt','/robots.php',
  '/assets/css/design-system.css','/assets/img/logo.png','/assets/images/logo.png','/favicon.ico',
  '/php/install','/php/install.php','/php/install/'];
-for(const path of publicPaths){const r=await api.get(path);check('GET '+path,r.status()===200||r.status()===302,String(r.status()));}
+const retiredTopics=await api.get('/topics',{maxRedirects:0});
+check('topics directory redirects permanently to articles',retiredTopics.status()===301&&String(retiredTopics.headers()['location']||'').includes('/articles'),String(retiredTopics.status())+' '+String(retiredTopics.headers()['location']||''));
+for(const path of publicPaths){const r=await api.get(path);check('GET '+path,r.status()===200||r.status()===302||r.status()===301,String(r.status()));}
+const sitemapResponse=await api.get('/sitemap.xml');
+const sitemapXml=await sitemapResponse.text();
+const sitemapLocs=[...sitemapXml.matchAll(/<loc>(.*?)<\/loc>/g)].map(match=>match[1]);
+check('topics directory omitted from sitemap',!sitemapLocs.some(loc=>{try{return new URL(loc).pathname.replace(/\/+$/,'')==='/topics';}catch{return false;}}));
 // Query parameters are scalar by contract; malformed bracket arrays must be a
 // clean 400 rather than warnings/TypeErrors in a page controller.
 const malformedQuery=await api.get('/index.php?p=topic&slug%5B%5D=unexpected');

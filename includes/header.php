@@ -90,11 +90,9 @@ if ($jhdPublicDbReady) {
     startPublicSession();
     $isAdminLoggedIn = isLoggedIn();
     $isMemberLoggedIn = isMemberLoggedIn();
-    $navTopicTree = getTopicTree();
 } else {
     $isAdminLoggedIn = false;
     $isMemberLoggedIn = false;
-    $navTopicTree = [];
 }
 
 /*
@@ -209,7 +207,7 @@ $isActiveNav = function (string $route) use ($currentPath): bool {
  * صفحهٔ موضوع بی‌نشانک می‌ماند.
  */
 $navSections = jhd_nav_sections();
-$navMoreActive = $isActiveNav('topic');
+$navMoreActive = false;
 foreach ($navSections['more'] as $navSection) {
     $navRoute = (string)($navSection['route'] ?? '');
     if ($navRoute !== '' && $isActiveNav($navRoute)) { $navMoreActive = true; break; }
@@ -376,12 +374,9 @@ if (!$noindexSeo) {
             <a class="jhd-icon-btn d-lg-none" href="<?= url('search') ?>" aria-label="جستجو"><i class="bi bi-search"></i></a>
             <button class="jhd-icon-btn" data-theme-toggle aria-label="تغییر پوسته روشن و تیره" aria-pressed="false"><i class="bi bi-moon"></i></button>
 
+            <?php if (!$isAdminLoggedIn): ?>
             <div class="jhd-account-cluster d-none d-md-flex">
-            <?php if ($isAdminLoggedIn): ?>
-            <a class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1" href="<?= adminDashboardUrl() ?>">
-                <i class="bi bi-speedometer2"></i><span>پنل مدیریت</span>
-            </a>
-            <?php elseif ($isMemberLoggedIn): ?>
+            <?php if ($isMemberLoggedIn): ?>
             <a class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1" href="<?= accountUrl() ?>">
                 <i class="bi bi-person-circle"></i><span>حساب من</span>
             </a>
@@ -394,7 +389,8 @@ if (!$noindexSeo) {
             </a>
             <?php endif; ?>
             </div>
-            <a class="jhd-icon-btn d-md-none" href="<?= $isAdminLoggedIn ? adminDashboardUrl() : ($isMemberLoggedIn ? accountUrl() : loginUrl()) ?>" aria-label="حساب کاربری"><i class="bi bi-person-circle"></i></a>
+            <a class="jhd-icon-btn d-md-none" href="<?= $isMemberLoggedIn ? accountUrl() : loginUrl() ?>" aria-label="حساب کاربری"><i class="bi bi-person-circle"></i></a>
+            <?php endif; ?>
 
             <button type="button" id="menuToggle" class="jhd-icon-btn d-lg-none" aria-label="باز کردن منو" aria-expanded="false" aria-controls="siteDrawer"><i class="bi bi-list"></i></button>
         </div>
@@ -413,11 +409,8 @@ if (!$noindexSeo) {
                 <?= jhd_render_desktop_nav_item($navSection, $isActiveNav) ?>
                 <?php endforeach; ?>
                 <li class="jhd-has-sub jhd-nav-more">
-                    <a href="<?= url('topics') ?>" class="jhd-nav-link <?= $navMoreActive ? 'active' : '' ?>" aria-haspopup="true"<?= $navMoreActive ? ' aria-current="page"' : '' ?>>بیشتر</a>
+                    <a href="<?= url('about') ?>" class="jhd-nav-link <?= $navMoreActive ? 'active' : '' ?>" aria-haspopup="true"<?= $navMoreActive ? ' aria-current="page"' : '' ?>>بیشتر</a>
                     <ul class="jhd-subnav jhd-subnav--align-end" role="menu">
-                        <?php if ($navTopicTree): ?>
-                        <?= jhd_render_topic_tree_nav($navTopicTree, 'desktop') ?>
-                        <?php endif; ?>
                         <?php foreach ($navSections['more'] as $navSection): ?>
                         <li><a href="<?= sanitize(url((string)$navSection['route'])) ?>"><?= sanitize((string)$navSection['label']) ?></a></li>
                         <?php endforeach; ?>
@@ -454,15 +447,6 @@ if (!$noindexSeo) {
         <?= jhd_render_drawer_nav_item($navSection, $isActiveNav) ?>
         <?php endforeach; ?>
 
-        <div class="drawer-section">موضوعات</div>
-        <details class="jhd-acc" <?= ($isActiveNav('topics') || $isActiveNav('topic')) ? 'open' : '' ?>>
-            <summary><i class="bi bi-diagram-3"></i> اطلس موضوعات</summary>
-            <div class="jhd-acc-body">
-                <a href="<?= url('topics') ?>" class="drawer-link drawer-all"><i class="bi bi-grid-3x3-gap"></i> همهٔ موضوعات</a>
-                <?= jhd_render_topic_tree_nav($navTopicTree, 'drawer') ?>
-            </div>
-        </details>
-
         <div class="drawer-section">بخش‌های بیشتر</div>
         <details class="jhd-acc"<?= $navMoreActive ? ' open' : '' ?>>
             <summary><i class="bi bi-grid"></i> همهٔ بخش‌ها</summary>
@@ -477,7 +461,7 @@ if (!$noindexSeo) {
 
         <div class="drawer-section">حساب کاربری</div>
         <?php if ($isAdminLoggedIn): ?>
-        <a href="<?= adminDashboardUrl() ?>" class="drawer-link"><i class="bi bi-speedometer2"></i> پنل مدیریت</a>
+        <!-- میان‌بر پنل مدیریت عمداً در ناوبری عمومی نمایش داده نمی‌شود. -->
         <a href="<?= adminProfileUrl() ?>" class="drawer-link"><i class="bi bi-person-gear"></i> پروفایل من</a>
         <a href="<?= adminLogoutUrl() ?>" class="drawer-link text-danger"><i class="bi bi-box-arrow-right"></i> خروج از حساب</a>
         <?php elseif ($isMemberLoggedIn): ?>
