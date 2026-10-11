@@ -1108,7 +1108,6 @@ function jhd_nav_sections(): array {
             ['route' => 'news',     'label' => 'اخبار',         'icon' => 'bi-newspaper',     'types' => ['news'],            'extra_active' => ['announcements', 'events', 'programs', 'religious-activities']],
         ],
         'more' => [
-            ['route' => 'topics',                'label' => 'اطلس موضوعات',          'icon' => 'bi-diagram-3',        'types' => []],
             ['route' => 'research',              'label' => 'پژوهش‌ها',               'icon' => 'bi-journal-richtext', 'types' => ['research']],
             ['route' => 'speeches',              'label' => 'سخنرانی‌ها',             'icon' => 'bi-mic',              'types' => ['speech']],
             ['route' => 'events',                'label' => 'رویدادها و برنامه‌ها',    'icon' => 'bi-calendar-event',   'types' => ['event', 'program']],
