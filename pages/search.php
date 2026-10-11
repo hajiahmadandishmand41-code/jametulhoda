@@ -12,7 +12,6 @@ $q = is_string($_GET['q'] ?? null) ? mb_substr(trim($_GET['q']), 0, 200) : '';
 $searchFilter = is_string($_GET['type'] ?? null) ? trim($_GET['type']) : 'all';
 $allowedSearchFilters = [
     'all' => 'همه محتواها',
-    'topic' => 'موضوعات',
     'article' => 'مقالات',
     'research' => 'پژوهش‌ها',
     'report' => 'گزارش‌ها',
@@ -39,29 +38,22 @@ if ($q === '') $searchSort = 'newest';
 
 $page = max(1, min(100000, (int)($_GET['page'] ?? 1)));
 $limit = 12;
-$topicOptions = getTopics(['active' => 1]);
-$topicById = [];
-foreach ($topicOptions as $topicOption) {
-    $topicById[(int)($topicOption['id'] ?? 0)] = $topicOption;
-}
-$topicParam = is_string($_GET['topic'] ?? null) ? trim($_GET['topic']) : '';
-$topicId = preg_match('/^[0-9]{1,10}$/D', $topicParam) === 1 ? (int)$topicParam : 0;
-if ($topicId < 1 || !isset($topicById[$topicId])) $topicId = 0;
-$activeTopic = $topicId > 0 ? $topicById[$topicId] : null;
-$hasActiveSearch = $q !== '' || $searchFilter !== 'all' || $topicId > 0;
+$hasActiveSearch = $q !== '' || $searchFilter !== 'all';
+
+
 
 $pageTitle = $q !== ''
     ? 'جستجو: ' . $q
-    : ($activeTopic ? 'مطالب موضوع ' . (string)$activeTopic['name'] : ($searchFilter !== 'all' ? 'مرور ' . $allowedSearchFilters[$searchFilter] : 'جستجو در آرشیو محتوا'));
+    : ($searchFilter !== 'all' ? 'مرور ' . $allowedSearchFilters[$searchFilter] : 'جستجو در آرشیو محتوا');
 $pageDesc = $q !== ''
     ? 'نتایج جستجو برای «' . $q . '» در محتوای منتشرشدهٔ مدرسه جامعه‌الهدی.'
-    : 'جستجو و مرور محتوای منتشرشدهٔ مدرسه جامعه‌الهدی بر پایهٔ نوع محتوا و موضوع.';
+    : 'جستجو و مرور محتوای منتشرشدهٔ مدرسه جامعه‌الهدی بر پایهٔ عبارت جستجو و نوع محتوا.';
 
 $results = [];
 $total = 0;
 if ($hasActiveSearch) {
     $offset = ($page - 1) * $limit;
-    $data = searchAll($q, $limit, $offset, $searchFilter, $topicId, $searchSort);
+    $data = searchAll($q, $limit, $offset, $searchFilter, 0, $searchSort);
     $results = $data['results'];
     $total = $data['total'];
 }
@@ -99,7 +91,7 @@ require_once __DIR__ . '/../includes/header.php';
         <span>جستجو در آرشیو محتوایی</span>
       </h1>
       <div class="section-divider" aria-hidden="true"></div>
-      <p class="text-muted mt-2 mb-0">در محتوای منتشرشده جستجو کنید یا با فیلتر نوع و موضوع، آرشیو را مرور کنید.</p>
+      <p class="text-muted mt-2 mb-0">در محتوای منتشرشده جستجو کنید یا با فیلتر نوع محتوا، آرشیو را مرور کنید.</p>
     </header>
 
     <form method="get" action="<?= sanitize(formUrl('search')) ?>" class="jhd-search-panel jhd-search-form" role="search">
@@ -138,15 +130,6 @@ require_once __DIR__ . '/../includes/header.php';
           </select>
         </div>
         <div class="jhd-search-filter">
-          <label for="archive-search-topic">موضوع</label>
-          <select id="archive-search-topic" name="topic" class="form-select">
-            <option value="">همهٔ موضوعات</option>
-            <?php foreach ($topicOptions as $topicOption): ?>
-              <option value="<?= (int)$topicOption['id'] ?>" <?= $topicId === (int)$topicOption['id'] ? 'selected' : '' ?>><?= sanitize((string)$topicOption['name']) ?></option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-        <div class="jhd-search-filter">
           <label for="archive-search-sort">مرتب‌سازی</label>
           <select id="archive-search-sort" name="sort" class="form-select">
             <option value="relevance" <?= $searchSort === 'relevance' ? 'selected' : '' ?>>مرتبط‌ترین</option>
@@ -168,7 +151,6 @@ require_once __DIR__ . '/../includes/header.php';
             <p>
               <?php if ($q !== ''): ?>برای «<strong><?= sanitize($q) ?></strong>» در <?php endif; ?>
               <?= sanitize($allowedSearchFilters[$searchFilter]) ?>
-              <?php if ($activeTopic): ?> · موضوع «<?= sanitize((string)$activeTopic['name']) ?>»<?php endif; ?>
             </p>
           </div>
           <span class="jhd-search-result-count">
@@ -181,13 +163,12 @@ require_once __DIR__ . '/../includes/header.php';
           <div class="jhd-empty-state jhd-search-empty" role="status">
             <i class="bi bi-search" aria-hidden="true"></i>
             <h2><?= $q !== '' ? 'نتیجه‌ای برای این عبارت پیدا نشد' : 'محتوایی با این فیلترها پیدا نشد' ?></h2>
-            <p><?= $q !== '' ? 'املای واژه را بررسی کنید، عبارت کوتاه‌تری بنویسید یا فیلترها را تغییر دهید.' : 'موضوع یا نوع محتوای دیگری انتخاب کنید یا همهٔ فیلترها را پاک کنید.' ?></p>
+            <p><?= $q !== '' ? 'املای واژه را بررسی کنید، عبارت کوتاه‌تری بنویسید یا فیلترها را تغییر دهید.' : 'نوع محتوای دیگری انتخاب کنید یا عبارت جستجو را تغییر دهید.' ?></p>
             <a href="<?= sanitize(url('search')) ?>" class="btn btn-outline-primary btn-sm">پاک‌کردن فیلترها</a>
           </div>
         <?php endif; ?>
 
         <?php if (!empty($results)): ?>
-          <?php jhd_preload_post_topics($results); ?>
           <?= jhd_grid_open('jhd-search-result-grid') ?>
             <?php foreach ($results as $p):
                 if (($p['target'] ?? '') === 'media') {
@@ -201,10 +182,6 @@ require_once __DIR__ . '/../includes/header.php';
                     $resultUrl = ($p['target'] ?? '') === 'lesson' ? lessonUrl($p) : postUrl($p);
                     $resultType = (string)$p['media_kind'];
                     $p['featured_image'] = '';
-                } elseif (($p['target'] ?? '') === 'topic') {
-                    $resultUrl = topicUrl($p);
-                    $resultType = 'topic';
-                    $p['featured_image'] = (string)($p['featured_image'] ?? '');
                 } elseif (($p['target'] ?? '') === 'book') {
                     $resultUrl = bookUrl($p);
                     $resultType = 'book';
@@ -229,29 +206,20 @@ require_once __DIR__ . '/../includes/header.php';
         <?php endif; ?>
 
         <?php if ($pages > 1): ?>
-          <?php $paginationUrl = url('search', ['q' => $q, 'type' => $searchFilter, 'topic' => $topicId, 'sort' => $searchSort, 'page' => '%d']); ?>
+          <?php $paginationUrl = url('search', ['q' => $q, 'type' => $searchFilter, 'sort' => $searchSort, 'page' => '%d']); ?>
           <div class="mt-5"><?= paginate($total, $limit, $page, $paginationUrl) ?></div>
         <?php endif; ?>
       </section>
     <?php else: ?>
       <aside class="jhd-search-discovery" aria-labelledby="search-discovery-title">
         <div class="jhd-search-discovery-copy">
-          <span class="jhd-search-discovery-icon"><i class="bi bi-compass" aria-hidden="true"></i></span>
+          <span class="jhd-search-discovery-icon"><i class="bi bi-journal-text" aria-hidden="true"></i></span>
           <div>
-            <h2 id="search-discovery-title">مرور بر پایهٔ موضوع</h2>
-            <p>موضوع‌های فعال را انتخاب کنید تا محتوای منتشرشدهٔ مرتبط را ببینید.</p>
+            <h2 id="search-discovery-title">جستجو در محتوای منتشرشده</h2>
+            <p>عنوان کتاب، نام نویسنده، بخشی از مقاله یا عبارت مرتبط با درس را وارد کنید. نتایج بر اساس نوع محتوا قابل محدودکردن‌اند.</p>
           </div>
         </div>
-        <?php if ($topicOptions): ?>
-          <div class="jhd-search-suggestions" aria-label="موضوع‌های فعال">
-            <?php foreach (array_slice($topicOptions, 0, 6) as $topicOption): ?>
-              <a class="jhd-search-suggestion" href="<?= sanitize(url('search', ['topic' => (int)$topicOption['id']])) ?>">
-                <i class="bi bi-arrow-up-left" aria-hidden="true"></i><?= sanitize((string)$topicOption['name']) ?>
-              </a>
-            <?php endforeach; ?>
-          </div>
-        <?php endif; ?>
-      </aside>
+      </aside>aside>
     <?php endif; ?>
   </div>
 </section>
