@@ -96,6 +96,7 @@ try {
   const bookResponse = await page.goto(new URL('book?slug=usul-aqaid',base.endsWith('/')?base:base+'/').href,{waitUntil:'networkidle'});
   assert.equal(bookResponse?.status(),200,'book detail route responds successfully');
   assert.equal(await page.locator('.jhd-book-detail').count(),1,'book detail uses the dedicated layout');
+  assert.equal(await page.locator('.jhd-book-detail main').count(),0,'book detail does not nest main landmarks');
   assert.equal(await page.locator('.jhd-book-cover-panel').count(),1,'book cover appears in a single panel');
   assert.equal(await page.locator('.jhd-book-reader-callout').count(),0,'duplicate reader callout is removed');
   assert.ok(await page.locator('.jhd-book-topics').count()<=1,'book topics are shown at most once');
