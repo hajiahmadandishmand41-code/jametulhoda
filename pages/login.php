@@ -90,7 +90,7 @@ require_once $jhdLoginRoot . '/includes/header.php';
             <div class="alert alert-danger" role="alert" aria-live="polite"><i class="bi bi-exclamation-triangle ms-2"></i><?= sanitize($error) ?></div>
             <?php endif; ?>
 
-            <form method="post" action="<?= $jhdLoginInAdminContext ? adminLoginUrl() : loginUrl() ?>" class="jhd-auth-form" autocomplete="on" novalidate>
+            <form method="post" action="<?= $jhdLoginInAdminContext ? adminLoginUrl() : loginUrl() ?>" class="jhd-auth-form" autocomplete="on">
                 <?= csrfField() ?>
                 <?php if ($requestedRedirect !== ''): ?>
                 <input type="hidden" name="redirect" value="<?= sanitize($requestedRedirect) ?>">
