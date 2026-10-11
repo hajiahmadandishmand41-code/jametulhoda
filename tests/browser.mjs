@@ -7,24 +7,46 @@ const browser=await chromium.launch({executablePath:process.env.BROWSER_EXECUTAB
 try {
   const page=await browser.newPage({viewport:{width:1440,height:1000}});
   const errors=[];
+  const missingUploads=new Set();
   page.on('pageerror',e=>errors.push(String(e)));
-  page.on('response',r=>{if(r.status()>=400) errors.push(r.status()+' '+r.url())});
+  page.on('response',r=>{
+    if(r.status()<400) return;
+    const path=new URL(r.url()).pathname;
+    // Editorial uploads are operator-provisioned and intentionally absent from
+    // a fresh test checkout; the route/link audit records these as skipped too.
+    if(path.startsWith('/uploads/')) { missingUploads.add(path); return; }
+    errors.push(r.status()+' '+r.url());
+  });
   await page.goto(base,{waitUntil:'networkidle'});
   assert.equal(await page.locator('html').getAttribute('data-theme'),'light','first visit defaults to light theme');
   await page.screenshot({path:'test-results/home-desktop.png',fullPage:true});
 
-  const homeHero=page.locator('.jhd-home-hero');
-  assert.equal(await homeHero.isVisible(),true,'homepage introduction is visible');
+  assert.equal(await page.locator('.jhd-home-intro').isVisible(),true,'homepage introduction is visible');
   assert.equal(await page.locator('#home-brand-title').isVisible(),true,'homepage has a visible brand heading');
-  const quickLinks=page.locator('.jhd-home-quick-links a');
-  assert.equal(await quickLinks.count(),8,'homepage links directly to all eight primary archives');
-  const quickRoutes=await quickLinks.evaluateAll(links=>links.map(link=>{
+  assert.equal(await page.locator('.jhd-hero-media').count(),0,'homepage omits the school-courtyard hero image');
+  const categoryLinks=page.locator('.jhd-home-category');
+  assert.equal(await categoryLinks.count(),5,'homepage presents five concise category shortcuts');
+  const categoryRoutes=await categoryLinks.evaluateAll(links=>links.map(link=>{
     const url=new URL(link.href);
     const queryRoute=url.searchParams.get('p');
     return url.pathname.replace(/\/+$/,'')+(queryRoute?'/'+queryRoute:'');
   }));
-  for (const route of ['news','articles','research','reports','topics','books','lessons','media']) {
-    assert.ok(quickRoutes.some(path=>path.endsWith('/'+route)),`homepage quick access includes ${route}`);
+  for (const route of ['news','articles','books','lessons','media']) {
+    assert.ok(categoryRoutes.some(path=>path.endsWith('/'+route)),`homepage categories include ${route}`);
+  }
+  const homeCards=await page.locator('.jhd-home-card-grid .jhd-card').evaluateAll(cards=>cards.map(card=>{
+    const rect=card.getBoundingClientRect();
+    return {top:Math.round(rect.top),width:Math.round(rect.width),height:Math.round(rect.height)};
+  }));
+  assert.ok(homeCards.length>=3,'homepage presents several content cards');
+  const cardRows=Object.values(homeCards.reduce((rows,card)=>{
+    (rows[card.top] ||= []).push(card);
+    return rows;
+  },{}));
+  const firstCardRow=cardRows[0];
+  assert.ok(firstCardRow.length>=2,'homepage lays out multiple cards in a desktop row');
+  for (const row of cardRows.filter(cards=>cards.length>1)) {
+    assert.ok(row.every(card=>Math.abs(card.height-row[0].height)<=1),'cards in every row have a consistent height');
   }
   assert.equal(await page.locator('.jhd-home-search').count(),0,'homepage avoids a duplicate search form');
   const headerSearch=page.locator('.jhd-search #header-search');
@@ -138,7 +160,9 @@ try {
   await page.locator('#menuToggle').click();
   assert.equal(await page.locator('#menuToggle').getAttribute('aria-expanded'),'true','mobile menu opens');
   assert.equal(await page.locator('#siteDrawer').getAttribute('aria-hidden'),'false','drawer is exposed to assistive technology');
+  await page.waitForFunction(()=>document.querySelector('#siteDrawer').contains(document.activeElement),null,{timeout:5000});
   await page.keyboard.press('Shift+Tab');
+  await page.waitForFunction(()=>document.querySelector('#siteDrawer').contains(document.activeElement),null,{timeout:5000});
   assert.equal(await page.evaluate(()=>document.querySelector('#siteDrawer').contains(document.activeElement)),true,'drawer contains keyboard focus');
   await page.keyboard.press('Escape');
   await page.locator('[data-theme-toggle]').click();
@@ -226,5 +250,6 @@ try {
     await page.screenshot({path:'test-results/admin-mobile.png',fullPage:true});
     console.log('PASS browser staff login, admin mobile navigation, media, theme');
   }
-  assert.deepEqual(errors,[],'browser errors / failed resources');
+  assert.deepEqual(errors,[],'browser errors / failed application resources');
+  if (missingUploads.size) console.log('INFO skipped unprovisioned uploads: '+[...missingUploads].join(', '));
 } finally { await browser.close(); }

@@ -652,7 +652,6 @@ function renderBookCard(array $book, array $opts = []): string {
 
 /** کارت درس — همان کارت استاندارد. */
 function renderLessonCard(array $lesson, array $opts = []): string {
-    $minimal = !empty($opts['minimal']);
     $lessonNo = (int)($lesson['lesson_number'] ?? 0);
     $collection = trim((string)($lesson['collection_title'] ?? $lesson['subject'] ?? ''));
     $meta = [];
@@ -679,9 +678,7 @@ function renderLessonCard(array $lesson, array $opts = []): string {
     ];
     return jhd_card($card, [
         'col'    => array_key_exists('col', $opts) ? (string)$opts['col'] : 'col-12 col-sm-6 col-lg-3',
-        'class'  => 'jhd-card--topic'
-            . ($minimal ? ' jhd-card--topic-home' : '')
-            . (!empty($opts['class']) ? ' ' . trim((string)$opts['class']) : ''),
+        'class'  => trim((string)($opts['class'] ?? '')),
         'eager'  => !empty($opts['eager']),
     ]);
 }

@@ -51,10 +51,16 @@ document.querySelectorAll('[data-theme-toggle]').forEach(button => {
         toggleBtn.setAttribute('aria-expanded', 'true');
         document.body.style.overflow = 'hidden';
 
-        // Focus close button or first link
-        const firstFocusable = drawer.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        // Focus a visible control in the drawer. Hidden desktop search fields
+        // can appear earlier in the DOM and otherwise leave focus behind on the toggle.
+        const visibleFocusable = [...drawer.querySelectorAll(
+            'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )].find(element => element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden');
+        const firstFocusable = closeBtn?.getClientRects().length ? closeBtn : visibleFocusable;
         if (firstFocusable) {
-            firstFocusable.focus();
+            window.setTimeout(() => {
+                if (drawer.classList.contains('open') && firstFocusable.isConnected) firstFocusable.focus();
+            }, 100);
         }
     }
 
