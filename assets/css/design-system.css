@@ -2934,17 +2934,213 @@ html[data-theme="dark"] .jhd-brand img, html[data-theme="dark"] .footer-brand im
 .post-content { line-height: 2.05; font-size: .95rem; color: var(--jhd-ink); }
 .post-content p { margin-bottom: 1rem; }
 
-/* کتاب — صفحهٔ detail */
-.jhd-book-cover-panel { position: sticky; top: 84px; }
-.jhd-book-cover-panel img { border: 1px solid var(--jhd-border); }
-.jhd-book-metadata { background: var(--jhd-paper); border: 1px solid var(--jhd-border); }
-.jhd-book-metadata > div + div { border-top: 1px dashed var(--jhd-border); }
-.jhd-book-metadata strong { color: var(--jhd-ink); }
-.jhd-book-copy { color: var(--jhd-ink); }
-.jhd-book-toc { background: var(--jhd-paper); border: 1px solid var(--jhd-border); }
-.jhd-book-toc-content { white-space: pre-wrap; line-height: 2; font-size: .88rem; color: var(--jhd-muted); }
-.jhd-book-topic { background: var(--jhd-green-soft); color: var(--jhd-green-dark); border: 1px solid var(--jhd-border); font-weight: 500; }
-.jhd-detail-title { font-size: clamp(1.35rem, 1.05rem + 1.4vw, 2rem); font-weight: 800; line-height: 1.55; color: var(--jhd-ink); margin: .3rem 0 .8rem; }
+/* کتاب — صفحهٔ جزئیات: قاب روشن، سلسله‌مراتب روشن و بدون عناصر تکراری */
+.jhd-book-detail { max-width: 1160px; }
+.jhd-book-detail > .row { align-items: start; }
+.jhd-book-sidebar, .jhd-book-main { min-width: 0; }
+.jhd-book-cover-panel {
+  display: grid;
+  gap: .9rem;
+  padding: .9rem;
+  border: 1px solid var(--jhd-border);
+  border-radius: var(--jhd-radius-lg);
+  background: var(--jhd-surface);
+  box-shadow: var(--jhd-shadow-1);
+}
+.jhd-book-cover-stage {
+  display: grid;
+  place-items: center;
+  width: min(100%, 320px);
+  aspect-ratio: 3 / 4;
+  justify-self: center;
+  overflow: hidden;
+  border: 1px solid var(--jhd-border);
+  border-radius: var(--jhd-radius);
+  background: var(--jhd-soft);
+}
+.jhd-book-detail-cover {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: transparent;
+}
+.jhd-book-cover-empty {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: .6rem;
+  width: 100%;
+  height: 100%;
+  padding: 1rem;
+  color: var(--jhd-muted);
+  text-align: center;
+}
+.jhd-book-cover-empty i { color: var(--jhd-green); font-size: 2.2rem; }
+.jhd-book-cover-empty span { font-size: var(--jhd-text-sm); }
+.jhd-book-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .55rem;
+}
+.jhd-book-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .25rem;
+  min-width: 0;
+  min-height: 42px;
+  white-space: normal;
+  text-align: center;
+}
+.jhd-book-actions > .btn:only-child,
+.jhd-book-actions > .btn:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.jhd-book-metadata {
+  display: grid;
+  gap: 0;
+  margin-top: .9rem;
+  padding: .85rem 1rem;
+  border: 1px solid var(--jhd-border);
+  border-radius: var(--jhd-radius-lg);
+  background: var(--jhd-surface);
+}
+.jhd-book-metadata__title {
+  margin: 0 0 .45rem;
+  font-size: var(--jhd-text-base);
+  font-weight: 800;
+}
+.jhd-book-meta-row {
+  display: grid;
+  grid-template-columns: minmax(5rem, .75fr) minmax(0, 1.25fr);
+  align-items: start;
+  gap: .6rem;
+  padding: .48rem 0;
+  border-top: 1px solid var(--jhd-border);
+  font-size: var(--jhd-text-sm);
+  line-height: 1.7;
+}
+.jhd-book-meta-row > span { color: var(--jhd-muted); }
+.jhd-book-meta-row > strong { min-width: 0; color: var(--jhd-ink); overflow-wrap: anywhere; text-align: start; }
+.jhd-book-heading {
+  margin-bottom: 1.35rem;
+  padding-bottom: 1.1rem;
+  border-bottom: 1px solid var(--jhd-border);
+}
+.jhd-detail-title {
+  margin: .3rem 0 .6rem;
+  color: var(--jhd-ink);
+  font-size: clamp(1.45rem, 1.15rem + 1.4vw, 2.15rem);
+  font-weight: 800;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.jhd-book-author {
+  display: flex;
+  align-items: flex-start;
+  gap: .4rem;
+  margin: 0;
+  color: var(--jhd-muted);
+  font-size: var(--jhd-text-sm);
+  line-height: 1.8;
+}
+.jhd-book-author i { flex: 0 0 auto; margin-top: .2rem; color: var(--jhd-green); }
+.jhd-book-section { margin-bottom: 1.45rem; min-width: 0; }
+.jhd-book-section-title {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin: 0 0 .65rem;
+  color: var(--jhd-ink);
+  font-size: var(--jhd-text-lg);
+  font-weight: 800;
+  line-height: 1.6;
+}
+.jhd-book-section-title i { color: var(--jhd-green); flex: 0 0 auto; }
+.jhd-book-copy {
+  color: var(--jhd-ink);
+  max-width: 76ch;
+  overflow-wrap: anywhere;
+}
+.jhd-book-toc {
+  padding: .95rem 1.05rem;
+  border: 1px solid var(--jhd-border);
+  border-radius: var(--jhd-radius-lg);
+  background: var(--jhd-paper);
+}
+.jhd-book-toc > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  cursor: pointer;
+  list-style: none;
+}
+.jhd-book-toc > summary::-webkit-details-marker { display: none; }
+.jhd-book-toc > summary .jhd-book-section-title { margin: 0; }
+.jhd-book-toc-chevron {
+  flex: 0 0 auto;
+  color: var(--jhd-muted);
+  transition: transform var(--jhd-dur) var(--jhd-ease);
+}
+.jhd-book-toc[open] > summary { padding-bottom: .7rem; margin-bottom: .6rem; border-bottom: 1px solid var(--jhd-border); }
+.jhd-book-toc[open] > summary .jhd-book-toc-chevron { transform: rotate(180deg); }
+.jhd-book-toc-content {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.95;
+  font-size: var(--jhd-text-sm);
+  color: var(--jhd-muted);
+}
+.jhd-book-topics { min-width: 0; }
+.jhd-book-topic-list { display: flex; flex-wrap: wrap; gap: .45rem; }
+.jhd-book-topic {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: .3rem .7rem;
+  border: 1px solid var(--jhd-border);
+  border-radius: var(--jhd-radius-pill);
+  background: var(--jhd-green-soft);
+  color: var(--jhd-green);
+  font-size: var(--jhd-text-sm);
+  font-weight: 650;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+.jhd-book-topic:hover { border-color: var(--jhd-green); color: var(--jhd-green); }
+.jhd-book-attachments { margin-block: 0 1.45rem; }
+.jhd-book-attachments .jhd-files { margin-block: .75rem 0; }
+.jhd-book-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .55rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--jhd-border);
+}
+.jhd-book-related { margin-top: 2.5rem; }
+.jhd-book-related > .jhd-book-section-title { margin-bottom: 1rem; }
+@media (min-width: 992px) {
+  .jhd-book-sidebar { order: 0; }
+  .jhd-book-main { order: 1; }
+  .jhd-book-cover-panel { position: sticky; top: 84px; }
+}
+@media (max-width: 991.98px) {
+  .jhd-book-detail { max-width: 760px; }
+  .jhd-book-main { order: 0; }
+  .jhd-book-sidebar { order: 1; }
+  .jhd-book-cover-panel { position: static; }
+  .jhd-book-cover-stage { width: min(100%, 290px); }
+}
+@media (max-width: 575.98px) {
+  .jhd-book-detail { padding-inline: 1rem; }
+  .jhd-book-cover-panel, .jhd-book-metadata { border-radius: var(--jhd-radius); }
+  .jhd-book-actions { grid-template-columns: minmax(0, 1fr); }
+  .jhd-book-actions > .btn:only-child,
+  .jhd-book-actions > .btn:last-child:nth-child(odd) { grid-column: auto; }
+  .jhd-book-meta-row { grid-template-columns: minmax(4.5rem, .7fr) minmax(0, 1.3fr); gap: .5rem; }
+  .jhd-book-related { margin-top: 1.8rem; }
+}
 
 /* رسانه — صفحهٔ detail */
 .jhd-media-detail { max-width: 62rem; margin-inline: auto; }

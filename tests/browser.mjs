@@ -92,6 +92,26 @@ try {
     assert.equal(menuVisible,width<992,`drawer toggle breakpoint at ${width}px`);
   }
 
+  // Book-detail layout: unique actions/topics, collapsible contents and responsive overflow.
+  const bookResponse = await page.goto(new URL('book?slug=usul-aqaid',base.endsWith('/')?base:base+'/').href,{waitUntil:'networkidle'});
+  assert.equal(bookResponse?.status(),200,'book detail route responds successfully');
+  assert.equal(await page.locator('.jhd-book-detail').count(),1,'book detail uses the dedicated layout');
+  assert.equal(await page.locator('.jhd-book-cover-panel').count(),1,'book cover appears in a single panel');
+  assert.equal(await page.locator('.jhd-book-reader-callout').count(),0,'duplicate reader callout is removed');
+  assert.ok(await page.locator('.jhd-book-topics').count()<=1,'book topics are shown at most once');
+  assert.ok(await page.locator('.jhd-book-actions').count()<=1,'book actions are grouped in one place');
+  const bookToc = page.locator('details.jhd-book-toc');
+  if (await bookToc.count()) {
+    assert.equal(await bookToc.evaluate(el=>el.open),false,'long book table of contents starts collapsed');
+    await bookToc.locator('summary').click();
+    assert.equal(await bookToc.evaluate(el=>el.open),true,'book table of contents can be expanded');
+  }
+  for (const width of [320,360,390,768,1024,1440]) {
+    await page.setViewportSize({width,height:900});
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'book detail has no horizontal overflow at '+width+'px');
+  }
+  await page.goto(base,{waitUntil:'networkidle'});
+
   // Audit every requested public route in a real browser, not just the landing page.
   // Route smoke checks status/canonical metadata; this layer checks visible content,
   // responsive overflow and actual browser resource/runtime errors.
