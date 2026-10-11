@@ -80,10 +80,25 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 $user = currentUser();
 $capabilities = jhd_role_permission_summary($user['role']);
 ?>
-<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <h1 class="h4 mb-0">پروفایل من</h1>
-    <span class="badge bg-secondary"><?= sanitize(jhd_role_label($user['role'])) ?></span>
-</div>
+<?php
+$profileDisplayName = trim((string)($user['full_name'] ?? '')) ?: trim((string)($user['username'] ?? '')) ?: 'مدیر';
+$profileInitial = mb_substr($profileDisplayName, 0, 1, 'UTF-8');
+?>
+<header class="admin-profile-hero">
+    <div class="admin-profile-identity">
+        <?php if (!empty($user['avatar'])): ?>
+        <img class="admin-profile-avatar" src="<?= sanitize(imgUrl((string)$user['avatar'])) ?>" alt="تصویر پروفایل <?= sanitize($profileDisplayName) ?>" width="76" height="76">
+        <?php else: ?>
+        <span class="admin-profile-avatar admin-profile-avatar--initial" aria-hidden="true"><?= sanitize($profileInitial) ?></span>
+        <?php endif; ?>
+        <div class="admin-profile-heading">
+            <span class="admin-profile-eyebrow">تنظیمات حساب</span>
+            <h1>پروفایل من</h1>
+            <p><?= sanitize($profileDisplayName) ?></p>
+        </div>
+    </div>
+    <span class="admin-profile-role"><i class="bi bi-shield-check" aria-hidden="true"></i><?= sanitize(jhd_role_label($user['role'])) ?></span>
+</header>
 
 <?php if ($forced): ?>
 <div class="alert alert-warning">
