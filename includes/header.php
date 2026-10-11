@@ -376,12 +376,9 @@ if (!$noindexSeo) {
             <a class="jhd-icon-btn d-lg-none" href="<?= url('search') ?>" aria-label="جستجو"><i class="bi bi-search"></i></a>
             <button class="jhd-icon-btn" data-theme-toggle aria-label="تغییر پوسته روشن و تیره" aria-pressed="false"><i class="bi bi-moon"></i></button>
 
+            <?php if (!$isAdminLoggedIn): ?>
             <div class="jhd-account-cluster d-none d-md-flex">
-            <?php if ($isAdminLoggedIn): ?>
-            <a class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1" href="<?= adminDashboardUrl() ?>">
-                <i class="bi bi-speedometer2"></i><span>پنل مدیریت</span>
-            </a>
-            <?php elseif ($isMemberLoggedIn): ?>
+            <?php if ($isMemberLoggedIn): ?>
             <a class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1" href="<?= accountUrl() ?>">
                 <i class="bi bi-person-circle"></i><span>حساب من</span>
             </a>
@@ -394,7 +391,8 @@ if (!$noindexSeo) {
             </a>
             <?php endif; ?>
             </div>
-            <a class="jhd-icon-btn d-md-none" href="<?= $isAdminLoggedIn ? adminDashboardUrl() : ($isMemberLoggedIn ? accountUrl() : loginUrl()) ?>" aria-label="حساب کاربری"><i class="bi bi-person-circle"></i></a>
+            <a class="jhd-icon-btn d-md-none" href="<?= $isMemberLoggedIn ? accountUrl() : loginUrl() ?>" aria-label="حساب کاربری"><i class="bi bi-person-circle"></i></a>
+            <?php endif; ?>
 
             <button type="button" id="menuToggle" class="jhd-icon-btn d-lg-none" aria-label="باز کردن منو" aria-expanded="false" aria-controls="siteDrawer"><i class="bi bi-list"></i></button>
         </div>
@@ -477,7 +475,7 @@ if (!$noindexSeo) {
 
         <div class="drawer-section">حساب کاربری</div>
         <?php if ($isAdminLoggedIn): ?>
-        <a href="<?= adminDashboardUrl() ?>" class="drawer-link"><i class="bi bi-speedometer2"></i> پنل مدیریت</a>
+        <!-- میان‌بر پنل مدیریت عمداً در ناوبری عمومی نمایش داده نمی‌شود. -->
         <a href="<?= adminProfileUrl() ?>" class="drawer-link"><i class="bi bi-person-gear"></i> پروفایل من</a>
         <a href="<?= adminLogoutUrl() ?>" class="drawer-link text-danger"><i class="bi bi-box-arrow-right"></i> خروج از حساب</a>
         <?php elseif ($isMemberLoggedIn): ?>
