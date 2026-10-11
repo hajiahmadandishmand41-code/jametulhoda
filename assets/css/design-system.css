@@ -4470,3 +4470,134 @@ html[data-theme="dark"] .jhd-home-intro {
   }
   .jhd-homepage--editorial .jhd-news-row__title { font-size: .87rem; }
 }
+
+
+/* ─── تایپوگرافی یکپارچهٔ عنوان‌ها در پوستهٔ عمومی ──────────────────────── */
+body.jhd-public-site main h1,
+body.jhd-public-site main .jhd-page-title,
+body.jhd-public-site main .jhd-article-title,
+body.jhd-public-site main .jhd-detail-title,
+body.jhd-public-site main .jhd-book-heading h1,
+body.jhd-public-site main .jhd-lesson-title,
+body.jhd-public-site main #home-brand-title {
+  font-family: var(--jhd-font-body);
+  font-weight: 800;
+  letter-spacing: -.025em;
+  line-height: 1.55;
+  text-wrap: balance;
+}
+body.jhd-public-site main h1,
+body.jhd-public-site main .jhd-page-title,
+body.jhd-public-site main .jhd-article-title,
+body.jhd-public-site main .jhd-detail-title,
+body.jhd-public-site main .jhd-book-heading h1,
+body.jhd-public-site main .jhd-lesson-title {
+  font-size: clamp(1.35rem, 1.12rem + .8vw, 1.85rem);
+  margin-block: 0 .8rem;
+}
+body.jhd-public-site main h2,
+body.jhd-public-site main .jhd-section-head h2,
+body.jhd-public-site main .jhd-book-section-title,
+body.jhd-public-site main .jhd-related-head h2 {
+  font-family: var(--jhd-font-body);
+  font-weight: 780;
+  letter-spacing: -.015em;
+  line-height: 1.6;
+}
+body.jhd-public-site main .jhd-section-head h2 { font-size: clamp(1.02rem, .95rem + .35vw, 1.22rem); }
+body.jhd-public-site main .jhd-prose {
+  line-height: 2.05;
+  overflow-wrap: anywhere;
+}
+body.jhd-public-site main .jhd-prose p { margin-block: 0 1.05em; }
+body.jhd-public-site main .jhd-prose p:last-child { margin-block-end: 0; }
+body.jhd-public-site main .jhd-prose h2,
+body.jhd-public-site main .jhd-prose h3,
+body.jhd-public-site main .jhd-prose h4 { margin-block: 1.45em .55em; }
+body.jhd-public-site main .jhd-prose ul,
+body.jhd-public-site main .jhd-prose ol { padding-inline-start: 1.35rem; margin-block: .6em 1em; }
+body.jhd-public-site main .jhd-prose li { margin-block: .25em; }
+
+/* احراز هویت: کارت‌های مرتب، فرم‌های خوانا و هدف‌های لمسی مناسب */
+.jhd-auth-page { min-height: min(76vh, 860px); align-content: center; }
+.jhd-auth-card,
+.jhd-login-card {
+  padding: clamp(1.35rem, 1rem + 1.3vw, 2rem);
+  border-radius: 20px;
+  box-shadow: 0 18px 50px rgba(20, 57, 39, .09);
+}
+.jhd-auth-card-wide { width: min(600px, 100%); }
+.jhd-login-head { margin-bottom: 1.4rem; }
+.jhd-login-logo,
+.jhd-auth-head img { width: 64px; height: 64px; margin-inline: auto; }
+.jhd-login-head h1,
+.jhd-auth-head h1,
+.jhd-auth-card h1 {
+  font-family: var(--jhd-font-body);
+  font-size: clamp(1.25rem, 1.1rem + .7vw, 1.55rem);
+  font-weight: 800;
+  line-height: 1.55;
+  letter-spacing: -.02em;
+  margin-block: .55rem .35rem;
+}
+.jhd-auth-lead { line-height: 1.9; }
+.jhd-auth-form { display: grid; gap: .48rem; }
+.jhd-auth-form label:not(.jhd-check) { font-weight: 700; margin-top: .25rem; }
+.jhd-auth-form .form-control,
+.jhd-auth-form .form-select {
+  min-height: 48px;
+  border-radius: 11px;
+  padding: .68rem .85rem;
+}
+.jhd-input-wrap .form-control { min-height: 50px; padding-inline-start: 2.9rem; }
+.jhd-input-action { min-width: 42px; min-height: 42px; }
+.jhd-auth-form .form-control:focus,
+.jhd-auth-form .form-select:focus {
+  border-color: var(--jhd-green);
+  box-shadow: 0 0 0 4px var(--jhd-green-soft);
+}
+.jhd-auth-form .jhd-button-block {
+  min-height: 49px;
+  border-radius: 12px;
+  font-size: .98rem;
+  font-weight: 800;
+  margin-top: .7rem;
+}
+.jhd-auth-links { flex-wrap: wrap; gap: .65rem 1rem; line-height: 1.8; }
+.jhd-login-row { gap: .8rem; align-items: center; flex-wrap: wrap; margin-block: .35rem; }
+.jhd-login-help { font-size: .78rem; }
+html[data-theme="dark"] .jhd-auth-card,
+html[data-theme="dark"] .jhd-login-card { box-shadow: 0 18px 50px rgba(0, 0, 0, .16); }
+
+/* پایین صفحه: پیوند شبکه‌های اجتماعی بزرگ‌تر و قابل تشخیص‌تر */
+.footer-social { align-items: center; flex-wrap: wrap; gap: .6rem; }
+.footer-social .social-link--button {
+  width: auto;
+  min-width: 118px;
+  min-height: 46px;
+  height: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .55rem;
+  padding: .6rem 1rem;
+  border-radius: 999px;
+  font-size: .92rem;
+  font-weight: 800;
+  text-decoration: none;
+  color: var(--jhd-footer-ink);
+  border-color: rgba(232, 239, 233, .38);
+  background: rgba(255,255,255,.055);
+}
+.footer-social .social-link--button i { font-size: 1.15rem; }
+.footer-social .social-link--button:hover {
+  color: #14231b;
+  background: var(--jhd-gold);
+  border-color: var(--jhd-gold);
+}
+@media (max-width: 575.98px) {
+  .jhd-auth-page { padding: 1rem .75rem 1.6rem; }
+  .jhd-auth-card,
+  .jhd-login-card { padding: 1.2rem 1rem; border-radius: 16px; }
+  .footer-social .social-link--button { min-width: 104px; flex: 1 1 7rem; }
+}
