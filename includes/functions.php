@@ -987,7 +987,7 @@ function persianDate(string $datetime): string {
     if (!$datetime || $datetime === '0000-00-00 00:00:00') return '—';
     $ts = strtotime($datetime);
     if (!$ts) return $datetime;
-    $monthNames = ['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'];
+    $monthNames = ['حمل','ثور','جوزا','سرطان','اسد','سنبله','میزان','عقرب','قوس','جدی','دلو','حوت'];
     $parts = explode('-', date('Y-m-d', $ts));
     $gy = (int)$parts[0] - 1600; $gm = (int)$parts[1]; $gd = (int)$parts[2] - 1;
     $leap = ($gy % 4 === 0 && $gy % 100 !== 0) || ($gy % 400 === 0);
@@ -1014,7 +1014,7 @@ function persianDateParts(string $datetime): ?array {
     if (!$datetime || $datetime === '0000-00-00 00:00:00') return null;
     $ts = strtotime($datetime);
     if (!$ts) return null;
-    $monthNames = ['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'];
+    $monthNames = ['حمل','ثور','جوزا','سرطان','اسد','سنبله','میزان','عقرب','قوس','جدی','دلو','حوت'];
     $parts = explode('-', date('Y-m-d', $ts));
     $gy = (int)$parts[0] - 1600; $gm = (int)$parts[1]; $gd = (int)$parts[2] - 1;
     $leap = ($gy % 4 === 0 && $gy % 100 !== 0) || ($gy % 400 === 0);
@@ -2770,10 +2770,33 @@ function lessonJsonLd(array $lesson): string {
 // ─── Safe rich text ───────────────────────────────────────────────────────────
 
 function safeRichText(?string $html): string {
-    if (!$html) return '';
+    if ($html === null || trim($html) === '') return '';
+
+    /*
+     * Plain text written into the content textarea must preserve paragraphs
+     * and single line breaks. Existing rich HTML stays on the sanitizing path.
+     * Escaping occurs before text is converted to safe paragraph markup.
+     */
+    if (!preg_match('~</?(?:p|div|span|strong|b|em|i|u|ul|ol|li|blockquote|h[2-5]|br|hr|a|img|table|thead|tbody|tr|th|td)\b~i', $html)) {
+        $plain = str_replace(["\r\n", "\r"], "\n", trim($html));
+        if ($plain === '') return '';
+        $blocks = preg_split("/\n[ \t]*\n+/u", $plain) ?: [$plain];
+        $html = '';
+        foreach ($blocks as $block) {
+            $block = trim($block);
+            if ($block === '') continue;
+            $lineItems = explode("\n", $block);
+            $escapedLines = array_map(
+                static fn(string $line): string => htmlspecialchars($line, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                $lineItems
+            );
+            $html .= '<p>' . implode("<br>\n", $escapedLines) . '</p>';
+        }
+    }
+
     $dom = new DOMDocument('1.0', 'UTF-8');
     $previous = libxml_use_internal_errors(true);
-    $dom->loadHTML('<?xml encoding="UTF-8\"><div>' . $html . '</div>', LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+    $dom->loadHTML('<?xml encoding="UTF-8"><div>' . $html . '</div>', LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
     libxml_clear_errors(); libxml_use_internal_errors($previous);
     $allowed = ['p','div','span','strong','b','em','i','u','ul','ol','li','blockquote','h2','h3','h4','h5','br','hr','a','img','table','thead','tbody','tr','th','td'];
     $clean = function (DOMNode $node) use (&$clean,$allowed): void {
