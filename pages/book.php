@@ -122,7 +122,7 @@ $bookDownloadWordUrl = $bookDetailUrl . (str_contains($bookDetailUrl, '?') ? '&'
   <?php endif; ?>
 </aside>
 
-<main class="col-lg-8 jhd-book-main" id="book-main">
+<div class="col-lg-8 jhd-book-main" id="book-main">
   <header class="jhd-book-heading">
     <span class="jhd-eyebrow">کتابخانهٔ دیجیتال</span>
     <h1 class="jhd-detail-title"><?= sanitize($book['title']) ?></h1>
@@ -184,7 +184,7 @@ $bookDownloadWordUrl = $bookDetailUrl . (str_contains($bookDetailUrl, '?') ? '&'
   <nav class="jhd-book-navigation" aria-label="پیوندهای کتاب">
     <a href="<?= sanitize(siteUrl('books')) ?>" class="btn btn-outline-secondary"><i class="bi bi-arrow-right ms-1" aria-hidden="true"></i>بازگشت به کتابخانه</a>
   </nav>
-</main>
+</div>
 </div>
 
 <?php if ($related): ?>
