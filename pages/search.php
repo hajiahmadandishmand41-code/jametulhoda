@@ -219,7 +219,7 @@ require_once __DIR__ . '/../includes/header.php';
             <p>عنوان کتاب، نام نویسنده، بخشی از مقاله یا عبارت مرتبط با درس را وارد کنید. نتایج بر اساس نوع محتوا قابل محدودکردن‌اند.</p>
           </div>
         </div>
-      </aside>aside>
+      </aside>
     <?php endif; ?>
   </div>
 </section>
