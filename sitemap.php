@@ -139,7 +139,7 @@ if ($db !== null) {
         $landingHasContent['programs'] = (bool)($landingHasContent['program'] ?? false);
         $landingHasContent['announcements'] = (bool)($landingHasContent['announcement'] ?? false);
         $landingHasContent['religious-activities'] = (bool)($landingHasContent['religious'] ?? false);
-        $landingHasContent['news'] = (bool)($landingHasContent['news'] ?? false);
+        $landingHasContent['news'] = (bool)($landingHasContent['news'] ?? false) || (bool)($landingHasContent['announcement'] ?? false);
         $landingHasContent['articles'] = (bool)($landingHasContent['article'] ?? false);
         $landingHasContent['research'] = (bool)($landingHasContent['research'] ?? false);
         $landingHasContent['reports'] = (bool)($landingHasContent['report'] ?? false);
