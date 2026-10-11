@@ -34,29 +34,21 @@ require_once __DIR__ . '/../includes/auth.php';
 startPublicSession();
 
 $search = trim($_GET['q'] ?? '');
-$topicSlug = trim($_GET['topic'] ?? '');
-$topicId = null;
-if ($topicSlug) {
-    $t = getTopicBySlug($topicSlug);
-    if ($t) $topicId = (int)$t['id'];
-}
-
 $page = max(1, (int)($_GET['page'] ?? 1));
 $limit = 12;
 $offset = ($page - 1) * $limit;
 
 $base = ['types' => $types];
 if ($search) $base['search'] = $search;
-if ($topicId) $base['topic'] = $topicId;
 
 $opts = $base + ['limit' => $limit, 'offset' => $offset];
 $posts = getPosts($opts);
 $total = countPosts($base);
 $pages = (int)ceil($total / $limit);
 
-// Query fields that every link in this listing carries (search, topic, type).
-$keep = static function (array $extra = []) use ($search, $topicSlug, $typeKey): array {
-    $q = array_filter(['q' => $search, 'topic' => $topicSlug, 'type' => $typeKey !== 'all' ? $typeKey : ''], static fn($v) => $v !== '');
+// Keep only search and content type in archive links.
+$keep = static function (array $extra = []) use ($search, $typeKey): array {
+    $q = array_filter(['q' => $search, 'type' => $typeKey !== 'all' ? $typeKey : ''], static fn($v) => $v !== '');
     return $q + $extra;
 };
 
@@ -73,9 +65,6 @@ $breadcrumbs = [
 ];
 if ($typeKey !== 'all') {
     $breadcrumbs[] = ['name' => $typeLabels[$typeKey], 'url' => url('articles', ['type' => $typeKey])];
-}
-if ($topicId && !empty($t)) {
-    $breadcrumbs[] = ['name' => $t['name'], 'url' => url('articles', ['topic' => $t['slug']])];
 }
 $breadcrumbsJsonLd = breadcrumbsJsonLd($breadcrumbs);
 
@@ -111,7 +100,7 @@ require_once __DIR__ . '/../includes/header.php';
     <!-- فیلتر نوع: یک بخش، دو نما -->
     <nav class="jhd-type-tabs" aria-label="نوع مطلب">
       <?php foreach ($typeLabels as $key => $label):
-        $tabQuery = array_filter(['q' => $search, 'topic' => $topicSlug, 'type' => $key !== 'all' ? $key : ''], static fn($v) => $v !== '');
+        $tabQuery = array_filter(['q' => $search, 'type' => $key !== 'all' ? $key : ''], static fn($v) => $v !== '');
       ?>
       <a class="jhd-type-tab<?= $key === $typeKey ? ' is-active' : '' ?>"
          href="<?= sanitize(url('articles', $tabQuery)) ?>"
@@ -128,25 +117,22 @@ require_once __DIR__ . '/../includes/header.php';
             <input type="search" name="q" class="form-control" aria-label="جستجو در عنوان یا متن مقالات و پژوهش‌ها"
                    placeholder="جستجو در عنوان یا متن مقالات و پژوهش‌ها..."
                    value="<?= sanitize($search) ?>">
-            <?php if ($topicSlug): ?>
-            <input type="hidden" name="topic" value="<?= sanitize($topicSlug) ?>">
-            <?php endif; ?>
+
             <button type="submit" class="btn btn-primary">
               <i class="bi bi-search ms-1"></i>جستجو
             </button>
-            <?php if ($search || $topicSlug): ?>
-            <a href="<?= sanitize(url('articles', $keep(['q' => null, 'topic' => null]))) ?>" class="btn btn-outline-secondary" title="حذف فیلترها">
+            <?php if ($search): ?>
+            <a href="<?= sanitize(url('articles', $keep(['q' => null]))) ?>" class="btn btn-outline-secondary" title="حذف فیلترها">
               <i class="bi bi-x-lg"></i>
             </a>
             <?php endif; ?>
           </div>
         </div>
       </div>
-      <?php if ($search || $topicSlug): ?>
+      <?php if ($search): ?>
       <div class="mt-2 text-muted small">
         فیلتر فعال:
         <?php if ($search): ?>«<strong><?= sanitize($search) ?></strong>»<?php endif; ?>
-        <?php if ($topicSlug && !empty($t)): ?>در موضوع «<strong><?= sanitize($t['name']) ?></strong>»<?php endif; ?>
         — <?= number_format($total) ?> مورد یافت شد
       </div>
       <?php endif; ?>
