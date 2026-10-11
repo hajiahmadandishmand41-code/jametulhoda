@@ -349,12 +349,7 @@ require_once __DIR__ . '/../includes/header.php';
         </ul>
     </div>
 
-    <?php $sideTopics = getTopics(['active' => 1, 'limit' => 12]); if ($sideTopics): ?>
-    <div class="jhd-side-card">
-        <h3><i class="bi bi-tags"></i> موضوعات</h3>
-        <div class="jhd-cat-strip mb-0"><?php foreach ($sideTopics as $ct): ?><a href="<?= topicUrl($ct) ?>" class="jhd-chip"><?= sanitize($ct['name']) ?></a><?php endforeach; ?></div>
-    </div>
-    <?php endif; ?>
+
 </div>
 </div>
 </div></div></div>
