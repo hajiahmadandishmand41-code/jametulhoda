@@ -93,7 +93,7 @@ $capabilities = jhd_role_permission_summary($user['role']);
 <?php endif; ?>
 <?php if ($error !== ''): ?><div class="alert alert-danger"><?= sanitize($error) ?></div><?php endif; ?>
 
-<div class="row g-4">
+<div class="row g-3 admin-profile-layout">
     <div class="col-lg-7">
         <div class="admin-card mb-4">
             <div class="admin-card-header"><i class="bi bi-person-badge ms-2"></i>اطلاعات حساب</div>
