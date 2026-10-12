@@ -31,7 +31,7 @@ for line in routes_chunk.splitlines():
     m = re.match(r"['\"]([^'\"]+)['\"]\s*=>\s*(.*)", line)
     if m:
         path = m.group(1)
-        target = m.group(2).rstrip(',')
+        target = re.sub(r"\\s+//.*$", "", m.group(2)).rstrip(',')
         if target.startswith('{') or target.startswith('['):
             fm = re.search(r"['\"]file['\"]\s*=>\s*['\"]([^'\"]+)['\"]", target)
             routes[path] = {'file': fm.group(1) if fm else 'unknown'}
