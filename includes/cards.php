@@ -1034,6 +1034,11 @@ function jhd_news_list(array $items, array $opts = []): string
             $textSource = preg_replace('~<\s*br\s*/?\s*>|</\s*(?:p|div|li|h[1-6]|blockquote|section)\s*>~i', ' ', $textSource) ?? $textSource;
             $textValue = html_entity_decode(strip_tags($textSource), ENT_QUOTES | ENT_HTML5, 'UTF-8');
             $textValue = trim((string)(preg_replace('/\s+/u', ' ', $textValue) ?? $textValue));
+            // Content often repeats its heading as the first line; keep the text once.
+            if ($title !== '') {
+                $titlePrefix = '~^' . preg_quote($title, '~') . '\\s+~u';
+                $textValue = preg_replace($titlePrefix, '', $textValue, 1) ?? $textValue;
+            }
             if ($textValue !== '') {
                 $textHtml = '<span class="jhd-news-row__text">' . sanitize($textValue) . '</span>';
             }
