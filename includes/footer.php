@@ -66,7 +66,7 @@ $footerSections = array_merge(
                     <p class="footer-text"><?= sanitize($aboutShort) ?></p>
                     <?php if ($socialTelegram || $socialYoutube || $socialInstagram): ?>
                     <div class="footer-social mt-3">
-                        <?php if ($socialTelegram): ?><a href="<?= sanitize(safeExternalUrl($socialTelegram)) ?>" target="_blank" rel="noopener noreferrer" class="social-link" title="تلگرام" aria-label="تلگرام"><i class="bi bi-telegram"></i></a><?php endif; ?>
+                        <?php if ($socialTelegram): ?><a href="<?= sanitize(safeExternalUrl($socialTelegram)) ?>" target="_blank" rel="noopener noreferrer" class="social-link social-link--telegram" title="تلگرام" aria-label="کانال تلگرام"><i class="bi bi-telegram" aria-hidden="true"></i><span>کانال تلگرام</span></a><?php endif; ?>
                         <?php if ($socialYoutube): ?><a href="<?= sanitize(safeExternalUrl($socialYoutube)) ?>" target="_blank" rel="noopener noreferrer" class="social-link" title="یوتیوب" aria-label="یوتیوب"><i class="bi bi-youtube"></i></a><?php endif; ?>
                         <?php if ($socialInstagram): ?><a href="<?= sanitize(safeExternalUrl($socialInstagram)) ?>" target="_blank" rel="noopener noreferrer" class="social-link" title="اینستاگرام" aria-label="اینستاگرام"><i class="bi bi-instagram"></i></a><?php endif; ?>
                     </div>
