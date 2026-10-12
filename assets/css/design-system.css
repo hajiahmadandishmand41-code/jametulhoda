@@ -4470,3 +4470,53 @@ html[data-theme="dark"] .jhd-home-intro {
   }
   .jhd-homepage--editorial .jhd-news-row__title { font-size: .87rem; }
 }
+
+/* Form, heading and profile consistency */
+h1,h2,h3,h4,h5,h6,.jhd-section-head h2,.jhd-auth-card h1 {
+  line-height: 1.55;
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+.jhd-auth-page { min-height: min(78vh, 900px); padding-block: clamp(1.5rem, 4vw, 3.5rem); }
+.jhd-auth-page > .container { width: min(100%, 620px); }
+.jhd-auth-card,.jhd-login-card {
+  width: min(100%, 470px); margin-inline: auto;
+  padding: clamp(1.25rem, 4vw, 2rem);
+  border-radius: 18px; box-shadow: var(--jhd-shadow-2);
+}
+.jhd-auth-card-wide { width: min(100%, 620px); }
+.jhd-login-head { margin-bottom: 1.4rem; }
+.jhd-login-head h1,.jhd-auth-card h1 {
+  margin-block: .45rem .65rem;
+  font-size: clamp(1.25rem, 1rem + 1.1vw, 1.65rem);
+}
+.jhd-auth-lead { font-size: .9rem; line-height: 1.9; }
+.jhd-auth-form { display: grid; gap: .7rem; }
+.jhd-auth-form label,.jhd-auth-form .form-label {
+  display: block; margin: .25rem 0 .35rem; font-weight: 650; line-height: 1.75;
+}
+.jhd-auth-form .form-control,.jhd-auth-form .form-select {
+  min-height: 46px; padding: .7rem .85rem; line-height: 1.7; border-radius: 10px;
+}
+.jhd-auth-form textarea.form-control { min-height: 120px; }
+.jhd-auth-form .row { --bs-gutter-y: 1rem; }
+.jhd-auth-form button[type="submit"],.jhd-auth-form input[type="submit"] {
+  min-height: 48px; width: 100%; border-radius: 10px; font-weight: 750;
+}
+.jhd-auth-links { flex-wrap: wrap; align-items: center; gap: .65rem; }
+.jhd-account-dl {
+  display: grid; grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: .65rem; margin-block: 1.25rem;
+}
+.jhd-account-dl > div {
+  min-width: 0; padding: .8rem; border: 1px solid var(--jhd-border);
+  border-radius: 10px; background: var(--jhd-paper);
+}
+.jhd-account-dl dt { margin: 0 0 .25rem; color: var(--jhd-muted); font-size: .78rem; font-weight: 650; }
+.jhd-account-dl dd { margin: 0; overflow-wrap: anywhere; line-height: 1.8; font-weight: 600; }
+@media (max-width: 575.98px) {
+  .jhd-auth-page { padding: 1rem .7rem 1.8rem; }
+  .jhd-account-dl { grid-template-columns: minmax(0,1fr); }
+  .jhd-auth-links { display: grid; grid-template-columns: minmax(0,1fr); }
+  .jhd-auth-links .jhd-button { width: 100%; }
+}
