@@ -71,10 +71,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $page_section = implode(',', array_filter(array_map('trim', $sections)));
         if (!$page_section) $page_section = 'other';
 
-        $topicIds = $_POST['topic_ids'] ?? [];
-        if(!is_array($topicIds)) $topicIds=[$topicIds];
-        $topicIds=array_filter(array_map('intval',$topicIds));
-
         if (!$title) {
             $error = 'عنوان مطلب الزامی است.';
         } else {
@@ -174,10 +170,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ]);
 
                 syncPrimaryMediaFile('post', $id, 'video', $featVid, $title);
-
-                // همگام‌سازی موضوعات (ستون فقرات)
-                $primaryTopicId = (int)($_POST['primary_topic_id'] ?? 0);
-                setPostTopics($id, $topicIds, $primaryTopicId > 0 ? $primaryTopicId : null);
 
                 // تصاویر اضافی تازه (با ترتیب واقعی در post_images.sort_order)
                 foreach (jhdDirectUploadPaths('images') as $directPath) {
@@ -632,30 +624,6 @@ $csrfToken        = generateCsrfToken();
                             <?php endforeach; ?>
                         </select>
                         <?php endif; ?>
-                    </div>
-                    <?php $curTopicIds = getTopicIdsForPost((int)$post['id']); ?>
-                    <div class="mb-3"><label class="form-label fw-bold"><i class="bi bi-diagram-3 ms-1"></i> موضوعات (ستون فقرات)</label>
-                    <input type="search" class="form-control form-control-sm mb-2" data-topic-filter data-topic-target="postTopicList" placeholder="جستجو در همهٔ موضوعات">
-                    <div id="postTopicList" style="max-height:220px;overflow:auto;border:1px solid #e8e6dc;border-radius:10px;padding:10px;background:#fafaf7">
-                        <?php if(empty($allTopics)): ?><div class="text-muted small">موضوعی نیست.</div><?php else: foreach($allTopics as $t): ?>
-                        <label class="form-check" <?= $t['parent_id'] ? 'style="padding-inline-start:14px"' : '' ?>>
-                            <input type="checkbox" class="form-check-input" name="topic_ids[]" value="<?= $t['id'] ?>" <?= in_array($t['id'], $curTopicIds)?'checked':'' ?>>
-                            <span class="form-check-label small"><?= sanitize($t['name']) ?></span>
-                        </label>
-                        <?php endforeach; endif; ?>
-                    </div>
-                    <div class="mt-2">
-                        <label class="form-label small">موضوع اصلی</label>
-                        <select name="primary_topic_id" class="form-select form-select-sm">
-                            <option value="">— اولین موضوع انتخاب‌شده —</option>
-                            <?php foreach ($allTopics as $t): ?>
-                            <option value="<?= (int)$t['id'] ?>" <?= (!empty($curTopicIds) && (int)$curTopicIds[0] === (int)$t['id']) ? 'selected' : '' ?>><?= sanitize($t['name']) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="mt-2">
-                        <a href="<?= siteUrl('admin/topics/') ?>" class="small" target="_blank" rel="noopener noreferrer"><i class="bi bi-box-arrow-up-left ms-1"></i>مدیریت موضوعات و زیرموضوع‌ها</a>
-                    </div>
                     </div>
                     <div>
                         <label class="form-label">دسته‌بندی قدیمی (اختیاری)</label>
