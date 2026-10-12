@@ -600,7 +600,13 @@ function renderEditorialRow(array $post, array $opts = []): string {
         ? '<span class="jhd-row-index" aria-hidden="true">' . str_pad((string)$index, 2, '0', STR_PAD_LEFT) . '</span>'
         : '';
 
-    return '<div class="col-12"><article class="jhd-editorial-row">'
+    $rowClasses = [
+        'jhd-editorial-row',
+        'jhd-editorial-row--' . jhd_type_class($type),
+        $thumb !== '' ? 'jhd-editorial-row--has-thumb' : 'jhd-editorial-row--no-thumb',
+    ];
+
+    return '<div class="col-12"><article class="' . sanitize(implode(' ', $rowClasses)) . '">'
         . $thumb . $body
         . '<span class="jhd-editorial-badge">' . sanitize($badge) . '</span>'
         . $number
@@ -1008,6 +1014,7 @@ function jhd_news_list(array $items, array $opts = []): string
 {
     if (!$items) return '';
     $showType = empty($opts['hide_type']);
+    $showText = !empty($opts['show_text']);
     $html = '<div class="jhd-news-list">';
     foreach ($items as $item) {
         $type = (string)($item['post_type'] ?? 'post');
@@ -1017,6 +1024,26 @@ function jhd_news_list(array $items, array $opts = []): string
         $rawDate = (string)($item['published_at'] ?? $item['created_at'] ?? '');
         $parts = $rawDate !== '' ? persianDateParts($rawDate) : null;
         $meta = trim((string)($item['cat_name'] ?? ''));
+
+        $textHtml = '';
+        if ($showText) {
+            // Prefer the article's complete body. Fall back to its stored summary
+            // only when no body is available; never pass this text through excerpt().
+            $textSource = trim((string)($item['content'] ?? ''));
+            if ($textSource === '') $textSource = trim((string)($item['summary'] ?? ''));
+            $textSource = preg_replace('~<\s*br\s*/?\s*>|</\s*(?:p|div|li|h[1-6]|blockquote|section)\s*>~i', ' ', $textSource) ?? $textSource;
+            $textValue = html_entity_decode(strip_tags($textSource), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $textValue = trim((string)(preg_replace('/\s+/u', ' ', $textValue) ?? $textValue));
+            // Content often repeats its heading as the first line; keep the text once.
+            if ($title !== '') {
+                $titlePrefix = '~^' . preg_quote($title, '~') . '\\s+~u';
+                $textValue = preg_replace($titlePrefix, '', $textValue, 1) ?? $textValue;
+            }
+            if ($textValue !== '') {
+                $textHtml = '<span class="jhd-news-row__text">' . sanitize($textValue) . '</span>';
+            }
+        }
+
         $html .= '<article class="jhd-news-row' . ($showType ? '' : ' jhd-news-row--plain') . '">';
         $html .= $parts
             ? '<time datetime="' . sanitize($rawDate) . '">'
@@ -1025,6 +1052,7 @@ function jhd_news_list(array $items, array $opts = []): string
             : '<span class="jhd-news-row__meta" aria-hidden="true">•</span>';
         $html .= '<span class="jhd-news-row__body">'
             . '<a class="jhd-news-row__title" href="' . sanitize($href) . '">' . sanitize($title) . '</a>'
+            . $textHtml
             . ($meta !== '' ? '<span class="jhd-news-row__meta">' . sanitize($meta) . '</span>' : '')
             . '</span>';
         $html .= $showType ? '<span class="jhd-news-row__type">' . sanitize(postTypeLabel($type)) . '</span>' : '';
@@ -1105,7 +1133,7 @@ function jhd_nav_sections(): array {
             ['route' => 'books',    'label' => 'کتابخانه',      'icon' => 'bi-book',          'types' => [],                  'extra_active' => ['book']],
             ['route' => 'articles', 'label' => 'نوشتارها',      'icon' => 'bi-pencil-square', 'types' => ['article','research'], 'extra_active' => ['research', 'reports', 'qa', 'post', 'article']],
             ['route' => 'media',    'label' => 'صوت و تصویر',   'icon' => 'bi-play-btn',      'types' => [],                  'extra_active' => ['videos', 'audios', 'speeches', 'video', 'audio']],
-            ['route' => 'news',     'label' => 'اخبار',         'icon' => 'bi-newspaper',     'types' => ['news'],            'extra_active' => ['announcements', 'events', 'programs', 'religious-activities']],
+            ['route' => 'news',     'label' => 'اخبار مدرسه',  'icon' => 'bi-newspaper',     'types' => ['news'],            'extra_active' => ['announcements', 'events', 'programs', 'religious-activities']],
         ],
         'more' => [
             ['route' => 'research',              'label' => 'پژوهش‌ها',               'icon' => 'bi-journal-richtext', 'types' => ['research']],
@@ -1143,6 +1171,9 @@ function jhd_section_children(array $section): array {
     $memoKey = (string)($section['route'] ?? '') . '|' . implode(',', (array)($section['types'] ?? []));
     if (array_key_exists($memoKey, $memo)) return $memo[$memoKey];
     $route = (string)($section['route'] ?? '');
+    // News has one canonical navigation destination; do not duplicate it with
+    // the single matching "اخبار مدرسه" category in desktop or hamburger menus.
+    if ($route === 'news') return $memo[$memoKey] = [];
     $children = [];
     foreach (getCategoriesForTypes($section['types'] ?? []) as $c) {
         $children[] = ['label' => (string)$c['name'], 'url' => categoryUrl($c)];

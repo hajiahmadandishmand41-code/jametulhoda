@@ -30,6 +30,8 @@ jobs:
             echo "::endgroup::"
           done < <(find . -type f -name '*.php' -not -path './vendor/*' -print0)
           exit "$status"
+      - name: Verify route and public UI contracts
+        run: python3 tests/verify_routes.py
       - name: Ensure the mobile feed has no social-network integration
         shell: bash
         run: |
