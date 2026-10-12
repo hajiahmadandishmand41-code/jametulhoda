@@ -1014,8 +1014,7 @@ function jhd_news_list(array $items, array $opts = []): string
 {
     if (!$items) return '';
     $showType = empty($opts['hide_type']);
-    $showSummary = !empty($opts['show_summary']);
-    $fallbackExcerpt = max(80, (int)($opts['fallback_excerpt'] ?? 320));
+    $showText = !empty($opts['show_text']);
     $html = '<div class="jhd-news-list">';
     foreach ($items as $item) {
         $type = (string)($item['post_type'] ?? 'post');
@@ -1026,18 +1025,17 @@ function jhd_news_list(array $items, array $opts = []): string
         $parts = $rawDate !== '' ? persianDateParts($rawDate) : null;
         $meta = trim((string)($item['cat_name'] ?? ''));
 
-        $summaryHtml = '';
-        if ($showSummary) {
-            $summarySource = trim((string)($item['summary'] ?? ''));
-            $fromContent = $summarySource === '';
-            if ($fromContent) $summarySource = (string)($item['content'] ?? '');
-            $summaryText = html_entity_decode(strip_tags($summarySource), ENT_QUOTES | ENT_HTML5, 'UTF-8');
-            $summaryText = trim((string)(preg_replace('/\s+/u', ' ', $summaryText) ?? $summaryText));
-            if ($fromContent && $summaryText !== '') {
-                $summaryText = excerpt($summaryText, $fallbackExcerpt);
-            }
-            if ($summaryText !== '') {
-                $summaryHtml = '<span class="jhd-news-row__summary">' . sanitize($summaryText) . '</span>';
+        $textHtml = '';
+        if ($showText) {
+            // Prefer the article's complete body. Fall back to its stored summary
+            // only when no body is available; never pass this text through excerpt().
+            $textSource = trim((string)($item['content'] ?? ''));
+            if ($textSource === '') $textSource = trim((string)($item['summary'] ?? ''));
+            $textSource = preg_replace('~<\s*br\s*/?\s*>|</\s*(?:p|div|li|h[1-6]|blockquote|section)\s*>~i', ' ', $textSource) ?? $textSource;
+            $textValue = html_entity_decode(strip_tags($textSource), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $textValue = trim((string)(preg_replace('/\s+/u', ' ', $textValue) ?? $textValue));
+            if ($textValue !== '') {
+                $textHtml = '<span class="jhd-news-row__text">' . sanitize($textValue) . '</span>';
             }
         }
 
