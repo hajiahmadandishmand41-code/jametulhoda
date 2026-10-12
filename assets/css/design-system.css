@@ -4533,3 +4533,60 @@ h1,h2,h3,h4,h5,h6,.jhd-section-head h2,.jhd-auth-card h1 {
 .main-footer .footer-social .social-link{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;min-width:46px;min-height:46px;padding:.65rem;border:1px solid var(--jhd-border);border-radius:12px;text-decoration:none}
 .main-footer .footer-social .social-link--telegram{min-width:150px;padding-inline:1rem;font-weight:750}
 .main-footer .footer-social .social-link i{font-size:1.15rem}
+
+
+/* Larger article cards: spacious covers, readable summaries and a two-column editorial grid. */
+.jhd-home-articles-grid > [class*="col-"] { display: flex; }
+.jhd-home-articles-grid > [class*="col-"] > .jhd-card { width: 100%; height: 100%; }
+.jhd-home-articles-grid .jhd-card--article.jhd-card--featured > .jhd-card-media,
+.jhd-home-articles-grid .jhd-card--research.jhd-card--featured > .jhd-card-media {
+  aspect-ratio: 16 / 9;
+  max-height: none;
+}
+.jhd-home-articles-grid .jhd-card--article.jhd-card--featured > .jhd-card-body,
+.jhd-home-articles-grid .jhd-card--research.jhd-card--featured > .jhd-card-body {
+  min-height: 0;
+  padding: clamp(1rem, 1.3vw, 1.4rem);
+  gap: .55rem;
+}
+.jhd-home-articles-grid .jhd-card--article.jhd-card--featured .jhd-card-title,
+.jhd-home-articles-grid .jhd-card--research.jhd-card--featured .jhd-card-title {
+  font-size: clamp(1.15rem, 1.02rem + .55vw, 1.45rem);
+  line-height: 1.6;
+  min-height: 3em;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+.jhd-home-articles-grid .jhd-card--article.jhd-card--featured .jhd-card-summary,
+.jhd-home-articles-grid .jhd-card--research.jhd-card--featured .jhd-card-summary {
+  font-size: .93rem;
+  line-height: 1.85;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+}
+.jhd-home-articles-grid .jhd-card--article.jhd-card--featured .jhd-card-foot,
+.jhd-home-articles-grid .jhd-card--research.jhd-card--featured .jhd-card-foot {
+  padding-top: .55rem;
+  min-height: 3rem;
+}
+@media (max-width: 575.98px) {
+  .jhd-home-articles-grid .jhd-card--article.jhd-card--featured > .jhd-card-media,
+  .jhd-home-articles-grid .jhd-card--research.jhd-card--featured > .jhd-card-media {
+    max-height: 230px;
+  }
+  .jhd-home-articles-grid .jhd-card--article.jhd-card--featured > .jhd-card-body,
+  .jhd-home-articles-grid .jhd-card--research.jhd-card--featured > .jhd-card-body {
+    padding: .85rem;
+  }
+  .jhd-home-articles-grid .jhd-card--article.jhd-card--featured .jhd-card-title,
+  .jhd-home-articles-grid .jhd-card--research.jhd-card--featured .jhd-card-title {
+    font-size: 1.08rem;
+    min-height: 0;
+  }
+  .jhd-home-articles-grid .jhd-card--article.jhd-card--featured .jhd-card-summary,
+  .jhd-home-articles-grid .jhd-card--research.jhd-card--featured .jhd-card-summary {
+    font-size: .84rem;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
+}
