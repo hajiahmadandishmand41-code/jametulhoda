@@ -987,7 +987,7 @@ function persianDate(string $datetime): string {
     if (!$datetime || $datetime === '0000-00-00 00:00:00') return '—';
     $ts = strtotime($datetime);
     if (!$ts) return $datetime;
-    $monthNames = ['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'];
+    $monthNames = ['حمل','ثور','جوزا','سرطان','اسد','سنبله','میزان','عقرب','قوس','جدی','دلو','حوت'];
     $parts = explode('-', date('Y-m-d', $ts));
     $gy = (int)$parts[0] - 1600; $gm = (int)$parts[1]; $gd = (int)$parts[2] - 1;
     $leap = ($gy % 4 === 0 && $gy % 100 !== 0) || ($gy % 400 === 0);
@@ -1014,7 +1014,7 @@ function persianDateParts(string $datetime): ?array {
     if (!$datetime || $datetime === '0000-00-00 00:00:00') return null;
     $ts = strtotime($datetime);
     if (!$ts) return null;
-    $monthNames = ['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'];
+    $monthNames = ['حمل','ثور','جوزا','سرطان','اسد','سنبله','میزان','عقرب','قوس','جدی','دلو','حوت'];
     $parts = explode('-', date('Y-m-d', $ts));
     $gy = (int)$parts[0] - 1600; $gm = (int)$parts[1]; $gd = (int)$parts[2] - 1;
     $leap = ($gy % 4 === 0 && $gy % 100 !== 0) || ($gy % 400 === 0);
