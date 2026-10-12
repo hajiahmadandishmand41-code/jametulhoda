@@ -151,7 +151,7 @@ require_once __DIR__ . '/includes/header.php';
                 'url' => url($section['url']),
                 'link' => $section['link'],
             ]) ?>
-            <?= jhd_news_list($section['rows'], ['hide_type' => true, 'show_summary' => true]) ?>
+            <?= jhd_news_list($section['rows'], ['hide_type' => true, 'show_text' => true]) ?>
             <?php if ($section['key'] === 'news'): ?>
             <a class="jhd-home-all-news" href="<?= url('news') ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i> همهٔ اخبار</a>
             <?php endif; ?>
