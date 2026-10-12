@@ -1047,7 +1047,7 @@ function jhd_news_list(array $items, array $opts = []): string
             : '<span class="jhd-news-row__meta" aria-hidden="true">•</span>';
         $html .= '<span class="jhd-news-row__body">'
             . '<a class="jhd-news-row__title" href="' . sanitize($href) . '">' . sanitize($title) . '</a>'
-            . $summaryHtml
+            . $textHtml
             . ($meta !== '' ? '<span class="jhd-news-row__meta">' . sanitize($meta) . '</span>' : '')
             . '</span>';
         $html .= $showType ? '<span class="jhd-news-row__type">' . sanitize(postTypeLabel($type)) . '</span>' : '';
