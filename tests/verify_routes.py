@@ -232,24 +232,43 @@ if __name__ == '__main__':
         print(f"[{status}] {req:<32} {exp:<10} {got:<10} {(expected_handler or '-'): <30} {handler_str}")
 
     print("="*80)
+    # Public taxonomy UI is retired, but legacy URLs must keep their permanent redirect.
+    with open('pages/topic.php', 'r', encoding='utf-8') as f:
+        legacy_topic = f.read()
+    with open('pages/topics.php', 'r', encoding='utf-8') as f:
+        legacy_topics = f.read()
+    assert "true, 301" in legacy_topic and "url('articles')" in legacy_topic, 'legacy topic detail must 301 to articles'
+    assert "true, 301" in legacy_topics and "url('articles')" in legacy_topics, 'topic directory must 301 to articles'
+    with open('admin/includes/header.php', 'r', encoding='utf-8') as f:
+        admin_nav = f.read()
+    assert "'key' => 'taxonomy'" not in admin_nav, 'topic/category group must not appear in admin navigation'
+
+    with open('includes/cards.php', 'r', encoding='utf-8') as f:
+        card_renderer = f.read()
+    assert "$topics = []; // Public topic chips are retired" in card_renderer, 'public card topic chips must stay disabled'
+    assert "if ($route === 'news') return $memo[$memoKey] = [];" in card_renderer, 'news navigation must not repeat the matching news category'
+    assert re.search(r"\['route'\s*=>\s*'news',\s*'label'\s*=>\s*'اخبار مدرسه'", card_renderer), 'single news menu entry should be labelled اخبار مدرسه'
+    assert "'show_summary' => true" in card_renderer, 'text list renderer should support homepage summaries'
+    assert "'jhd-editorial-row--no-thumb'" in card_renderer and "$thumb !== ''" in card_renderer, 'article row should know whether an image exists'
+
+    with open('index.php', 'r', encoding='utf-8') as f:
+        homepage = f.read()
+    assert "jhd_news_list($section['rows'], ['hide_type' => true, 'show_summary' => true])" in homepage, 'homepage sections must use text-only rows and summaries'
+    assert "jhd-home-articles-grid" not in homepage and "renderPostCard($articlePost" not in homepage, 'homepage must not render article cards'
+
+    with open('pages/articles.php', 'r', encoding='utf-8') as f:
+        article_archive = f.read()
+    assert "'excerpt' => 240" in article_archive, 'article archive summaries should be longer'
+
+    with open('assets/css/design-system.css', 'r', encoding='utf-8') as f:
+        styles = f.read()
+    assert '.jhd-articles-hub .jhd-editorial-row--no-thumb' in styles, 'missing-image article cards must not reserve an image column'
+    assert '.jhd-homepage--editorial .jhd-news-row__summary' in styles, 'homepage summaries must be readable and visible'
+    assert '-webkit-line-clamp: unset' in styles, 'homepage headlines must not be truncated'
+
     if all_passed:
-        print(f"SUCCESS: ALL {len(test_cases)} ROUTE RESOLUTION TESTS PASSED! ALL FILES EXIST!")
+        print(f"SUCCESS: ALL {len(test_cases)} ROUTE RESOLUTION TESTS AND UI CONTRACT ASSERTIONS PASSED!")
         sys.exit(0)
     else:
-        print("FAILURE: ONE OR MORE TESTS FAILED!")
+        print("FAILURE: ONE OR MORE ROUTE TESTS FAILED!")
         sys.exit(1)
-
-
-# Public taxonomy UI is retired, but legacy URLs must keep their permanent redirect.
-with open('pages/topic.php', 'r', encoding='utf-8') as f:
-    legacy_topic = f.read()
-with open('pages/topics.php', 'r', encoding='utf-8') as f:
-    legacy_topics = f.read()
-assert "true, 301" in legacy_topic and "url('articles')" in legacy_topic, 'legacy topic detail must 301 to articles'
-assert "true, 301" in legacy_topics and "url('articles')" in legacy_topics, 'topic directory must 301 to articles'
-with open('admin/includes/header.php', 'r', encoding='utf-8') as f:
-    admin_nav = f.read()
-assert "'key' => 'taxonomy'" not in admin_nav, 'topic/category group must not appear in admin navigation'
-with open('includes/cards.php', 'r', encoding='utf-8') as f:
-    card_renderer = f.read()
-assert "$topics = []; // Public topic chips are retired" in card_renderer, 'public card topic chips must stay disabled'
