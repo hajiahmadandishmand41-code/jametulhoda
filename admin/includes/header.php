@@ -97,14 +97,6 @@ $adminNavigationGroups = [
         ],
     ],
     [
-        'key' => 'taxonomy', 'label' => 'موضوعات و دسته‌بندی', 'icon' => 'bi-diagram-3',
-        'active' => $adminTopicsActive || $adminCategoriesActive,
-        'items' => [
-            ['label' => 'موضوعات', 'href' => url('admin/topics'), 'icon' => 'bi-diagram-3', 'active' => $adminTopicsActive],
-            ['label' => 'دسته‌بندی‌ها', 'href' => url('admin/categories'), 'icon' => 'bi-folder', 'active' => $adminCategoriesActive],
-        ],
-    ],
-    [
         'key' => 'media', 'label' => 'رسانه و فایل‌ها', 'icon' => 'bi-images',
         'active' => $adminVideosActive || $adminAudiosActive || $adminUploadsActive,
         'items' => [
