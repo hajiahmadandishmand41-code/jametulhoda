@@ -248,12 +248,12 @@ if __name__ == '__main__':
     assert "$topics = []; // Public topic chips are retired" in card_renderer, 'public card topic chips must stay disabled'
     assert "if ($route === 'news') return $memo[$memoKey] = [];" in card_renderer, 'news navigation must not repeat the matching news category'
     assert re.search(r"\['route'\s*=>\s*'news',\s*'label'\s*=>\s*'اخبار مدرسه'", card_renderer), 'single news menu entry should be labelled اخبار مدرسه'
-    assert "$showSummary = !empty($opts['show_summary'])" in card_renderer, 'text list renderer should support homepage summaries'
+    assert "$showText = !empty($opts['show_text'])" in card_renderer, 'text list renderer should support homepage summaries'
     assert "'jhd-editorial-row--no-thumb'" in card_renderer and "$thumb !== ''" in card_renderer, 'article row should know whether an image exists'
 
     with open('index.php', 'r', encoding='utf-8') as f:
         homepage = f.read()
-    assert "jhd_news_list($section['rows'], ['hide_type' => true, 'show_summary' => true])" in homepage, 'homepage sections must use text-only rows and summaries'
+    assert "jhd_news_list($section['rows'], ['hide_type' => true, 'show_text' => true])" in homepage, 'homepage sections must use text-only rows and summaries'
     assert "jhd-home-articles-grid" not in homepage and "renderPostCard($articlePost" not in homepage, 'homepage must not render article cards'
 
     with open('pages/articles.php', 'r', encoding='utf-8') as f:
@@ -263,7 +263,7 @@ if __name__ == '__main__':
     with open('assets/css/design-system.css', 'r', encoding='utf-8') as f:
         styles = f.read()
     assert '.jhd-articles-hub .jhd-editorial-row--no-thumb' in styles, 'missing-image article cards must not reserve an image column'
-    assert '.jhd-homepage--editorial .jhd-news-row__summary' in styles, 'homepage summaries must be readable and visible'
+    assert '.jhd-homepage--editorial .jhd-news-row__text' in styles, 'homepage summaries must be readable and visible'
     assert '-webkit-line-clamp: unset' in styles, 'homepage headlines must not be truncated'
 
     if all_passed:
