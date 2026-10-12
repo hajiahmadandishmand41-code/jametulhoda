@@ -95,32 +95,27 @@ $jhdPublicDbReady = jhd_db_ready();
 $db = jhd_db();
 $GLOBALS['JHD_PUBLIC_DB_READY'] = $jhdPublicDbReady;
 
-$newsItems = [];
-$writingRows = [];
-
+$homeSections = [];
 if ($jhdPublicDbReady) {
-    // همان نشست عمومی موجود حفظ می‌شود تا وضعیت ورود در پوستهٔ سایت درست بماند.
     startPublicSession();
+    // هر فهرست تنها وقتی محتوای منتشرشده دارد، در صفحهٔ نخست ظاهر می‌شود.
+    $homeFeeds = [
+        ['key' => 'news', 'title' => 'اخبار و اطلاعیه‌ها', 'eyebrow' => 'تازه‌های مدرسه', 'icon' => 'bi-newspaper', 'url' => 'news', 'link' => 'همهٔ اخبار', 'types' => ['news', 'announcement']],
+        ['key' => 'articles', 'title' => 'مقالات و پژوهش‌ها', 'eyebrow' => 'مطالعه و اندیشه', 'icon' => 'bi-journal-text', 'url' => 'articles', 'link' => 'همهٔ مقاله‌ها', 'types' => ['article', 'research']],
+        ['key' => 'reports', 'title' => 'گزارش‌ها', 'eyebrow' => 'گزارش فعالیت‌ها', 'icon' => 'bi-card-text', 'url' => 'reports', 'link' => 'همهٔ گزارش‌ها', 'types' => ['report']],
+        ['key' => 'events', 'title' => 'رویدادها', 'eyebrow' => 'برنامه‌ها و مناسبت‌ها', 'icon' => 'bi-calendar-event', 'url' => 'events', 'link' => 'همهٔ رویدادها', 'types' => ['event']],
+    ];
     try {
-        $newsItems = getPosts([
-            'types' => ['news', 'announcement'],
-            'limit' => 5,
-            'sort' => 'newest',
-        ]);
-        $writingRows = getPosts([
-            'types' => ['article', 'research'],
-            'limit' => 5,
-            'sort' => 'newest',
-        ]);
-    } catch (Throwable) {
-        // اگر آرشیو هنوز آماده نباشد، صفحهٔ عمومی بدون خطای PHP رندر می‌شود.
-        $newsItems = [];
-        $writingRows = [];
+        foreach ($homeFeeds as $feed) {
+            $rows = getPosts(['types' => $feed['types'], 'limit' => 4, 'sort' => 'newest']);
+            if ($rows) $homeSections[] = $feed + ['rows' => $rows];
+        }
+    } catch (Throwable $e) {
+        error_log('Homepage feeds unavailable: ' . $e->getMessage());
+        $homeSections = [];
     }
 }
-
-$homeHasAnyContent = !empty($newsItems) || !empty($writingRows);
-
+$homeHasAnyContent = !empty($homeSections);
 require_once __DIR__ . '/includes/header.php';
 ?>
 
@@ -140,48 +135,31 @@ require_once __DIR__ . '/includes/header.php';
     </section>
 
     <?php if (!$homeHasAnyContent): ?>
-    <section class="jhd-section jhd-home-empty">
-        <div class="container">
-            <p role="status">
-                <?= $jhdPublicDbReady
-                    ? 'هنوز خبر یا مقاله‌ای برای نمایش منتشر نشده است.'
-                    : 'مطالب سایت موقتاً در دسترس نیستند. لطفاً بعداً دوباره مراجعه کنید.' ?>
-            </p>
-        </div>
-    </section>
+    <section class="jhd-section jhd-home-empty"><div class="container">
+        <p role="status"><?= $jhdPublicDbReady ? 'هنوز محتوای منتشرشده‌ای برای نمایش وجود ندارد.' : 'مطالب سایت موقتاً در دسترس نیستند. لطفاً بعداً مراجعه کنید.' ?></p>
+    </div></section>
     <?php endif; ?>
 
-    <?php if ($newsItems): ?>
-    <section class="jhd-section jhd-home-editorial-section" aria-labelledby="home-news-heading">
+    <?php foreach ($homeSections as $section): ?>
+    <section class="jhd-section jhd-home-editorial-section" aria-labelledby="home-<?= sanitize($section['key']) ?>-heading">
         <div class="container jhd-home-editorial-container">
             <?= jhd_section_head([
-                'eyebrow' => 'تازه‌های مدرسه',
-                'title' => 'اخبار مدرسه',
-                'title_id' => 'home-news-heading',
-                'icon' => 'bi-newspaper',
-                'url' => url('news'),
-                'link' => 'همهٔ خبرها',
+                'eyebrow' => $section['eyebrow'],
+                'title' => $section['title'],
+                'title_id' => 'home-' . $section['key'] . '-heading',
+                'icon' => $section['icon'],
+                'url' => url($section['url']),
+                'link' => $section['link'],
             ]) ?>
-            <?= jhd_news_list($newsItems, ['hide_type' => true]) ?>
+            <?= jhd_news_list($section['rows'], ['hide_type' => true]) ?>
+            <?php if ($section['key'] === 'news'): ?>
+            <a class="jhd-home-all-news" href="<?= url('news') ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i> همهٔ اخبار</a>
+            <?php endif; ?>
         </div>
     </section>
-    <?php endif; ?>
-
-    <?php if ($writingRows): ?>
-    <section class="jhd-section jhd-home-editorial-section" aria-labelledby="home-articles-heading">
-        <div class="container jhd-home-editorial-container">
-            <?= jhd_section_head([
-                'eyebrow' => 'مطالعه و اندیشه',
-                'title' => 'مقالات و پژوهش‌ها',
-                'title_id' => 'home-articles-heading',
-                'icon' => 'bi-journal-text',
-                'url' => url('articles'),
-                'link' => 'همهٔ مقاله‌ها',
-            ]) ?>
-            <?= jhd_news_list($writingRows, ['hide_type' => true]) ?>
-        </div>
-    </section>
-    <?php endif; ?>
+    <?php endforeach; ?>
 </div><!-- /.jhd-homepage -->
+
+<?php require_once __DIR__ . '/includes/footer.php'; ?>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
