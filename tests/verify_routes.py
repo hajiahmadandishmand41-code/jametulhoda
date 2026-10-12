@@ -238,3 +238,18 @@ if __name__ == '__main__':
     else:
         print("FAILURE: ONE OR MORE TESTS FAILED!")
         sys.exit(1)
+
+
+# Public taxonomy UI is retired, but legacy URLs must keep their permanent redirect.
+with open('pages/topic.php', 'r', encoding='utf-8') as f:
+    legacy_topic = f.read()
+with open('pages/topics.php', 'r', encoding='utf-8') as f:
+    legacy_topics = f.read()
+assert "true, 301" in legacy_topic and "url('articles')" in legacy_topic, 'legacy topic detail must 301 to articles'
+assert "true, 301" in legacy_topics and "url('articles')" in legacy_topics, 'topic directory must 301 to articles'
+with open('admin/includes/header.php', 'r', encoding='utf-8') as f:
+    admin_nav = f.read()
+assert "'key' => 'taxonomy'" not in admin_nav, 'topic/category group must not appear in admin navigation'
+with open('includes/cards.php', 'r', encoding='utf-8') as f:
+    card_renderer = f.read()
+assert "$topics = []; // Public topic chips are retired" in card_renderer, 'public card topic chips must stay disabled'

@@ -431,3 +431,10 @@ html[data-theme="dark"] {
 @media (prefers-reduced-motion: reduce) {
   .admin-sidebar, .admin-card, .admin-tabbar a, .admin-tabbar button { transition: none !important; }
 }
+
+/* Profile page: compact admin-only controls and a single-column phone layout. */
+.admin-content .admin-profile-layout{align-items:start}
+.admin-content .admin-profile-layout .admin-card-body{padding:clamp(.85rem,2vw,1.25rem)}
+.admin-content .admin-profile-layout .admin-form .form-control{min-width:0;width:100%;min-height:44px}
+.admin-content .admin-profile-layout .jhd-admin-avatar-preview{display:block;max-width:100%;height:auto;object-fit:cover;border-radius:12px}
+@media(max-width:767.98px){.admin-content .admin-profile-layout>.col-lg-7,.admin-content .admin-profile-layout>.col-lg-5{width:100%}.admin-content .admin-profile-layout .admin-card-body{padding:.85rem}.admin-content .admin-profile-layout .admin-form .row{--bs-gutter-x:.75rem;--bs-gutter-y:.75rem}}

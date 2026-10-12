@@ -493,7 +493,7 @@ function renderPostCard(array $post, array $opts = []): string {
     $type = (string)($opts['type'] ?? ($post['post_type'] ?? 'post'));
     $variant = !empty($opts['featured']) ? 'featured' : (!empty($opts['compact']) ? 'compact' : 'default');
     $rawDate = (string)($post['published_at'] ?? $post['created_at'] ?? '');
-    $topics = $opts['topics'] ?? jhd_card_topics($post, $variant === 'compact' ? 1 : 2);
+    $topics = []; // Public topic chips are retired; taxonomy data remains stored.
     $author = trim((string)($post['author_name'] ?? '')) ?: trim((string)($post['speaker'] ?? ''));
 
     $meta = [];
@@ -564,7 +564,7 @@ function renderEditorialRow(array $post, array $opts = []): string {
         (int)($opts['excerpt'] ?? 105)
     );
     $rawDate = (string)($post['published_at'] ?? $post['created_at'] ?? '');
-    $topics = $opts['topics'] ?? jhd_card_topics($post, 2);
+    $topics = []; // Public topic chips are retired; taxonomy data remains stored.
     $index = isset($opts['index']) ? max(0, (int)$opts['index']) : null;
     $image = trim((string)($post['featured_image'] ?? ''));
     $type = (string)($post['post_type'] ?? 'article');
