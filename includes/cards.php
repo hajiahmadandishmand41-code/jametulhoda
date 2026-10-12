@@ -1032,7 +1032,7 @@ function jhd_news_list(array $items, array $opts = []): string
             $fromContent = $summarySource === '';
             if ($fromContent) $summarySource = (string)($item['content'] ?? '');
             $summaryText = html_entity_decode(strip_tags($summarySource), ENT_QUOTES | ENT_HTML5, 'UTF-8');
-            $summaryText = trim((string)(preg_replace('/\\s+/u', ' ', $summaryText) ?? $summaryText));
+            $summaryText = trim((string)(preg_replace('/\s+/u', ' ', $summaryText) ?? $summaryText));
             if ($fromContent && $summaryText !== '') {
                 $summaryText = excerpt($summaryText, $fallbackExcerpt);
             }
