@@ -1,7 +1,7 @@
 <?php
 /**
  * admin/posts/create.php — ایجاد مطلب (گزارش / مقاله / پژوهش / پرسش و پاسخ / خبر)
- * ستون فقرات: موضوعات (post_topics) + نوع مطلب post_type
+ * نوع مطلب post_type؛ برچسب‌گذاری موضوعی در فرم عمومی مدیریت استفاده نمی‌شود.
  */
 $adminTitle = 'مطلب جدید';
 require_once __DIR__ . '/../includes/header.php';
@@ -50,10 +50,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!is_array($sections)) $sections = [$sections];
         $page_section = implode(',', array_filter(array_map('trim', $sections)));
         if (!$page_section) $page_section = 'other';
-
-        $topicIds = $_POST['topic_ids'] ?? [];
-        if(!is_array($topicIds)) $topicIds=[$topicIds];
-        $topicIds=array_filter(array_map('intval',$topicIds));
 
         if (!$title) {
             $error = 'عنوان مطلب الزامی است.';
@@ -136,10 +132,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($videoId > 0) togglePostFeaturedVideo($postId, $videoId, true);
                 }
                 $db->prepare('UPDATE posts SET featured_image=?, featured_video=? WHERE id=?')->execute([$featImg ?: null, $featVid ?: null, $postId]);
-
-                $primaryTopicId = (int)($_POST['primary_topic_id'] ?? 0);
-                $topicIds = validatedTopicIds($topicIds);
-                setPostTopics($postId, $topicIds, $primaryTopicId > 0 ? $primaryTopicId : null);
 
                 $imageErrors = [];
                 foreach (jhdDirectUploadPaths('images') as $directPath) {
@@ -380,7 +372,7 @@ $formPostType = $fixedPostType !== '' ? $fixedPostType : (string)($_POST['post_t
             </div>
 
             <div class="admin-card mb-3">
-                <div class="admin-card-header">نوع مطلب &amp; موضوعات</div>
+                <div class="admin-card-header">نوع مطلب</div>
                 <div class="admin-card-body">
                     <div class="mb-3">
                         <label class="form-label">نوع مطلب <span class="text-danger">*</span></label>
@@ -396,27 +388,6 @@ $formPostType = $fixedPostType !== '' ? $fixedPostType : (string)($_POST['post_t
                         <?php endif; ?>
                         <div class="form-text">نوع محتوا، محل نمایش و مسیر پوشهٔ اختصاصی آن را مشخص می‌کند.</div>
                     </div>
-                    <div class="mb-2"><label class="form-label fw-bold"><i class="bi bi-diagram-3 ms-1"></i> موضوعات (ستون فقرات) — چند انتخابی</label></div>
-                    <input type="search" class="form-control form-control-sm mb-2" data-topic-filter data-topic-target="postTopicList" placeholder="جستجو در همهٔ موضوعات">
-                    <div id="postTopicList" style="max-height:240px;overflow:auto;border:1px solid #e8e6dc;border-radius:10px;padding:10px;background:#fafaf7">
-                        <?php if(empty($allTopics)): ?><div class="text-muted small">موضوعی وجود ندارد — از <a href="<?= siteUrl('admin/topics/') ?>">مدیریت موضوعات</a> اضافه کنید.</div>
-                        <?php else: foreach($allTopics as $t): $indent = $t['parent_id'] ? 'style="padding-inline-start:18px"' : ''; ?>
-                        <label class="form-check" <?= $indent ?>>
-                            <input type="checkbox" class="form-check-input" name="topic_ids[]" value="<?= $t['id'] ?>" <?= in_array($t['id'], (array)$selectedTopicIds)?'checked':'' ?>>
-                            <span class="form-check-label small"><?= sanitize($t['name']) ?></span>
-                        </label>
-                        <?php endforeach; endif; ?>
-                    </div>
-                    <div class="mt-3">
-                        <label class="form-label small fw-bold">موضوع اصلی</label>
-                        <select name="primary_topic_id" class="form-select form-select-sm">
-                            <option value="">— اولین موضوع انتخاب‌شده —</option>
-                            <?php foreach ($allTopics as $t): ?>
-                            <option value="<?= (int)$t['id'] ?>"><?= sanitize($t['name']) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="form-text mt-2">اتصال به موضوعات باعث نمایش در صفحهٔ موضوع و پیوند داخلی می‌شود.</div>
                     <div class="mt-3">
                         <label class="form-label">دسته‌بندی قدیمی (اختیاری)</label>
                         <select name="category_id" class="form-select">
