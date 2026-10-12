@@ -248,7 +248,8 @@ if __name__ == '__main__':
     assert "$topics = []; // Public topic chips are retired" in card_renderer, 'public card topic chips must stay disabled'
     assert "if ($route === 'news') return $memo[$memoKey] = [];" in card_renderer, 'news navigation must not repeat the matching news category'
     assert re.search(r"\['route'\s*=>\s*'news',\s*'label'\s*=>\s*'اخبار مدرسه'", card_renderer), 'single news menu entry should be labelled اخبار مدرسه'
-    assert "$showText = !empty($opts['show_text'])" in card_renderer, 'text list renderer should support homepage summaries'
+    assert "$showText = !empty($opts['show_text'])" in card_renderer, 'text list renderer should support homepage text'
+    assert "$textSource = trim((string)($item['content'] ?? ''));" in card_renderer and ". $textHtml" in card_renderer, 'homepage must render the full stored content body rather than a clipped excerpt'
     assert "'jhd-editorial-row--no-thumb'" in card_renderer and "$thumb !== ''" in card_renderer, 'article row should know whether an image exists'
 
     with open('index.php', 'r', encoding='utf-8') as f:
