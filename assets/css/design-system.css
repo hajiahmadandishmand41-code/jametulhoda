@@ -4527,3 +4527,9 @@ h1,h2,h3,h4,h5,h6,.jhd-section-head h2,.jhd-auth-card h1 {
 .jhd-home-editorial-section{padding-block:clamp(1rem,2.2vw,1.8rem);}
 .jhd-home-editorial-container{min-width:0;}
 @media(max-width:575.98px){.jhd-home-all-news{width:100%;min-height:50px;font-size:1rem}.jhd-home-editorial-section{padding-block:1rem}}
+
+/* Footer social controls share one target size; Telegram also exposes a text label. */
+.main-footer .footer-social{display:flex;flex-wrap:wrap;align-items:center;gap:.65rem}
+.main-footer .footer-social .social-link{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;min-width:46px;min-height:46px;padding:.65rem;border:1px solid var(--jhd-border);border-radius:12px;text-decoration:none}
+.main-footer .footer-social .social-link--telegram{min-width:150px;padding-inline:1rem;font-weight:750}
+.main-footer .footer-social .social-link i{font-size:1.15rem}
