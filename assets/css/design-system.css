@@ -4545,7 +4545,7 @@ h1,h2,h3,h4,h5,h6,.jhd-section-head h2,.jhd-auth-card h1 {
   line-clamp: unset;
   overflow-wrap: anywhere;
 }
-.jhd-homepage--editorial .jhd-news-row__summary {
+.jhd-homepage--editorial .jhd-news-row__text {
   display: block;
   margin-top: .25rem;
   color: var(--jhd-muted);
