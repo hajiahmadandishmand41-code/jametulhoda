@@ -151,25 +151,11 @@ require_once __DIR__ . '/includes/header.php';
                 'url' => url($section['url']),
                 'link' => $section['link'],
             ]) ?>
-            <?php if ($section['key'] === 'articles'): ?>
-            <?php jhd_preload_post_topics($section['rows']); ?>
-            <?= jhd_grid_open('jhd-home-articles-grid') ?>
-                <?php foreach ($section['rows'] as $articlePost):
-                    $articleType = (string)($articlePost['post_type'] ?? 'article');
-                    echo renderPostCard($articlePost, [
-                        'featured' => true,
-                        'col' => 'col-12 col-md-6',
-                        'cta' => $articleType === 'research' ? 'مطالعه پژوهش' : 'مطالعه مقاله',
-                        'excerpt' => 180,
-                    ]);
-                endforeach; ?>
-            <?= jhd_grid_close() ?>
-            <?php else: ?>
-            <?= jhd_news_list($section['rows'], ['hide_type' => true]) ?>
-            <?php endif; ?>
-            <?php if ($section['key'] === 'news'): ?>
-            <a class="jhd-home-all-news" href="<?= url('news') ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i> همهٔ اخبار</a>
-            <?php endif; ?>
+            <?php
+            // صفحهٔ نخست فقط فهرست متنی دارد؛ هیچ کارت تصویری یا قاب خالی نمایش داده نمی‌شود.
+            // نوع هر مطلب در آرشیو اختصاصی خودش با ظاهر و برچسب متناسب نمایش داده می‌شود.
+            echo jhd_news_list($section['rows'], ['hide_type' => true]);
+            ?>
         </div>
     </section>
     <?php endforeach; ?>
