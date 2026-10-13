@@ -158,7 +158,7 @@ require_once __DIR__ . '/../includes/header.php';
     <?php jhd_preload_post_topics($posts); ?>
     <?= jhd_grid_open() ?>
       <?php foreach ($posts as $k => $p):
-        echo renderEditorialRow($p, ['index' => ($page - 1) * $limit + $k + 1, 'cta' => $p['post_type'] === 'research' ? 'مطالعه پژوهش' : 'مطالعه مقاله', 'excerpt' => 120]);
+        echo renderEditorialRow($p, ['index' => ($page - 1) * $limit + $k + 1, 'cta' => $p['post_type'] === 'research' ? 'مطالعه پژوهش' : 'مطالعه مقاله', 'excerpt' => 150, 'hide_image' => true]);
       endforeach; ?>
     <?= jhd_grid_close() ?>
 

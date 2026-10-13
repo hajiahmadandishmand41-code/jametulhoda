@@ -576,7 +576,7 @@ function renderEditorialRow(array $post, array $opts = []): string {
     ]);
 
     $thumb = '';
-    if ($image !== '') {
+    if ($image !== '' && empty($opts['hide_image'])) {
         $src = imgUrl($image);
         $thumb = '<a class="jhd-editorial-thumb" href="' . sanitize($href) . '"'
             . ' aria-label="' . sanitize($title) . '">'
@@ -1105,7 +1105,7 @@ function jhd_nav_sections(): array {
             ['route' => 'books',    'label' => 'کتابخانه',      'icon' => 'bi-book',          'types' => [],                  'extra_active' => ['book']],
             ['route' => 'articles', 'label' => 'نوشتارها',      'icon' => 'bi-pencil-square', 'types' => ['article','research'], 'extra_active' => ['research', 'reports', 'qa', 'post', 'article']],
             ['route' => 'media',    'label' => 'صوت و تصویر',   'icon' => 'bi-play-btn',      'types' => [],                  'extra_active' => ['videos', 'audios', 'speeches', 'video', 'audio']],
-            ['route' => 'news',     'label' => 'اخبار',         'icon' => 'bi-newspaper',     'types' => ['news'],            'extra_active' => ['announcements', 'events', 'programs', 'religious-activities']],
+            ['route' => 'news',     'label' => 'اخبار مدرسه',         'icon' => 'bi-newspaper',     'types' => ['news'],            'extra_active' => ['announcements', 'events', 'programs', 'religious-activities']],
         ],
         'more' => [
             ['route' => 'research',              'label' => 'پژوهش‌ها',               'icon' => 'bi-journal-richtext', 'types' => ['research']],
@@ -1143,6 +1143,8 @@ function jhd_section_children(array $section): array {
     $memoKey = (string)($section['route'] ?? '') . '|' . implode(',', (array)($section['types'] ?? []));
     if (array_key_exists($memoKey, $memo)) return $memo[$memoKey];
     $route = (string)($section['route'] ?? '');
+    // «اخبار مدرسه» یک مقصد واحد در منوی همبرگری است؛ زیرمنوی تکراری «اخبار مدرسه/همه اخبار» نساز.
+    if ($route === 'news') return $memo[$memoKey] = [];
     $children = [];
     foreach (getCategoriesForTypes($section['types'] ?? []) as $c) {
         $children[] = ['label' => (string)$c['name'], 'url' => categoryUrl($c)];
