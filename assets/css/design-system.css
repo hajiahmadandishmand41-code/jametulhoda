@@ -4590,3 +4590,17 @@ h1,h2,h3,h4,h5,h6,.jhd-section-head h2,.jhd-auth-card h1 {
     line-clamp: 3;
   }
 }
+
+
+/* Article archive: slightly larger text-first rows, with no image or reserved thumbnail space. */
+.jhd-articles-hub .jhd-editorial-row { min-height: 0; padding: clamp(1rem, 2vw, 1.45rem); gap: 1rem; }
+.jhd-articles-hub .jhd-editorial-main { min-width: 0; gap: .55rem; }
+.jhd-articles-hub .jhd-editorial-title { font-size: clamp(1.12rem, 1rem + .45vw, 1.35rem); line-height: 1.75; }
+.jhd-articles-hub .jhd-card-summary { font-size: .96rem; line-height: 1.95; }
+.jhd-articles-hub .jhd-editorial-thumb { display: none !important; }
+.jhd-articles-hub .jhd-editorial-badge { align-self: start; }
+@media (max-width: 575.98px) {
+  .jhd-articles-hub .jhd-editorial-row { padding: .9rem; gap: .55rem; }
+  .jhd-articles-hub .jhd-editorial-title { font-size: 1.05rem; }
+  .jhd-articles-hub .jhd-card-summary { font-size: .9rem; }
+}
