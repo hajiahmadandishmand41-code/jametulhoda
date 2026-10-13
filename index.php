@@ -100,10 +100,8 @@ if ($jhdPublicDbReady) {
     startPublicSession();
     // هر فهرست تنها وقتی محتوای منتشرشده دارد، در صفحهٔ نخست ظاهر می‌شود.
     $homeFeeds = [
-        ['key' => 'news', 'title' => 'اخبار و اطلاعیه‌ها', 'eyebrow' => 'تازه‌های مدرسه', 'icon' => 'bi-newspaper', 'url' => 'news', 'link' => 'همهٔ اخبار', 'types' => ['news', 'announcement']],
+        ['key' => 'news', 'title' => 'اخبار مدرسه', 'eyebrow' => 'تازه‌های مدرسه', 'icon' => 'bi-newspaper', 'url' => 'news', 'link' => 'همهٔ اخبار', 'types' => ['news', 'announcement']],
         ['key' => 'articles', 'title' => 'مقالات و پژوهش‌ها', 'eyebrow' => 'مطالعه و اندیشه', 'icon' => 'bi-journal-text', 'url' => 'articles', 'link' => 'همهٔ مقاله‌ها', 'types' => ['article', 'research']],
-        ['key' => 'reports', 'title' => 'گزارش‌ها', 'eyebrow' => 'گزارش فعالیت‌ها', 'icon' => 'bi-card-text', 'url' => 'reports', 'link' => 'همهٔ گزارش‌ها', 'types' => ['report']],
-        ['key' => 'events', 'title' => 'رویدادها', 'eyebrow' => 'برنامه‌ها و مناسبت‌ها', 'icon' => 'bi-calendar-event', 'url' => 'events', 'link' => 'همهٔ رویدادها', 'types' => ['event']],
     ];
     try {
         foreach ($homeFeeds as $feed) {
