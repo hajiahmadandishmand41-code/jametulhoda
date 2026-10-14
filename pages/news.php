@@ -5,7 +5,11 @@
 $pageTitle = 'اخبار';
 $metaTitleOverride = 'اخبار جامعه‌الهدی | اخبار مدرسه علمیه و رویدادها';
 $pageDesc = 'تازه‌ترین اخبار، اطلاعیه‌ها، گزارش‌ها و رویدادهای مدرسه جامعه‌الهدی در حوزه آموزش، فرهنگ و علوم اسلامی.';
-require_once __DIR__ . '/../includes/header.php';
+require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/auth.php';
+startPublicSession();
 
 $search = trim($_GET['q'] ?? '');
 $page   = max(1, (int)($_GET['page'] ?? 1));
@@ -20,6 +24,14 @@ $total = countPosts(array_merge(['types' => ['news', 'announcement']], $search ?
 $pages = (int)ceil($total / $limit);
 jhd_validate_pagination($page, $total, $limit, 'اخبار', url('news'), 'اخبار');
 $noindexSeo = ($total === 0);
+
+$breadcrumbs = [
+    ['name' => 'صفحه اصلی', 'url' => url()],
+    ['name' => 'اخبار', 'url' => url('news')],
+];
+$breadcrumbsJsonLd = breadcrumbsJsonLd($breadcrumbs);
+
+require_once __DIR__ . '/../includes/header.php';
 
 ?>
 

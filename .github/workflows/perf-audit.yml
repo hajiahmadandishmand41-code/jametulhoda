@@ -64,7 +64,7 @@ jobs:
           SAMPLES: '6'
           THROTTLE_MS: '300'
           REQUEST_TIMEOUT_MS: '120000'
-          ONLY_PATHS: '/,/news,/topics,/books,/login'
+          ONLY_PATHS: '/,/news,/articles,/books,/login'
           SKIP_ASSETS: '1'
           CACHE_PROBE: '1'
         run: node tests/perf-measure.mjs 2>&1 | tee preview-report.txt
@@ -121,7 +121,7 @@ jobs:
           ASSET_SAMPLES: '1'
           THROTTLE_MS: '100'
           REQUEST_TIMEOUT_MS: '25000'
-          ONLY_PATHS: ${{ inputs.sweep_paths || '/,/news,/articles,/topics,/books,/lessons,/events,/research,/login,/admin,/sitemap.xml,/robots.txt,/this-route-does-not-exist-xyz' }}
+          ONLY_PATHS: ${{ inputs.sweep_paths || '/,/news,/articles,/books,/lessons,/events,/research,/login,/admin,/sitemap.xml,/robots.txt,/this-route-does-not-exist-xyz' }}
         run: node tests/perf-measure.mjs 2>&1 | tee sweep-report.txt
 
       - name: Publish measurement

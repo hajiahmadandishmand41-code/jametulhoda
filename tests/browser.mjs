@@ -34,10 +34,12 @@ try {
     rows:section.querySelectorAll('.jhd-news-row').length,
     hrefs:[...section.querySelectorAll('.jhd-news-row__title')].map(link=>link.getAttribute('href')||'')
   })));
-  assert.ok(homeSections.length<=2,'homepage contains at most two editorial sections');
-  assert.ok(homeSections.every(section=>['اخبار مدرسه','مقالات و پژوهش‌ها'].includes(section.heading)),'homepage only presents news and articles');
-  assert.ok(homeSections.every(section=>section.rows<=5),'each homepage list is limited to five entries');
+  const allowedHomeHeadings=['اخبار و اطلاعیه‌ها','مقالات و پژوهش‌ها','گزارش‌ها','کتاب‌ها','درس‌ها','رویدادها'];
+  assert.ok(homeSections.length>=2&&homeSections.length<=6,'homepage displays active main sections with published content');
+  assert.ok(homeSections.every(section=>allowedHomeHeadings.includes(section.heading)),'homepage presents only active main content sections');
+  assert.ok(homeSections.every(section=>section.rows>0&&section.rows<=5),'each homepage list is non-empty and limited to five entries');
   assert.ok(homeSections.every(section=>section.hrefs.every(href=>href.startsWith('/')||href.startsWith('http'))),'editorial list links are valid');
+  assert.equal(await page.locator('.jhd-home-all-news').count(),1,'homepage news section has a clear all-news button');
   assert.equal(await page.locator('.jhd-home-search').count(),0,'homepage avoids a duplicate search form');
   const headerSearch=page.locator('.jhd-search #header-search');
   assert.equal(await headerSearch.isVisible(),true,'shared header search is visible on desktop');
@@ -56,16 +58,7 @@ try {
   ]);
   assert.equal(new URL(page.url()).searchParams.get('type'),'article','archive type filter is submitted');
   assert.equal(new URL(page.url()).searchParams.get('sort'),'newest','archive date sort is submitted');
-  assert.equal(await page.locator('#archive-search-topic').count(),1,'archive topic filter is available');
-  const topicOptions=await page.locator('#archive-search-topic option').evaluateAll(options=>options.map(option=>option.value).filter(Boolean));
-  if (topicOptions.length) {
-    await page.locator('#archive-search-topic').selectOption(topicOptions[0]);
-    await Promise.all([
-      page.waitForURL(url=>url.searchParams.get('topic')===topicOptions[0],{timeout:30000}),
-      page.locator('.jhd-search-form button[type=submit]').click(),
-    ]);
-    assert.equal(new URL(page.url()).searchParams.get('topic'),topicOptions[0],'archive topic filter is submitted');
-  }
+  assert.equal(await page.locator('#archive-search-topic').count(),0,'archive topic filter is retired from public search');
   await page.goto(base,{waitUntil:'networkidle'});
   await page.setViewportSize({width:390,height:844});
   assert.equal(await page.locator('.jhd-header-actions a[aria-label="جستجو"]').isVisible(),true,'mobile header keeps a direct search link');
@@ -89,7 +82,7 @@ try {
   assert.equal(await page.locator('.jhd-book-detail main').count(),0,'book detail does not nest main landmarks');
   assert.equal(await page.locator('.jhd-book-cover-panel').count(),1,'book cover appears in a single panel');
   assert.equal(await page.locator('.jhd-book-reader-callout').count(),0,'duplicate reader callout is removed');
-  assert.ok(await page.locator('.jhd-book-topics').count()<=1,'book topics are shown at most once');
+  assert.equal(await page.locator('.jhd-book-topics').count(),0,'book topics are retired from book detail page');
   assert.ok(await page.locator('.jhd-book-actions').count()<=1,'book actions are grouped in one place');
   const bookToc = page.locator('details.jhd-book-toc');
   if (await bookToc.count()) {
@@ -138,7 +131,7 @@ try {
   assert.equal(await archiveQuery.getAttribute('autofocus'),null,'search does not unexpectedly open the mobile keyboard');
   assert.equal(await page.locator('label[for="archive-search-query"]').count(),1,'visible search label is associated with its input');
   assert.equal(await page.locator('#archive-search-type').count(),1,'content type filter is available');
-  assert.equal(await page.locator('#archive-search-topic').count(),1,'topic filter is available');
+  assert.equal(await page.locator('#archive-search-topic').count(),0,'topic filter is retired from search');
   assert.equal(await page.locator('#archive-search-sort').count(),1,'sort control is available');
   for (const width of [360,390,768,1024,1440]) {
     await page.setViewportSize({width,height:900});

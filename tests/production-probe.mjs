@@ -20,9 +20,9 @@ const base = (process.env.TEST_BASE_URL || 'https://jametulhoda.vercel.app').rep
 // Deployments behind Vercel's Attack Challenge Mode answer plain HTTP clients
 // with a 403 challenge page. Solve it once in a real browser and reuse the
 // cookie for every request below; without this the probe stalls partway.
-const storageState = process.env.PROBE_SKIP_BROWSER
+const storageState = (process.env.PROBE_SKIP_BROWSER
   ? undefined
-  : await passSecurityCheckpoint(base, { debug: true });
+  : await passSecurityCheckpoint(base, { debug: true })) || undefined;
 
 const api = await request.newContext({ baseURL: base, storageState });
 const results = [];
@@ -118,7 +118,7 @@ console.log(`\n=== Unauthenticated probe: ${base} (throttle ${THROTTLE_MS}ms) ==
 // ── 1. Homepage and security headers ────────────────────────────────────────
 const home = await probe('GET', '/');
 check('homepage responds 200', home.status === 200, String(home.status));
-check('homepage renders the site identity', /\u062c\u0627\u0645\u0639\u0629/.test(home.body));
+check('homepage renders the site identity', /\u062c\u0627\u0645\u0639[\u0629\u0647]/.test(home.body));
 check('no PHP error text leaks on the homepage',
   !/(Warning|Fatal error|Parse error|Deprecated|TypeError):/.test(home.body));
 note('server', home.headers.server || '(none)');

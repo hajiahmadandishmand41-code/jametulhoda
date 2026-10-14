@@ -41,14 +41,14 @@ const DEFAULT_PAGES = [
   ['news', '/news'],
   ['articles', '/articles'],
   ['reports', '/reports'],
-  ['research', '/research'],
+  ['research', '/articles?type=research'],
   ['books', '/books'],
   ['lessons', '/lessons'],
-  ['topics', '/topics'],
-  ['topic', '/topic/quran'],
   ['media', '/media'],
   ['search', '/search?q=%D9%82%D8%B1%D8%A2%D9%86'],
   ['post', '/post/new-school-year'],
+  ['login', '/login'],
+  ['register', '/register'],
 ];
 // JHD_PAGES lets the same measurement run against saved HTML snapshots
 // (for example [["home","/tests/snapshots/home.html"]]) instead of a live

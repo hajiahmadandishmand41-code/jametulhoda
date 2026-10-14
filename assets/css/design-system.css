@@ -107,16 +107,16 @@ html[data-theme="light"] {
   /* تایپوگرافی — مقیاس ثابت، بدون اندازهٔ سرگردان */
   --jhd-font-body: 'Vazirmatn', 'Segoe UI', Tahoma, system-ui, sans-serif;
   --jhd-font-display: 'Amiri', 'Vazirmatn', serif;
-  --jhd-root-size: 14.2px;
-  --jhd-text-2xs: .6875rem;   /* 10.3px — فقط برچسب عددی ریز؛ متن خوانا نه */
-  --jhd-text-xs:   .75rem;    /* 11.25px */
-  --jhd-text-sm:   .8125rem;   /* 12.2px */
-  --jhd-text-base: .9375rem;   /* 14.06px */
-  --jhd-text-md:   1rem;        /* 15px — بدنهٔ کارت و متن برجسته */
-  --jhd-text-lg:   1.125rem;    /* 16.9px */
-  --jhd-text-xl:   1.3rem;      /* 19.5px */
-  --jhd-text-2xl:  1.6rem;      /* 24px */
-  --jhd-text-3xl:  1.95rem;     /* 29px */
+  --jhd-root-size: 14.8px;
+  --jhd-text-2xs: .6875rem;   /* 10.2px — فقط برچسب عددی ریز؛ متن خوانا نه */
+  --jhd-text-xs:   .75rem;    /* 11.1px */
+  --jhd-text-sm:   .8125rem;   /* 12px */
+  --jhd-text-base: .9375rem;   /* 13.9px */
+  --jhd-text-md:   1rem;        /* 14.8px — بدنهٔ کارت و متن برجسته */
+  --jhd-text-lg:   1.125rem;    /* 16.65px */
+  --jhd-text-xl:   1.3rem;      /* 19.2px */
+  --jhd-text-2xl:  1.6rem;      /* 23.7px */
+  --jhd-text-3xl:  1.95rem;     /* 28.8px */
   --jhd-leading-tight: 1.45;
   --jhd-leading-snug:  1.62;
   --jhd-leading-body:  1.78;
@@ -198,7 +198,10 @@ html[data-theme="dark"] {
 
 /* ─── ۳. پایه و تایپوگرافی ────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
-html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+html { font-size: var(--jhd-root-size, 14.8px); scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+@media (max-width: 575.98px) {
+  :root, html[data-theme="light"], html[data-theme="dark"] { --jhd-root-size: 15px; }
+}
 html, body { max-width: 100%; }
 body {
   margin: 0;

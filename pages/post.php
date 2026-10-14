@@ -156,11 +156,6 @@ $typeMap = [
 if (isset($typeMap[$post['post_type']])) {
     $breadcrumbs[] = ['name' => $typeMap[$post['post_type']]['label'], 'url' => $typeMap[$post['post_type']]['url']];
 }
-if ($primaryTopic) {
-    foreach (getTopicBreadcrumbs((int)$primaryTopic['id']) as $bt) {
-        $breadcrumbs[] = ['name' => $bt['name'], 'url' => topicUrl($bt)];
-    }
-}
 // Use the URL-mode-aware canonical also used by cards, redirects and the
 // sitemap: Pretty deployments publish the clean typed path; Query-mode hosts
 // keep the working index.php?p=… canonical rather than pointing crawlers at a
@@ -198,7 +193,6 @@ require_once __DIR__ . '/../includes/header.php';
         <div class="d-flex flex-wrap gap-2 mb-2">
             <span class="jhd-card-badge jhd-card-badge--inline"><?= sanitize(postTypeLabel((string)$post['post_type'])) ?></span>
             <?php if (!empty($post['cat_name'])): ?><a href="<?= categoryUrl($post['cat_slug']) ?>" class="jhd-chip"><?= sanitize($post['cat_name']) ?></a><?php endif; ?>
-            <?php if ($primaryTopic): ?><a href="<?= topicUrl($primaryTopic) ?>" class="jhd-chip"><i class="bi bi-tag"></i><?= sanitize($primaryTopic['name']) ?></a><?php endif; ?>
         </div>
         <h1 class="jhd-article-title" itemprop="headline"><?= sanitize($post['title']) ?></h1>
         <?php if (!empty($post['summary'])): ?><p class="jhd-article-lead" itemprop="description"><?= sanitize($post['summary']) ?></p><?php endif; ?>
@@ -320,13 +314,6 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
     <?php endif; ?>
 
-    <?php if ($postTopics): ?>
-    <section class="mt-4" aria-label="موضوعات مطلب">
-        <h2 class="h6"><i class="bi bi-diagram-3 ms-1 text-gold"></i> موضوعات مرتبط</h2>
-        <div class="jhd-cat-strip mb-0"><?php foreach ($postTopics as $t): ?><a href="<?= topicUrl($t) ?>" class="jhd-chip"><?= sanitize($t['name']) ?></a><?php endforeach; ?></div>
-    </section>
-    <?php endif; ?>
-
     <?= jhd_share_row($postCanonicalUrl, (string)$post['title']) ?>
 
     <?php
@@ -393,13 +380,6 @@ require_once __DIR__ . '/../includes/header.php';
         <?php endforeach; ?>
         </ul>
     </div>
-
-    <?php $sideTopics = getTopics(['active' => 1, 'limit' => 12]); if ($sideTopics): ?>
-    <div class="jhd-side-card">
-        <h3><i class="bi bi-tags"></i> موضوعات</h3>
-        <div class="jhd-cat-strip mb-0"><?php foreach ($sideTopics as $ct): ?><a href="<?= topicUrl($ct) ?>" class="jhd-chip"><?= sanitize($ct['name']) ?></a><?php endforeach; ?></div>
-    </div>
-    <?php endif; ?>
 </div>
 </div>
 </div></div></div>

@@ -41,10 +41,13 @@ require_once __DIR__ . '/../includes/header.php';
 <section class="jhd-auth-page">
     <div class="container">
         <div class="jhd-auth-card jhd-auth-card-wide">
-            <p class="jhd-kicker">عضویت</p>
-            <h1>ثبت‌نام در جامعة‌الهدی</h1>
-            <p class="jhd-auth-lead">حساب کاربری عمومی برای پیگیری مطالب است و هیچ دسترسی مدیریتی ایجاد نمی‌کند.</p>
-            <?php if ($error): ?><div class="alert alert-danger" role="alert"><?= sanitize($error) ?></div><?php endif; ?>
+            <div class="jhd-login-head">
+                <img src="<?= imgUrl(SITE_LOGO_PATH) ?>" width="64" height="64" alt="<?= sanitize($siteName) ?>" class="jhd-login-logo">
+                <p class="jhd-kicker">عضویت</p>
+                <h1>ثبت‌نام در جامعه‌الهدی</h1>
+                <p class="jhd-auth-lead">حساب کاربری عمومی برای پیگیری مطالب است و هیچ دسترسی مدیریتی ایجاد نمی‌کند.</p>
+            </div>
+            <?php if ($error): ?><div class="alert alert-danger" role="alert" aria-live="polite"><i class="bi bi-exclamation-triangle ms-2"></i><?= sanitize($error) ?></div><?php endif; ?>
             <form method="post" action="<?= registerUrl() ?>" autocomplete="on" class="jhd-auth-form">
                 <?= csrfField() ?>
                 <div class="row g-3">

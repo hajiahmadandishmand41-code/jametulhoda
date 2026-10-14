@@ -11,7 +11,7 @@ startPublicSession();
 $slug = trim($_GET['slug'] ?? '');
 $db = jhd_db();
 if ($db === null) {
-    jhd_render_content_unavailable('دسته‌بندی', url('topics'), 'مشاهده موضوعات');
+    jhd_render_content_unavailable('دسته‌بندی', url('articles'), 'مشاهده مقالات');
 }
 $cat = null;
 try {
@@ -21,12 +21,12 @@ try {
 } catch (PDOException $e) { $cat = null; }
 
 if (!$cat) {
-    if ($slug === '') { header('Location: ' . siteUrl('topics')); exit; }
+    if ($slug === '') { header('Location: ' . siteUrl('articles'), true, 301); exit; }
     http_response_code(404);
     $pageTitle = 'دسته‌بندی یافت نشد';
     $pageDesc = 'دسته‌بندی مورد نظر یافت نشد';
     require_once __DIR__ . '/../includes/header.php';
-    echo '<div class="container py-5 text-center"><h1>دسته‌بندی مورد نظر یافت نشد.</h1><a href="'.siteUrl('topics').'" class="btn btn-primary mt-3">مشاهده موضوعات</a></div>';
+    echo '<div class="container py-5 text-center"><h1>دسته‌بندی مورد نظر یافت نشد.</h1><a href="'.siteUrl('articles').'" class="btn btn-primary mt-3">مشاهده مقالات</a></div>';
     require_once __DIR__ . '/../includes/footer.php';
     exit;
 }
@@ -70,13 +70,12 @@ require_once __DIR__ . '/../includes/header.php';
     <?php if (empty($posts)): ?>
     <div class="jhd-empty-state"><i class="bi bi-folder" aria-hidden="true"></i><p>مطلبی یافت نشد</p></div>
     <?php else: ?>
-    <?php jhd_preload_post_topics($posts); ?>
     <?= jhd_grid_open() ?>
         <?php foreach ($posts as $k => $p):
             echo renderPostCard($p, ['featured' => $k === 0, 'cta' => 'ادامه مطلب', 'excerpt' => 120]);
         endforeach; ?>
     </div>
-    <?php if ($pages > 1): ?><div class="mt-5"><?= paginate($total, $limit, $page, categoryUrl($slug) . '&page=%d') ?></div><?php endif; ?>
+    <?php if ($pages > 1): ?><div class="mt-5"><?= paginate($total, $limit, $page, url('category', ['slug' => $slug, 'page' => '%d'])) ?></div><?php endif; ?>
     <?php endif; ?>
 </div></div>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

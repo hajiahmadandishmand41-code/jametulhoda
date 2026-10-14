@@ -95,17 +95,6 @@ $topics   = getTopicFlatTree();   // فهرست تختِ درختی برای ف�
                     <option value="draft"     <?= $status==='draft'?'selected':'' ?>>پیش‌نویس</option>
                 </select>
             </div>
-            <div class="col-md-3">
-                <label class="form-label small text-muted">موضوع</label>
-                <select name="topic" class="form-select">
-                    <option value="0">همهٔ موضوعات</option>
-                    <?php foreach ($topics as $t): ?>
-                    <option value="<?= (int)$t['id'] ?>" <?= $topic === (int)$t['id'] ? 'selected' : '' ?>>
-                        <?= str_repeat('— ', (int)($t['depth'] ?? 0)) . sanitize($t['name']) ?>
-                    </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
             <div class="col-md-2">
                 <label class="form-label small text-muted">رسانه</label>
                 <select name="media" class="form-select">

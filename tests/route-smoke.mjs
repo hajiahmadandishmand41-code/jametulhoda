@@ -23,12 +23,12 @@ const cases = [
   ['/media', 'ویدیو'],
   ['/videos', 'ویدیو'],
   ['/audios', 'صوت'],
-  ['/topics', 'موضوع'],
   ['/search', 'جستجو'],
   ['/about', 'درباره'],
   ['/contact', 'تماس'],
   ['/qa', 'پرسش'],
   ['/login', 'ورود'],
+  ['/register', 'ثبت‌نام'],
 ];
 const failures = [];
 const errors = /(Warning|Fatal error|Parse error|Deprecated|Notice):|Uncaught (Error|Exception)|شناسه پیگیری/;

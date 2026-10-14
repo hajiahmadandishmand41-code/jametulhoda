@@ -84,7 +84,6 @@ for (const [path, marker] of [
   ['/audio', 'صوت'],
   ['/lessons', 'دروس فقه'],
   ['/research', 'روش‌شناسی تحقیق'],
-  ['/topics', 'مهدویت'],
   ['/search', 'جستجو در آرشیو'],
   ['/search?q=قرآن', 'نتیجه'],
   ['/about', 'جامعه‌الهدی'],
@@ -118,7 +117,6 @@ for (const [path, marker, canonicalSuffix] of [
   ['/book/usul-aqaid', 'اصول عقاید', '/books/usul-aqaid'],
   ['/book/1', 'اصول عقاید', '/books/usul-aqaid'],
   ['/lesson/fiqh-lesson-1', 'مقدمات فقه', '/lessons/fiqh-lesson-1'],
-  ['/topic/mahdaviat', 'امام مهدی', '/topics/mahdaviat'],
   ['/video/1', 'ویدیو تبیینی', '/video/1'],
   ['/audio/2', 'صوت مقاله', '/audio/2'],
 ]) {
@@ -154,7 +152,6 @@ for (const [path, marker] of [
   ['/post?slug=aql-in-religion', 'جایگاه عقل'],
   ['/book.php?id=1', 'اصول عقاید'],
   ['/lesson.php?slug=fiqh-lesson-1', 'مقدمات فقه'],
-  ['/topic.php?slug=mahdaviat', 'امام مهدی'],
   ['/library', 'کتابخانه'],
   ['/files', 'کتابخانه'],
 ]) {
@@ -173,7 +170,10 @@ for (const [path, marker] of [
 for (const [path, expectLoc] of [
   ['/post', '/articles'],
   ['/lesson', '/lessons'],
-  ['/topic', '/topics'],
+  ['/topics', '/articles'],
+  ['/topic', '/articles'],
+  ['/topic/mahdaviat', '/articles'],
+  ['/topic.php?slug=mahdaviat', '/articles'],
   ['/article/', '/articles'],
   ['/admin/', '/login'],
   ['/book/usul-aqaid?download=pdf', '/uploads/documents/seed-doc.pdf'],
@@ -195,7 +195,6 @@ for (const path of [
   '/book/draft-book',           // draft slug → 404
   '/book.php?id=7',             // draft id → 404
   '/lesson/no-such-slug',
-  '/topic/no-such-slug',
   '/category/no-such-slug',
   '/video/999999',
   '/audio/1',                   // id 1 is a video, not audio → 404

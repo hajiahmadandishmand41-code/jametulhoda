@@ -236,7 +236,7 @@ const staff = await newClient();
 }
 
 // ─── L/M: clean URLs refresh correctly, unknown routes 404 ───────────────
-for (const path of ['/', '/news', '/articles', '/research', '/topics', '/books', '/lessons', '/videos', '/audios', '/about', '/contact', '/login', '/register']) {
+for (const path of ['/', '/news', '/articles', '/books', '/lessons', '/videos', '/audios', '/about', '/contact', '/login', '/register']) {
     const client = await request.newContext({ baseURL: base });
     const r = await client.get(path);
     const html = await r.text();
@@ -290,7 +290,7 @@ const editor = await newClient();
         const okStatus = r.status() === 303 || r.status() === 302;
         check(label, okStatus, String(r.status()));
         if (expectPath) {
-            const detail = await editor.get(expectPath);
+            const detail = await editor.get(expectPath, { maxRedirects: 5 });
             const html = await detail.text();
             check(`${label} → detail page`, detail.status() === 200 && html.includes(fields.title), String(detail.status()));
         }

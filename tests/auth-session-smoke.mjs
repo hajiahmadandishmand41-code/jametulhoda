@@ -21,7 +21,7 @@ const get = (path, headers = {}) =>
   fetch(base + path, { redirect: 'manual', headers });
 
 // ─── public pages must not create a session ─────────────────────────────────
-for (const path of ['/', '/news', '/articles', '/books', '/topics', '/about']) {
+for (const path of ['/', '/news', '/articles', '/books', '/about']) {
   const res = await get(path);
   const setCookie = res.headers.get('set-cookie') || '';
   check(`${path} responds 200`, res.status === 200, `status=${res.status}`);

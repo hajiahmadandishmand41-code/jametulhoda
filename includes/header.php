@@ -132,7 +132,7 @@ if (!empty($metaTitleOverride)) {
 } else {
     $metaTitle = $siteName . ' | ' . $siteSlogan;
 }
-$metaDesc = $pageDesc ?? $siteSlogan;
+$metaDesc = trim((string)($pageDesc ?? '')) !== '' ? trim((string)$pageDesc) : $siteSlogan;
 if (mb_strlen($metaDesc, 'UTF-8') > 160) {
     $metaDesc = mb_substr($metaDesc, 0, 157, 'UTF-8') . '...';
 }

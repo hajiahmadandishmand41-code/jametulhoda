@@ -31,7 +31,7 @@ for line in routes_chunk.splitlines():
     m = re.match(r"['\"]([^'\"]+)['\"]\s*=>\s*(.*)", line)
     if m:
         path = m.group(1)
-        target = m.group(2).rstrip(',')
+        target = m.group(2).split('//')[0].strip().rstrip(',')
         if target.startswith('{') or target.startswith('['):
             fm = re.search(r"['\"]file['\"]\s*=>\s*['\"]([^'\"]+)['\"]", target)
             routes[path] = {'file': fm.group(1) if fm else 'unknown'}
@@ -232,24 +232,39 @@ if __name__ == '__main__':
         print(f"[{status}] {req:<32} {exp:<10} {got:<10} {(expected_handler or '-'): <30} {handler_str}")
 
     print("="*80)
-    if all_passed:
-        print(f"SUCCESS: ALL {len(test_cases)} ROUTE RESOLUTION TESTS PASSED! ALL FILES EXIST!")
-        sys.exit(0)
-    else:
+    if not all_passed:
         print("FAILURE: ONE OR MORE TESTS FAILED!")
         sys.exit(1)
 
+    # Public taxonomy UI is retired, but legacy URLs must keep their permanent redirect.
+    with open('pages/topic.php', 'r', encoding='utf-8') as f:
+        legacy_topic = f.read()
+    with open('pages/topics.php', 'r', encoding='utf-8') as f:
+        legacy_topics = f.read()
+    assert "true, 301" in legacy_topic and "url('articles')" in legacy_topic, 'legacy topic detail must 301 to articles'
+    assert "true, 301" in legacy_topics and "url('articles')" in legacy_topics, 'topic directory must 301 to articles'
+    with open('admin/includes/header.php', 'r', encoding='utf-8') as f:
+        admin_nav = f.read()
+    assert "'key' => 'taxonomy'" not in admin_nav, 'topic/category group must not appear in admin navigation'
+    with open('includes/cards.php', 'r', encoding='utf-8') as f:
+        card_renderer = f.read()
+    assert "$topics = []; // Public topic chips are retired" in card_renderer, 'public card topic chips must stay disabled'
+    with open('includes/footer.php', 'r', encoding='utf-8') as f:
+        footer_html = f.read()
+    assert "social-link--telegram" in footer_html and "<span>کانال تلگرام</span>" in footer_html, 'footer Telegram button must have text label'
+    assert "url('topics')" not in footer_html, 'footer must not link to topics'
+    with open('index.php', 'r', encoding='utf-8') as f:
+        home_php = f.read()
+    for section_key in ["'key' => 'news'", "'key' => 'articles'", "'key' => 'reports'", "'key' => 'books'", "'key' => 'lessons'", "'key' => 'events'"]:
+        assert section_key in home_php, f'homepage must define {section_key}'
+    assert 'jhd-home-all-news' in home_php and 'همهٔ اخبار' in home_php, 'homepage must render all-news CTA'
+    with open('pages/news.php', 'r', encoding='utf-8') as f:
+        news_php = f.read()
+    assert "'types' => ['news', 'announcement']" in news_php, 'news archive must unify news and announcements'
+    with open('includes/functions.php', 'r', encoding='utf-8') as f:
+        funcs_php = f.read()
+    for m_name in ['حمل','ثور','جوزا','سرطان','اسد','سنبله','میزان','عقرب','قوس','جدی','دلو','حوت']:
+        assert m_name in funcs_php, f'Afghan Solar Hijri month {m_name} must exist in functions.php'
 
-# Public taxonomy UI is retired, but legacy URLs must keep their permanent redirect.
-with open('pages/topic.php', 'r', encoding='utf-8') as f:
-    legacy_topic = f.read()
-with open('pages/topics.php', 'r', encoding='utf-8') as f:
-    legacy_topics = f.read()
-assert "true, 301" in legacy_topic and "url('articles')" in legacy_topic, 'legacy topic detail must 301 to articles'
-assert "true, 301" in legacy_topics and "url('articles')" in legacy_topics, 'topic directory must 301 to articles'
-with open('admin/includes/header.php', 'r', encoding='utf-8') as f:
-    admin_nav = f.read()
-assert "'key' => 'taxonomy'" not in admin_nav, 'topic/category group must not appear in admin navigation'
-with open('includes/cards.php', 'r', encoding='utf-8') as f:
-    card_renderer = f.read()
-assert "$topics = []; // Public topic chips are retired" in card_renderer, 'public card topic chips must stay disabled'
+    print(f"SUCCESS: ALL {len(test_cases)} ROUTE RESOLUTION AND CONTRACT TESTS PASSED!")
+    sys.exit(0)

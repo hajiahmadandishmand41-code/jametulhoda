@@ -23,16 +23,16 @@ $siteSlogan = SITE_SLOGAN;
 $siteLogo   = SITE_LOGO_PATH;
 
 if ($jhdPublicDbReady) {
-    $aboutShort    = getSetting('about_short', 'مدرسه علمیه جامعة‌الهدی یکی از مراکز علوم و معارف اسلامی در کابل، افغانستان است.');
-    $socialTelegram = getSetting('social_telegram');
+    $aboutShort    = getSetting('about_short', 'مدرسه علمیه جامعه‌الهدی یکی از مراکز علوم و معارف اسلامی در کابل، افغانستان است.');
+    $socialTelegram = trim((string)getSetting('social_telegram')) ?: 'https://t.me/jametulhoda';
     $socialYoutube  = getSetting('social_youtube');
     $socialInstagram = getSetting('social_instagram');
     $siteAddress   = getSetting('address', SITE_ADDRESS);
     $sitePhone     = getSetting('phone', SITE_PHONE);
     $siteEmail     = getSetting('email', SITE_EMAIL);
 } else {
-    $aboutShort     = 'مدرسه علمیه جامعة‌الهدی یکی از مراکز علوم و معارف اسلامی در کابل، افغانستان است.';
-    $socialTelegram = '';
+    $aboutShort     = 'مدرسه علمیه جامعه‌الهدی یکی از مراکز علوم و معارف اسلامی در کابل، افغانستان است.';
+    $socialTelegram = 'https://t.me/jametulhoda';
     $socialYoutube  = '';
     $socialInstagram = '';
     $siteAddress    = SITE_ADDRESS;
