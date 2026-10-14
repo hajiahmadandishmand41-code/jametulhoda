@@ -20,19 +20,19 @@ const leaksInternal = (u) => /(^|\/)(pages|admin|includes|config|bin|tests|datab
 const check = (label, ok, detail = '') => { results.push({ label, ok, detail }); console.log(`${ok ? 'PASS' : 'FAIL'} ${label}${detail ? ' | ' + detail : ''}`); if (!ok) failures.push({ label, detail }); };
 
 async function get(path) {
-  const url = base + path;
-  let res = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(30000) });
-  if (res.status === 301 || res.status === 302 || res.status === 308) {
-    const location = res.headers.get('location') || '';
-    try {
-      const next = new URL(location, url);
-      const current = new URL(url);
-      const slashFixup = next.pathname.replace(/\/+$/, '') === current.pathname.replace(/\/+$/, '')
-        && next.origin === current.origin;
-      if (slashFixup) {
-        res = await fetch(next, { redirect: 'manual', signal: AbortSignal.timeout(30000) });
-      }
-    } catch { /* keep original */ }
+  let url = base + path;
+  let res;
+  const visited = new Set();
+  for (let step=0; step<6; step++) {
+    if (visited.has(url)) throw new Error('Canonical redirect loop: '+path);
+    visited.add(url);
+    res = await fetch(url, {redirect:'manual',signal:AbortSignal.timeout(30000)});
+    if (![301,308].includes(res.status)) break;
+    const next = new URL(res.headers.get('location') || '',url);
+    // Query/legacy spellings legitimately redirect to their canonical path.
+    // Never mask an external redirect or an authentication (302) redirect.
+    if (next.origin !== new URL(base).origin) break;
+    url=next.href;
   }
   const body = res.status === 200 ? await res.text() : '';
   return { status: res.status, body, headers: res.headers };
@@ -46,7 +46,7 @@ const listings = [
   ['research', '/research', 'پژوهش'],
   ['books', '/books', 'کتاب'],
   ['lessons', '/lessons', 'درس'],
-  ['topics', '/topics', 'موضوع'],
+  ['topics', '/topics', 'مقالات'],
   ['media', '/media', 'ویدیو'],
   ['videos', '/videos', 'ویدیو'],
   ['video', '/video', 'ویدیو'], // singular pretty path is a listing without an id
@@ -91,9 +91,8 @@ async function testDetail(label, queryUrl, prettyUrl, marker) {
   }
 }
 
-// Topic detail (core deliverable). Discovered from the live /topics hub; the
-// topic route is still validated by the 404 + listing checks even when the
-// database has no published topic yet.
+// Legacy topic links redirect to articles; assert the compatibility route
+// when an old link is still discoverable, without inventing a new topic hub.
 const topicSlug = await firstDetailSlug('/index.php?p=topics', /(?:topic\/|\bp=topic&(?:amp;)?slug=)([^"'&>]+)/);
 if (topicSlug) {
   await testDetail('topic', `/index.php?p=topic&slug=${encodeURIComponent(topicSlug)}`, `/topic/${encodeURIComponent(topicSlug)}`);
@@ -141,10 +140,16 @@ for (const kind of ['video', 'audio']) {
   }
 }
 
+// Topic URLs intentionally retired in the current application. Check the
+// permanent compatibility redirect rather than expecting deleted topic pages.
+for (const path of ['/index.php?p=topic&slug=this-does-not-exist-xyz','/topic/this-does-not-exist-xyz']) {
+  const r=await fetch(base+path,{redirect:'manual',signal:AbortSignal.timeout(30000)});
+  const target=new URL(r.headers.get('location') || '',base);
+  check('retired topic permanent redirect '+path,r.status===301 && target.origin===new URL(base).origin && /articles|p=articles/.test(target.pathname+target.search),String(r.status));
+}
+
 // ── True 404 (no soft-404) ──────────────────────────────────────────────────
 const notFound = [
-  ['/index.php?p=topic&slug=this-does-not-exist-xyz', 'QUERY unknown topic slug'],
-  ['/topic/this-does-not-exist-xyz', 'PRETTY unknown topic slug'],
   ['/index.php?p=bogus-route-xyz', 'QUERY unknown route'],
   ['/index.php?p=article&slug=this-does-not-exist-xyz', 'QUERY unknown article slug'],
 ];

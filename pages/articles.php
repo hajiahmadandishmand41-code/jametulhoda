@@ -50,7 +50,7 @@ $pages = (int)ceil($total / $limit);
 // Query fields that every link in this listing carries (search, type).
 $keep = static function (array $extra = []) use ($search, $typeKey): array {
     $q = array_filter(['q' => $search, 'type' => $typeKey !== 'all' ? $typeKey : ''], static fn($v) => $v !== '');
-    return $q + $extra;
+    return array_filter(array_replace($q, $extra), static fn($v) => $v !== '' && $v !== null);
 };
 
 jhd_validate_pagination($page, $total, $limit, 'مقالات', url('articles', $keep()), 'مقالات');
@@ -110,7 +110,8 @@ require_once __DIR__ . '/../includes/header.php';
     </nav>
 
     <!-- Search & Filter Form -->
-    <form method="get" class="mb-4" role="search">
+    <form method="get" action="<?= formUrl('articles') ?>" class="mb-4" role="search">
+    <?= formRouteFields('articles') ?>
     <?php if ($typeKey !== 'all'): ?><input type="hidden" name="type" value="<?= sanitize($typeKey) ?>"><?php endif; ?>
       <div class="row g-2 align-items-center">
         <div class="col-md-6 col-lg-5">
@@ -141,10 +142,10 @@ require_once __DIR__ . '/../includes/header.php';
     <?php if (empty($posts)): ?>
     <?= renderEmptyState('bi-file-text', $search ? 'مطلبی مطابق با جستجوی شما یافت نشد؛ عبارت دیگری را بیازمایید.' : 'هنوز مطلبی در این بخش ثبت نشده است.', url('articles'), 'مشاهده همه مقالات و پژوهش‌ها') ?>
     <?php else: ?>
-    <?php jhd_preload_post_topics($posts); ?>
-    <?= jhd_grid_open() ?>
-      <?php foreach ($posts as $k => $p):
-        echo renderEditorialRow($p, ['index' => ($page - 1) * $limit + $k + 1, 'cta' => $p['post_type'] === 'research' ? 'مطالعه پژوهش' : 'مطالعه مقاله', 'excerpt' => 120]);
+    <?php jhd_preload_post_images($posts); ?>
+    <?= jhd_grid_open('jhd-articles-grid') ?>
+      <?php foreach ($posts as $p):
+        echo renderEditorialRow($p, ['cta' => $p['post_type'] === 'research' ? 'مطالعه پژوهش' : 'مطالعه مقاله', 'excerpt' => 220]);
       endforeach; ?>
     <?= jhd_grid_close() ?>
 

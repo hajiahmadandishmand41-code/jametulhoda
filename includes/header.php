@@ -172,8 +172,12 @@ if (SITE_URL && !$responseIs404) {
 // Search, filter and 404 URLs stay out of the index while remaining crawlable.
 $authRoutes = ['login', 'register', 'logout', 'account', 'profile', 'password-change'];
 $routeNameForRobots = isset($_SERVER['JHD_ROUTE_NAME']) ? (string)$_SERVER['JHD_ROUTE_NAME'] : (string)($_GET['p'] ?? '');
-$authNoindex = in_array($routeNameForRobots, $authRoutes, true)
-    || preg_match('~^/(login|register|logout|account|profile|password-change)(/|$)~', $currentPath);
+$authNoindex = in_array(preg_replace('~^admin/~', '', $routeNameForRobots), $authRoutes, true)
+    || preg_match('~^/(?:admin/)?(login|register|logout|account|profile|password-change)(?:[/.]|$)~', $currentPath);
+
+// Authentication forms contain per-session CSRF tokens and error messages.
+// They must never be cached by a browser or a shared/Vercel cache.
+if ($authNoindex) header('Cache-Control: private, no-store');
 
 // The page parameter alone is intentionally not a noindex signal: real
 // pagination pages can be indexed when they contain content. Search/filter

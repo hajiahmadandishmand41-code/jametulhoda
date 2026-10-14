@@ -34,33 +34,46 @@ if (($collectionSlug !== '' && !$activeCollection) || ($activeCollection && $vol
     exit;
 }
 
-$lessonWhere = [];
+$lessonWhere = ["l.status = 'published'"];
 $lessonParams = [];
 if ($activeCollection) {
-    $lessonWhere = ["l.status = 'published'", "l.collection_id = ?"];
-    $lessonParams = [(int)$activeCollection['id']];
+    $lessonWhere[] = "l.collection_id = ?";
+    $lessonParams[] = (int)$activeCollection['id'];
     if ($activeVolume) {
         $lessonWhere[] = "l.volume_id = ?";
         $lessonParams[] = (int)$activeVolume['id'];
     }
-    if ($search) {
-        $lessonWhere[] = "(l.title ILIKE ? OR l.summary ILIKE ?)";
-        $s = "%$search%";
-        $lessonParams[] = $s;
-        $lessonParams[] = $s;
-    }
-    $whereStr = implode(' AND ', $lessonWhere);
+}
+if ($search !== '') {
+    $lessonWhere[] = "(l.title ILIKE ? OR l.summary ILIKE ?)";
+    $lessonParams[] = "%$search%";
+    $lessonParams[] = "%$search%";
+}
+if ($level !== '') {
+    $lessonWhere[] = 'l.level = ?';
+    $lessonParams[] = $level;
+}
+$whereStr = implode(' AND ', $lessonWhere);
+$total = 0;
+$lessons = [];
+if (jhd_db_ready()) {
     try {
         $cntStmt = getDB()->prepare("SELECT COUNT(*) FROM lessons l WHERE $whereStr");
         $cntStmt->execute($lessonParams);
         $total = (int)$cntStmt->fetchColumn();
+        $stmt = getDB()->prepare("SELECT l.*, lc.title AS collection_title FROM lessons l
+            LEFT JOIN lesson_collections lc ON lc.id=l.collection_id
+            WHERE $whereStr ORDER BY COALESCE(l.lesson_number, 9999), l.sort_order, l.id LIMIT ? OFFSET ?");
+        $stmt->execute(array_merge($lessonParams, [$limit, $offset]));
+        $lessons = $stmt->fetchAll();
     } catch (Throwable $e) {
-        $total = 0;
+        error_log('Lessons archive unavailable: ' . get_class($e));
     }
-    $pages = max(1, (int)ceil($total / $limit));
-    jhd_validate_pagination($page, $total, $limit, 'دروس حوزوی', collectionUrl($activeCollection, $activeVolume ?: null), 'بازگشت به این مجموعه');
-    $noindexSeo = ($total === 0);
 }
+$pages = max(1, (int)ceil($total / $limit));
+$lessonArchiveUrl = $activeCollection ? collectionUrl($activeCollection, $activeVolume ?: null) : url('lessons');
+jhd_validate_pagination($page, $total, $limit, 'دروس حوزوی', $lessonArchiveUrl, 'بازگشت به دروس');
+$noindexSeo = ($total === 0 || $level !== '');
 
 $pageTitle = $activeCollection ? $activeCollection['title'] : 'دروس حوزوی';
 if (!$activeCollection) {
@@ -209,17 +222,6 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
     <?php endif; ?>
 
-    <?php
-    $whereStr = implode(' AND ', $lessonWhere);
-    try {
-        $stmt = getDB()->prepare("SELECT l.* FROM lessons l WHERE $whereStr ORDER BY COALESCE(l.lesson_number, 9999) ASC, l.sort_order ASC, l.id ASC LIMIT ? OFFSET ?");
-        $stmt->execute(array_merge($lessonParams, [$limit, $offset]));
-        $lessons = $stmt->fetchAll();
-    } catch (Throwable $e) {
-        $lessons = [];
-    }
-    ?>
-
     <?php if (empty($lessons)): ?>
     <?php echo renderEmptyState('bi-mortarboard', 'درسی در این بخش یافت نشد.'); ?>
     <?php else: ?>
@@ -235,7 +237,7 @@ require_once __DIR__ . '/../includes/header.php';
 
     <?php if ($pages > 1): ?>
     <div class="mt-4">
-      <?= paginate($total, $limit, $page, collectionUrl($activeCollection, $activeVolume ?: null) . '&page=%d') ?>
+      <?= paginate($total, $limit, $page, $lessonArchiveUrl . (str_contains($lessonArchiveUrl, '?') ? '&' : '?') . http_build_query(array_filter(['q' => $search, 'level' => $level], static fn($v) => $v !== '') + ['page' => '%d'])) ?>
     </div>
     <?php endif; ?>
     <?php endif; ?>

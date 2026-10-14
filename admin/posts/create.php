@@ -239,8 +239,9 @@ $formPostType = $fixedPostType !== '' ? $fixedPostType : (string)($_POST['post_t
                         <textarea name="summary" class="form-control" rows="3" placeholder="خلاصه کوتاه مطلب..."><?= sanitize($_POST['summary'] ?? '') ?></textarea>
                     </div>
                     <div>
-                        <label class="form-label fw-bold">متن کامل مطلب</label>
-                        <textarea name="content" class="form-control" rows="12" placeholder="متن کامل مطلب را بنویسید..."><?= htmlspecialchars($_POST['content'] ?? '', ENT_QUOTES, 'UTF-8') ?></textarea>
+                        <label for="post-content" class="form-label fw-bold">متن کامل مطلب</label>
+                        <textarea id="post-content" name="content" aria-describedby="post-content-help" class="form-control" rows="12" placeholder="متن کامل مطلب را بنویسید..."><?= htmlspecialchars($_POST['content'] ?? '', ENT_QUOTES, 'UTF-8') ?></textarea>
+                        <p id="post-content-help" class="form-text mb-0">برای پاراگراف تازه یک خط خالی بگذارید؛ شکست خط و ساختار HTML امن (تیتر، فهرست و نقل‌قول) در نمایش عمومی حفظ می‌شود.</p>
                     </div>
                     <?php if ($fixedPostType === 'speech'): ?>
                     <div class="mt-3">

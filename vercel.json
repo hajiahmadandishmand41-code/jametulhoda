@@ -34,6 +34,10 @@
       "dest": "/api/index.php"
     },
     {
+      "src": "^/(?:sitemap\\.xml|sitemap\\.php|robots\\.txt|robots\\.php)$",
+      "dest": "/api/index.php"
+    },
+    {
       "src": "^/(?!assets/).*$",
       "dest": "/api/index.php"
     },

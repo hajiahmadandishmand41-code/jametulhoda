@@ -150,7 +150,7 @@ require_once __DIR__ . '/../includes/header.php';
                 <div class="single-post-summary"><p><?= sanitize($post['summary']) ?></p></div>
                 <?php endif; ?>
 
-                <div class="single-post-content">
+                <div class="single-post-content jhd-prose">
                     <?= safeRichText($post['content']) ?: '<p class="text-muted">متنی وارد نشده است.</p>' ?>
                 </div>
 
