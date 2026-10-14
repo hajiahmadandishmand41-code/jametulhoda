@@ -11,12 +11,6 @@ require_once __DIR__ . '/../includes/auth.php';
 startPublicSession();
 
 $search = trim($_GET['q'] ?? '');
-$topicSlug = trim($_GET['topic'] ?? '');
-$topicId = null;
-if ($topicSlug) {
-    $t = getTopicBySlug($topicSlug);
-    if ($t) $topicId = (int)$t['id'];
-}
 
 $page = max(1, (int)($_GET['page'] ?? 1));
 $limit = 12;
@@ -24,10 +18,9 @@ $offset = ($page - 1) * $limit;
 
 $opts = ['type' => 'report', 'limit' => $limit, 'offset' => $offset];
 if ($search) $opts['search'] = $search;
-if ($topicId) $opts['topic'] = $topicId;
 
 $posts = getPosts($opts);
-$total = countPosts(['type' => 'report'] + ($search ? ['search' => $search] : []) + ($topicId ? ['topic' => $topicId] : []));
+$total = countPosts(['type' => 'report'] + ($search ? ['search' => $search] : []));
 
 $pages = (int)ceil($total / $limit);
 jhd_validate_pagination($page, $total, $limit, 'گزارش‌ها', url('reports'), 'گزارش‌ها');
@@ -38,9 +31,6 @@ $breadcrumbs = [
     ['name' => 'صفحه اصلی', 'url' => url()],
     ['name' => 'گزارش‌ها', 'url' => url('reports')]
 ];
-if ($topicId && !empty($t)) {
-    $breadcrumbs[] = ['name' => $t['name'], 'url' => url('reports', ['topic' => $t['slug']])];
-}
 $breadcrumbsJsonLd = breadcrumbsJsonLd($breadcrumbs);
 
 require_once __DIR__ . '/../includes/header.php';
@@ -81,13 +71,10 @@ require_once __DIR__ . '/../includes/header.php';
             <input type="search" name="q" class="form-control" aria-label="جستجو در گزارش‌ها"
                    placeholder="جستجو در گزارش‌ها..."
                    value="<?= sanitize($search) ?>">
-            <?php if ($topicSlug): ?>
-            <input type="hidden" name="topic" value="<?= sanitize($topicSlug) ?>">
-            <?php endif; ?>
             <button type="submit" class="btn btn-primary">
               <i class="bi bi-search ms-1"></i>جستجو
             </button>
-            <?php if ($search || $topicSlug): ?>
+            <?php if ($search): ?>
             <a href="<?= url('reports') ?>" class="btn btn-outline-secondary" title="حذف فیلترها">
               <i class="bi bi-x-lg"></i>
             </a>
@@ -95,11 +82,10 @@ require_once __DIR__ . '/../includes/header.php';
           </div>
         </div>
       </div>
-      <?php if ($search || $topicSlug): ?>
+      <?php if ($search): ?>
       <div class="mt-2 text-muted small">
         فیلتر فعال:
-        <?php if ($search): ?>«<strong><?= sanitize($search) ?></strong>»<?php endif; ?>
-        <?php if ($topicSlug && !empty($t)): ?>در موضوع «<strong><?= sanitize($t['name']) ?></strong>»<?php endif; ?>
+        «<strong><?= sanitize($search) ?></strong>»
         — <?= number_format($total) ?> مورد
       </div>
       <?php endif; ?>
@@ -126,7 +112,7 @@ require_once __DIR__ . '/../includes/header.php';
     <!-- صفحه‌بندی -->
     <?php if ($pages > 1): ?>
     <div class="mt-5">
-      <?= paginate($total, $limit, $page, url('reports', ['q' => $search, 'topic' => $topicSlug, 'page' => '%d'])) ?>
+      <?= paginate($total, $limit, $page, url('reports', ['q' => $search, 'page' => '%d'])) ?>
     </div>
     <?php endif; ?>
     <?php endif; ?>

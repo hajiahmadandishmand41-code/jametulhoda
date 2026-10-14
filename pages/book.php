@@ -45,7 +45,8 @@ jhd_redirect_to_canonical(bookUrl($book), $bookCanonicalPath);
 
 $pageTitle = $book['title'];
 $canonicalOverride = bookUrl($book);
-$pageDesc  = excerpt($book['description'] ?? $book['toc'] ?? '', 160);
+$rawBookDesc = excerpt($book['description'] ?? $book['toc'] ?? '', 160);
+$pageDesc = $rawBookDesc !== '' ? $rawBookDesc : ('کتاب «' . $book['title'] . '» در کتابخانه دیجیتال مدرسه جامعه‌الهدی');
 
 /*
  * NB: the local variable used to be called `$canonicalUrl`, which shadowed the
@@ -148,17 +149,6 @@ $bookDownloadWordUrl = $bookDetailUrl . (str_contains($bookDetailUrl, '?') ? '&'
     </summary>
     <div class="jhd-book-toc-content"><?= sanitize($book['toc']) ?></div>
   </details>
-  <?php endif; ?>
-
-  <?php if ($topics): ?>
-  <section class="jhd-book-topics jhd-book-section" aria-labelledby="book-topics-title">
-    <h2 id="book-topics-title" class="jhd-book-section-title"><i class="bi bi-diagram-3" aria-hidden="true"></i>موضوعات مرتبط</h2>
-    <div class="jhd-book-topic-list">
-      <?php foreach ($topics as $tp): ?>
-      <a href="<?= sanitize(topicUrl($tp)) ?>" class="jhd-book-topic"><?= sanitize($tp['name']) ?></a>
-      <?php endforeach; ?>
-    </div>
-  </section>
   <?php endif; ?>
 
   <?php if ($attachments): ?>

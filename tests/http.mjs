@@ -30,7 +30,7 @@ const publicPaths=['/','/index.php',
  '/assets/css/design-system.css','/assets/img/logo.png','/assets/images/logo.png','/favicon.ico',
  '/php/install','/php/install.php','/php/install/'];
 const retiredTopics=await api.get('/topics',{maxRedirects:0});
-check('topics directory redirects permanently to articles',retiredTopics.status()===301&&String(retiredTopics.headers()['location']||'').includes('/articles'),String(retiredTopics.status())+' '+String(retiredTopics.headers()['location']||''));
+check('topics directory redirects permanently to articles',retiredTopics.status()===301&&/\/articles(\?|$)|p=articles/.test(String(retiredTopics.headers()['location']||'')),String(retiredTopics.status())+' '+String(retiredTopics.headers()['location']||''));
 for(const path of publicPaths){const r=await api.get(path);check('GET '+path,r.status()===200||r.status()===302||r.status()===301,String(r.status()));}
 const sitemapResponse=await api.get('/sitemap.xml');
 const sitemapXml=await sitemapResponse.text();
@@ -51,11 +51,15 @@ check('array-shaped public query rejected cleanly',malformedQuery.status()===400
 
   const initialSearch=await api.get('/search');
   const initialSearchHtml=await initialSearch.text();
-  const quranTopicId=initialSearchHtml.match(/<option value="(\d+)"[^>]*>قرآن<\/option>/)?.[1]||'';
-  const topicParams=new URLSearchParams({type:'article',topic:quranTopicId,sort:'newest'});
-  const topicSearch=await api.get('/search?'+topicParams.toString());
-  const topicSearchHtml=await topicSearch.text();
-  check('search topic filter scopes to linked published articles',Boolean(quranTopicId)&&topicSearch.status()===200&&topicSearchHtml.includes('جایگاه عقل در معرفت دینی')&&!topicSearchHtml.includes('مهدویت و امید به آینده در اندیشه اسلامی'),String(topicSearch.status()));
+  check('search page has no topic filter UI or topic discovery block',initialSearch.status()===200&&!initialSearchHtml.includes('id="archive-search-topic"')&&!initialSearchHtml.includes('مرور بر پایهٔ موضوع'),String(initialSearch.status()));
+
+  const newsArchive=await api.get('/news');
+  const newsArchiveHtml=await newsArchive.text();
+  check('news archive unifies news and announcements',newsArchive.status()===200&&newsArchiveHtml.includes('آغاز سال تحصیلی جدید در مدرسه علمیه جامعه‌الهدی')&&newsArchiveHtml.includes('اطلاعیه ثبت‌نام دوره تابستانه'),String(newsArchive.status()));
+
+  const homePage=await api.get('/');
+  const homePageHtml=await homePage.text();
+  check('homepage renders active content sections and all-news CTA',homePage.status()===200&&homePageHtml.includes('id="home-news-heading"')&&homePageHtml.includes('id="home-articles-heading"')&&homePageHtml.includes('id="home-reports-heading"')&&homePageHtml.includes('id="home-books-heading"')&&homePageHtml.includes('id="home-lessons-heading"')&&homePageHtml.includes('id="home-events-heading"')&&homePageHtml.includes('همهٔ اخبار'),String(homePage.status()));
 
   const draftParams=new URLSearchParams({q:'پیش‌نویس منتشرنشده',type:'book'});
   const draftSearch=await api.get('/search?'+draftParams.toString());
@@ -96,7 +100,7 @@ if(installCsrf){
 // (/post, /lesson, /topic) or render the 404 detail page (/speech, /book).
 // What matters is that they fail gracefully — never a PHP warning or a 5xx.
 const bareDetail=['/post','/post.php','/lesson','/lesson.php','/speech','/speech.php','/book','/book.php','/category','/topic.php'];
-for(const path of bareDetail){const r=await api.get(path,{maxRedirects:0});const body=r.status()===200?await r.text():'';check('detail without id '+path,[200,302,404].includes(r.status())&&r.status()<500&&!/(Warning|Fatal error|Parse error|Deprecated):/.test(body),String(r.status()));}
+for(const path of bareDetail){const r=await api.get(path,{maxRedirects:0});const body=r.status()===200?await r.text():'';check('detail without id '+path,[200,301,302,404].includes(r.status())&&r.status()<500&&!/(Warning|Fatal error|Parse error|Deprecated):/.test(body),String(r.status()));}
 const malformedLoginPage=await api.get('/login');
 const malformedLoginCsrf=token(await malformedLoginPage.text());
 const malformedLogin=await api.post('/login',{form:{csrf_token:malformedLoginCsrf,'redirect[]':'//evil.example','identifier[]':'unexpected','password[]':'unexpected'},maxRedirects:0});
@@ -300,11 +304,10 @@ r=await api.get('/post.php?slug='+title);html=await r.text();check('edited conte
     check('gallery lifecycle fixture post deleted',r.status()===303,String(r.status()));
   } else check('gallery endpoint exposed on edit page',false,'GALLERY_ENDPOINT not found in edit page');
 }
-// Topic banner is the first content element and works even without a cover.
+// Legacy topic detail route permanently redirects (301) to /articles.
 {
-  const topicResponse=await api.get('/topic?slug=fiqh');
-  const topicHtml=await topicResponse.text();
-  check('topic renders banner ahead of section content',topicResponse.status()===200 && topicHtml.includes('jhd-topic-banner') && topicHtml.indexOf('jhd-topic-banner')<topicHtml.indexOf('jhd-cat-strip mb-4'),String(topicResponse.status()));
+  const topicResponse=await api.get('/topic?slug=fiqh',{maxRedirects:0});
+  check('legacy topic detail redirects permanently to articles',topicResponse.status()===301 && /\/articles(\?|$)|p=articles/.test(String(topicResponse.headers()['location']||'')),String(topicResponse.status())+' '+String(topicResponse.headers()['location']||''));
 }
 // Per spec 17: Like/View systems removed completely — ajax/like.php must be gone (404)
 r=await api.post('/ajax/like.php',{data:{post_id:Number(id)}});check('like endpoint removed (404)',r.status()===404,String(r.status()));

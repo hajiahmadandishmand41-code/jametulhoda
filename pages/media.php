@@ -131,7 +131,6 @@ require_once __DIR__ . '/../includes/header.php';
 <article class="jhd-media-detail">
 <div class="jhd-cat-strip">
 <span class="jhd-chip <?= $isAudio ? '' : 'jhd-chip--gold' ?>"><i class="bi bi-<?= $isAudio ? 'headphones' : 'camera-video' ?>"></i><?= $isAudio ? 'صوت' : 'ویدیو' ?></span>
-<?php if ($parentTopics): foreach (array_slice($parentTopics, 0, 3) as $t): ?><a href="<?= topicUrl($t) ?>" class="jhd-chip"><?= sanitize($t['name']) ?></a><?php endforeach; endif; ?>
 </div>
 <h1 class="jhd-detail-title"><?= sanitize($mediaTitle) ?></h1>
 <div class="jhd-meta-bar"><span><i class="bi bi-calendar3"></i><?= persianDate($parent['published_at'] ?? $media['created_at']) ?></span><?php if (!empty($parent['teacher'])): ?><span><i class="bi bi-person"></i><?= sanitize($parent['teacher']) ?></span><?php endif; ?></div>
@@ -163,7 +162,6 @@ require_once __DIR__ . '/../includes/header.php';
 </div><?php endforeach; ?></div>
 <?php endif; ?>
 </div>
-<div class="jhd-side-card"><h3><i class="bi bi-tags" aria-hidden="true"></i>موضوعات</h3><div class="jhd-cat-strip"><?php foreach (array_slice($parentTopics ?: getTopics(['active' => 1, 'limit' => 12]), 0, 12) as $ct): ?><a href="<?= topicUrl($ct) ?>" class="jhd-chip"><?= sanitize($ct['name']) ?></a><?php endforeach; ?></div></div>
 </div>
 </div>
 </div></div></div>

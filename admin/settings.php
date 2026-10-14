@@ -55,7 +55,6 @@ $homepageSectionLabels = [
     'books'   => 'هاب کتابخانهٔ دیجیتال',
     'writing' => 'هاب نوشتارها (مقاله، پژوهش و پرسش‌وپاسخ)',
     'media'   => 'هاب صوت و تصویر',
-    'topics'  => 'نوار موضوعات پرمحتوا (اطلس)',
 ];
 
 $homepageCfgRaw = trim((string)($sets['homepage_config'] ?? ''));

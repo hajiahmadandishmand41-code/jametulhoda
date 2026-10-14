@@ -100,14 +100,34 @@ if ($jhdPublicDbReady) {
     startPublicSession();
     // هر فهرست تنها وقتی محتوای منتشرشده دارد، در صفحهٔ نخست ظاهر می‌شود.
     $homeFeeds = [
-        ['key' => 'news', 'title' => 'اخبار و اطلاعیه‌ها', 'eyebrow' => 'تازه‌های مدرسه', 'icon' => 'bi-newspaper', 'url' => 'news', 'link' => 'همهٔ اخبار', 'types' => ['news', 'announcement']],
-        ['key' => 'articles', 'title' => 'مقالات و پژوهش‌ها', 'eyebrow' => 'مطالعه و اندیشه', 'icon' => 'bi-journal-text', 'url' => 'articles', 'link' => 'همهٔ مقاله‌ها', 'types' => ['article', 'research']],
-        ['key' => 'reports', 'title' => 'گزارش‌ها', 'eyebrow' => 'گزارش فعالیت‌ها', 'icon' => 'bi-card-text', 'url' => 'reports', 'link' => 'همهٔ گزارش‌ها', 'types' => ['report']],
-        ['key' => 'events', 'title' => 'رویدادها', 'eyebrow' => 'برنامه‌ها و مناسبت‌ها', 'icon' => 'bi-calendar-event', 'url' => 'events', 'link' => 'همهٔ رویدادها', 'types' => ['event']],
+        ['key' => 'news', 'title' => 'اخبار و اطلاعیه‌ها', 'eyebrow' => 'تازه‌های مدرسه', 'icon' => 'bi-newspaper', 'url' => 'news', 'link' => 'همهٔ اخبار', 'source' => 'posts', 'types' => ['news', 'announcement']],
+        ['key' => 'articles', 'title' => 'مقالات و پژوهش‌ها', 'eyebrow' => 'مطالعه و اندیشه', 'icon' => 'bi-journal-text', 'url' => 'articles', 'link' => 'همهٔ مقاله‌ها', 'source' => 'posts', 'types' => ['article', 'research']],
+        ['key' => 'reports', 'title' => 'گزارش‌ها', 'eyebrow' => 'گزارش فعالیت‌ها', 'icon' => 'bi-card-text', 'url' => 'reports', 'link' => 'همهٔ گزارش‌ها', 'source' => 'posts', 'types' => ['report']],
+        ['key' => 'books', 'title' => 'کتاب‌ها', 'eyebrow' => 'کتابخانه دیجیتال', 'icon' => 'bi-book', 'url' => 'books', 'link' => 'همهٔ کتاب‌ها', 'source' => 'books'],
+        ['key' => 'lessons', 'title' => 'درس‌ها', 'eyebrow' => 'دوره‌ها و دروس', 'icon' => 'bi-mortarboard', 'url' => 'lessons', 'link' => 'همهٔ درس‌ها', 'source' => 'lessons'],
+        ['key' => 'events', 'title' => 'رویدادها', 'eyebrow' => 'برنامه‌ها و مناسبت‌ها', 'icon' => 'bi-calendar-event', 'url' => 'events', 'link' => 'همهٔ رویدادها', 'source' => 'posts', 'types' => ['event', 'program', 'religious']],
     ];
     try {
         foreach ($homeFeeds as $feed) {
-            $rows = getPosts(['types' => $feed['types'], 'limit' => 4, 'sort' => 'newest']);
+            if ($feed['source'] === 'books') {
+                $rows = array_map(static fn(array $b): array => [
+                    'title' => (string)($b['title'] ?? ''),
+                    'url' => bookUrl($b),
+                    'post_type' => 'book',
+                    'published_at' => (string)($b['created_at'] ?? ''),
+                    'cat_name' => trim((string)($b['author'] ?? '')),
+                ], getBooks(['limit' => 4]));
+            } elseif ($feed['source'] === 'lessons') {
+                $rows = array_map(static fn(array $l): array => [
+                    'title' => (string)($l['title'] ?? ''),
+                    'url' => lessonUrl($l),
+                    'post_type' => 'lesson',
+                    'published_at' => (string)($l['created_at'] ?? ''),
+                    'cat_name' => trim((string)($l['teacher'] ?? $l['collection_title'] ?? $l['subject'] ?? '')),
+                ], getLessons(['limit' => 4]));
+            } else {
+                $rows = getPosts(['types' => $feed['types'], 'limit' => 4, 'sort' => 'newest']);
+            }
             if ($rows) $homeSections[] = $feed + ['rows' => $rows];
         }
     } catch (Throwable $e) {
@@ -151,22 +171,7 @@ require_once __DIR__ . '/includes/header.php';
                 'url' => url($section['url']),
                 'link' => $section['link'],
             ]) ?>
-            <?php if ($section['key'] === 'articles'): ?>
-            <?php jhd_preload_post_topics($section['rows']); ?>
-            <?= jhd_grid_open('jhd-home-articles-grid') ?>
-                <?php foreach ($section['rows'] as $articlePost):
-                    $articleType = (string)($articlePost['post_type'] ?? 'article');
-                    echo renderPostCard($articlePost, [
-                        'featured' => true,
-                        'col' => 'col-12 col-md-6',
-                        'cta' => $articleType === 'research' ? 'مطالعه پژوهش' : 'مطالعه مقاله',
-                        'excerpt' => 180,
-                    ]);
-                endforeach; ?>
-            <?= jhd_grid_close() ?>
-            <?php else: ?>
             <?= jhd_news_list($section['rows'], ['hide_type' => true]) ?>
-            <?php endif; ?>
             <?php if ($section['key'] === 'news'): ?>
             <a class="jhd-home-all-news" href="<?= url('news') ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i> همهٔ اخبار</a>
             <?php endif; ?>
@@ -174,7 +179,5 @@ require_once __DIR__ . '/includes/header.php';
     </section>
     <?php endforeach; ?>
 </div><!-- /.jhd-homepage -->
-
-<?php require_once __DIR__ . '/includes/footer.php'; ?>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

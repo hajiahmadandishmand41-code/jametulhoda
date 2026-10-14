@@ -92,7 +92,9 @@ jobs:
         id: probe
         env:
           TEST_BASE_URL: http://127.0.0.1:8080
-        run: node tests/seo-probe.mjs 2>&1 | tee seo-probe-report.txt
+        run: |
+          set -o pipefail
+          node tests/seo-probe.mjs 2>&1 | tee seo-probe-report.txt
 
       - name: Show the PHP server log on failure
         if: failure()
@@ -161,7 +163,9 @@ jobs:
         env:
           TEST_BASE_URL: ${{ steps.target.outputs.url }}
           SEO_PROBE_TIMEOUT_MS: '90000'
-        run: node tests/seo-probe.mjs 2>&1 | tee seo-probe-report.txt
+        run: |
+          set -o pipefail
+          node tests/seo-probe.mjs 2>&1 | tee seo-probe-report.txt
 
       - name: Upload the report
         if: always()

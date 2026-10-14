@@ -85,11 +85,10 @@ $dashboardStatGroups = [
     ],
     [
         'id' => 'dashboard-learning',
-        'title' => 'آموزش و طبقه‌بندی',
-        'description' => 'موضوعات فعال، درس‌ها و مجموعه‌های آموزشی.',
-        'columns' => 'col-6 col-lg-4',
+        'title' => 'آموزش و دوره‌ها',
+        'description' => 'درس‌ها و مجموعه‌های آموزشی منتشرشده.',
+        'columns' => 'col-6 col-lg-6',
         'items' => [
-            ['label' => 'موضوعات فعال', 'value' => $totalTopics, 'href' => url('admin/topics'), 'icon' => 'bi-diagram-3', 'tone' => 'green'],
             ['label' => 'درس‌های منتشرشده', 'value' => $totalLessons, 'href' => url('admin/courses'), 'icon' => 'bi-mortarboard', 'tone' => 'blue'],
             ['label' => 'مجموعه‌های درسی فعال', 'value' => $totalCollections, 'href' => url('admin/courses'), 'icon' => 'bi-collection', 'tone' => 'teal'],
         ],
@@ -124,7 +123,6 @@ $quickActionGroups = [
         'title' => 'سازمان‌دهی و پیگیری',
         'icon' => 'bi-sliders',
         'actions' => [
-            ['label' => 'موضوع جدید', 'href' => url('admin/topics/create'), 'icon' => 'bi-diagram-3', 'class' => 'btn-warning'],
             ['label' => 'مدیریت رسانه', 'href' => url('admin/uploads'), 'icon' => 'bi-upload', 'class' => 'btn-outline-secondary'],
             ['label' => 'پیام‌ها', 'href' => url('admin/messages'), 'icon' => 'bi-envelope', 'class' => 'btn-outline-secondary', 'badge' => $unreadMsgs],
         ],

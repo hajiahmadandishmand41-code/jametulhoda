@@ -1583,6 +1583,48 @@ function countBooksByTopic(int $topicId, ?array $scopeIds = null): int {
 
 // ─── Lessons with collections ─────────────────────────────────────────────────
 
+function getLessons(array $opts = []): array {
+    $db = jhd_db();
+    if ($db === null) return [];
+    try {
+        $where = ["l.status = 'published'"];
+        $params = [];
+        if (!empty($opts['collection_id'])) {
+            $where[] = 'l.collection_id = ?';
+            $params[] = (int)$opts['collection_id'];
+        }
+        if (!empty($opts['volume_id'])) {
+            $where[] = 'l.volume_id = ?';
+            $params[] = (int)$opts['volume_id'];
+        }
+        if (!empty($opts['featured'])) {
+            $where[] = 'l.is_featured = 1';
+        }
+        if (!empty($opts['search'])) {
+            $where[] = '(l.title ILIKE ? OR l.summary ILIKE ?)';
+            $s = '%' . $opts['search'] . '%';
+            $params[] = $s;
+            $params[] = $s;
+        }
+        $limit = max(1, min(100, (int)($opts['limit'] ?? 12)));
+        $offset = max(0, (int)($opts['offset'] ?? 0));
+        $whereStr = implode(' AND ', $where);
+        $stmt = $db->prepare(
+            "SELECT l.*, lc.title AS collection_title, lc.slug AS collection_slug, lv.title AS volume_title, lv.slug AS volume_slug
+             FROM lessons l
+             LEFT JOIN lesson_collections lc ON lc.id = l.collection_id
+             LEFT JOIN lesson_volumes lv ON lv.id = l.volume_id
+             WHERE $whereStr
+             ORDER BY l.is_featured DESC, l.created_at DESC, l.id DESC
+             LIMIT ? OFFSET ?"
+        );
+        $stmt->execute(array_merge($params, [$limit, $offset]));
+        return $stmt->fetchAll();
+    } catch (PDOException $e) {
+        return [];
+    }
+}
+
 function getLesson(int $id): ?array {
     $db = jhd_db();
     if ($db === null) return null;
@@ -2433,7 +2475,7 @@ function searchAll(string $q, int $limit=12, int $offset=0, string $filter='all'
 
     // Every source exposes the same columns so counts, sorting, and pagination
     // operate across the complete, published result set.
-    if (in_array($filter, ['all', 'topic'], true)) {
+    if ($filter === 'topic') {
         $topicMatchExpression = $scopeIds ? "CASE WHEN id IN ($scopeSql) THEN 1 ELSE 0 END" : '1';
         $addSource("SELECT id,name AS title,slug,description AS summary,intro AS content,cover_image AS featured_image,'topic' AS post_type,created_at AS published_at,created_at,'topic' AS target,'' AS media_kind,0 AS is_featured,$topicMatchExpression AS topic_match FROM topics WHERE is_active=1");
     }

@@ -25,7 +25,7 @@ const only = (process.env.ONLY_PATHS || '').split(',').map((s) => s.trim()).filt
 const assetSamples = Number(process.env.ASSET_SAMPLES || samples);
 
 const DOCUMENT_ROUTES = [
-  '/', '/login', '/register', '/topics', '/news', '/articles', '/lessons',
+  '/', '/login', '/register', '/news', '/articles', '/lessons',
   '/books', '/events', '/research', '/reports', '/media', '/speeches',
   '/about', '/contact', '/qa', '/search', '/announcements', '/programs',
   '/admin', '/admin/login', '/sitemap.xml', '/robots.txt',

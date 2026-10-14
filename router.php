@@ -401,6 +401,9 @@ if (JHD_PRETTY_URLS && $path === '/index.php' && $queryRoute !== '') {
     unset($legacyQuery['p']);
     $legacyCanonical = url($queryRoute, $legacyQuery);
     if ($legacyCanonical !== '') {
+        if (in_array($queryRoute, ['topic', 'topics'], true)) {
+            $legacyCanonical = url('articles');
+        }
         header('Location: ' . $legacyCanonical, true, 301);
         exit;
     }

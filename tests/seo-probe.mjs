@@ -194,15 +194,14 @@ record('PNG icon link is square and sized',
 // which the sitemap (correctly) cannot cover.
 console.log('\n--- Content type indexes ---');
 const indexQueryRoute = {
-  '/news': 'news', '/articles': 'articles', '/research': 'research', '/reports': 'reports',
+  '/news': 'news', '/articles': 'articles', '/reports': 'reports',
   '/announcements': 'announcements', '/programs': 'programs',
   '/religious-activities': 'religious-activities', '/speeches': 'speeches', '/qa': 'qa',
-  '/lessons': 'lessons', '/books': 'books', '/topics': 'topics', '/media': 'media',
+  '/lessons': 'lessons', '/books': 'books', '/media': 'media',
 };
 for (const [path, label] of [
   ['/news', 'news'],
   ['/articles', 'article'],
-  ['/research', 'research'],
   ['/reports', 'report'],
   ['/announcements', 'announcement'],
   ['/programs', 'program'],
@@ -211,7 +210,6 @@ for (const [path, label] of [
   ['/qa', 'Q&A'],
   ['/lessons', 'lesson'],
   ['/books', 'book'],
-  ['/topics', 'topic'],
   ['/media', 'media'],
 ]) {
   const r = await get(path);
@@ -247,7 +245,6 @@ const PREFIX_LABEL = [
   ['/speech/', 'speech'],
   ['/lessons/', 'lesson'],
   ['/books/', 'book'],
-  ['/topics/', 'topic'],
   ['/category/', 'category'],
   ['/video/', 'video'],
   ['/audio/', 'audio'],
@@ -258,7 +255,7 @@ const queryDetailLabel = {
   announcement: 'announcement', article: 'article', audio: 'audio', book: 'book',
   category: 'category', event: 'event', lesson: 'lesson', news: 'news', qa: 'Q&A',
   post: 'news', program: 'program', religious: 'religious activity', report: 'report',
-  research: 'research', speech: 'speech', topic: 'topic', video: 'video',
+  research: 'research', speech: 'speech', video: 'video',
 };
 for (const loc of locs) {
   const parsed = new URL(loc);
@@ -365,10 +362,10 @@ const contentSlug = (label) => {
 if (contentSamples.has('news')) legacyPairs.push(['/post/' + encodeURIComponent(contentSlug('news')), contentSamples.get('news')]);
 if (contentSamples.has('article')) legacyPairs.push(['/article/' + encodeURIComponent(contentSlug('article')), contentSamples.get('article')]);
 if (contentSamples.has('report')) legacyPairs.push(['/report/' + encodeURIComponent(contentSlug('report')), contentSamples.get('report')]);
-if (contentSamples.has('topic')) {
-  const topicPath = contentSlug('topic').split('/').map(encodeURIComponent).join('/');
-  legacyPairs.push(['/topic/' + topicPath, contentSamples.get('topic')]);
-}
+legacyPairs.push(['/topics', queryMode ? '/index.php?p=articles' : '/articles']);
+legacyPairs.push(['/topic/mahdaviat', queryMode ? '/index.php?p=articles' : '/articles']);
+legacyPairs.push(['/topics/mahdaviat', queryMode ? '/index.php?p=articles' : '/articles']);
+legacyPairs.push(['/research', queryMode ? '/index.php?p=articles&type=research' : '/articles?type=research']);
 legacyPairs.push(['/library', queryMode ? '/index.php?p=books' : '/books']);
 legacyPairs.push(['/index.php?p=news', queryMode ? '/index.php?p=news' : '/news']);
 if (queryMode) {

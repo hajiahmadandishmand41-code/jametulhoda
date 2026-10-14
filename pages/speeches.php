@@ -4,7 +4,7 @@
  * نسخه ۲.۰ — کامل‌شده با امکانات کامل
  */
 $pageTitle = 'سخنرانی‌ها';
-$pageDesc  = 'فهرست کامل سخنرانی‌های مدرسه جامعه‌الهدی — جستجو بر اساس عنوان، سخنران، موضوع و تاریخ';
+$pageDesc  = 'فهرست کامل سخنرانی‌های مدرسه جامعه‌الهدی — جستجو بر اساس عنوان، سخنران و تاریخ';
 require_once __DIR__ . '/../includes/header.php';
 
 $db = jhd_db(); // null → the page renders with its own empty state
@@ -277,40 +277,9 @@ function speechPageUrl(int $p): string {
             <div class="col-lg-3 order-1 order-lg-2">
                 <div class="sidebar">
 
-                    <!-- فیلتر دسته‌بندی -->
-                    <?php if (!empty($speechCats)): ?>
-                    <div class="sidebar-widget">
-                        <h5 class="sidebar-title">
-                            <i class="bi bi-tags-fill ms-2 text-gold"></i>موضوعات
-                        </h5>
-                        <ul class="list-unstyled mb-0">
-                            <li>
-                                <a href="<?= url('speeches', $search ? ['q' => $search] : []) ?>"
-                                   class="d-flex align-items-center justify-content-between py-2 border-bottom text-decoration-none <?= !$category ? 'fw-bold text-primary' : 'text-dark' ?>">
-                                    <span><i class="bi bi-collection ms-2 text-gold"></i>همه موضوعات</span>
-                                    <span class="badge bg-secondary"><?= number_format($total > 0 && !$search ? $total : $total) ?></span>
-                                </a>
-                            </li>
-                            <?php foreach ($speechCats as $sc): ?>
-                            <li>
-                                <?php
-                                $catQuery = array_filter(['q' => $search, 'speaker' => $speaker, 'year' => $year ?: '', 'cat' => $sc['slug']]);
-                                $catUrl   = url('speeches', $catQuery);
-                                ?>
-                                <a href="<?= htmlspecialchars($catUrl) ?>"
-                                   class="d-flex align-items-center justify-content-between py-2 border-bottom text-decoration-none <?= $category === $sc['slug'] ? 'fw-bold text-primary' : 'text-dark' ?>">
-                                    <span><i class="bi bi-chevron-left ms-2 text-gold"></i><?= sanitize($sc['name']) ?></span>
-                                    <span class="badge bg-secondary"><?= (int)$sc['cnt'] ?></span>
-                                </a>
-                            </li>
-                            <?php endforeach; ?>
-                        </ul>
-                    </div>
-                    <?php endif; ?>
-
                     <!-- فیلتر سال -->
                     <?php if (!empty($availableYears)): ?>
-                    <div class="sidebar-widget mt-3">
+                    <div class="sidebar-widget">
                         <h5 class="sidebar-title">
                             <i class="bi bi-calendar3 ms-2 text-gold"></i>بایگانی سالانه
                         </h5>

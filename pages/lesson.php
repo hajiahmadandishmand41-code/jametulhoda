@@ -222,14 +222,8 @@ require_once __DIR__.'/../includes/header.php';
           <div>
             <span class="jhd-eyebrow">ادامهٔ مسیر مطالعه</span>
             <h2 id="lesson-related-title">جستارهای وابسته به این درس</h2>
-            <p>درس‌های دیگری که بر اساس موضوع یا مجموعهٔ آموزشی این درس، برای ادامهٔ مطالعه پیشنهاد می‌شوند.</p>
+            <p>درس‌های دیگری که بر اساس مجموعهٔ آموزشی این درس، برای ادامهٔ مطالعه پیشنهاد می‌شوند.</p>
           </div>
-          <?php if ($lessonTopics): ?>
-          <a class="jhd-related-link" href="<?= sanitize(topicUrl($lessonTopics[0])) ?>">
-            مشاهده موضوع
-            <i class="bi bi-arrow-left" aria-hidden="true"></i>
-          </a>
-          <?php endif; ?>
         </div>
         <div class="row g-3 jhd-related-grid">
           <?php foreach ($relatedLessons as $relatedLesson): ?>
@@ -256,15 +250,6 @@ require_once __DIR__.'/../includes/header.php';
         <?php endforeach; ?>
       </div>
       <?php endif; endif; ?>
-
-      <?php if ($lessonTopics): ?>
-      <div class="jhd-side-card">
-        <h3><i class="bi bi-tags" aria-hidden="true"></i> موضوعات این درس</h3>
-        <div class="jhd-cat-strip">
-          <?php foreach ($lessonTopics as $t): ?><a class="jhd-chip" href="<?= topicUrl($t) ?>"><?= sanitize($t['name']) ?></a><?php endforeach; ?>
-        </div>
-      </div>
-      <?php endif; ?>
 
       <?php if ($relatedLessons): ?>
       <div class="jhd-side-card">

@@ -194,48 +194,6 @@ foreach ([
 }
 
 if ($db !== null) {
-    // ── Topics: build full parent/child slug paths in memory, avoiding N+1 DB queries.
-    try {
-        $rows = $db->query("
-            SELECT id, parent_id, slug
-            FROM topics
-            WHERE is_active = 1
-              AND COALESCE(slug, '') <> ''
-            ORDER BY id
-            LIMIT 50000
-        ")->fetchAll();
-
-        $byId = [];
-        foreach ($rows as $row) {
-            $byId[(int)$row['id']] = [
-                'parent_id' => (int)($row['parent_id'] ?? 0),
-                'slug' => trim((string)$row['slug']),
-            ];
-        }
-
-        $topicPath = static function (int $id, array $trail = []) use (&$topicPath, $byId): string {
-            if (!isset($byId[$id]) || isset($trail[$id])) return '';
-            $trail[$id] = true;
-
-            $own = trim($byId[$id]['slug']);
-            if ($own === '') return '';
-
-            $parent = (int)$byId[$id]['parent_id'];
-            if ($parent > 0 && isset($byId[$parent])) {
-                $parentPath = $topicPath($parent, $trail);
-                if ($parentPath !== '') return $parentPath . '/' . $own;
-            }
-            return $own;
-        };
-
-        foreach ($byId as $id => $_row) {
-            $slugPath = $topicPath((int)$id);
-            if ($slugPath !== '') $add('topic', ['slug' => $slugPath]);
-        }
-    } catch (Throwable $e) {
-        error_log('sitemap topics failed: ' . get_class($e));
-    }
-
     // ── Published posts: one canonical detail URL per published post.
     //     postUrl() owns the post_type → route mapping and honors the configured
     //     URL mode, matching the detail page's canonical, redirects and cards.
