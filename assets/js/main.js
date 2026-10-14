@@ -84,10 +84,18 @@ document.addEventListener('DOMContentLoaded', function () {
             // replaced with a stock illustration. Remove only the failed media
             // element (or its dedicated card-media wrapper) and keep the real
             // text/content visible.
-            var wrapper = this.closest('.jhd-card-media, .news-card-img-wrap, .media-thumb');
+            var editorial = this.closest('.jhd-editorial-row');
+            var wrapper = this.closest('.jhd-card-media, .jhd-editorial-thumb, .news-card-img-wrap, .media-thumb');
             if (wrapper && wrapper.querySelectorAll('img').length === 1) wrapper.remove();
             else this.remove();
+            if (editorial && !editorial.querySelector('.jhd-editorial-thumb')) {
+                editorial.classList.add('jhd-editorial-row--noimage');
+            }
         });
+        // A cached failure can finish before DOMContentLoaded/listener setup.
+        if (img.complete && img.naturalWidth === 0 && img.getAttribute('src')) {
+            img.dispatchEvent(new Event('error'));
+        }
     });
     document.querySelectorAll('[data-confirm]').forEach(function (el) {
         el.addEventListener('click', function (e) {

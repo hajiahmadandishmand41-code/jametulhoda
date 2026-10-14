@@ -8,7 +8,7 @@ if (!isset($jhdStubRoute) || !is_string($jhdStubRoute) || $jhdStubRoute === '') 
     http_response_code(404);
     exit;
 }
-if (!isset($_GET['p']) || !is_string($_GET['p']) || trim($_GET['p']) === '') {
-    $_GET['p'] = $jhdStubRoute;
-}
+// A physical /login[.php] entry point owns its route too. Never let a query
+// parameter swap the login/register controllers when mod_rewrite is absent.
+$_GET['p'] = $jhdStubRoute;
 require dirname(__DIR__) . '/index.php';

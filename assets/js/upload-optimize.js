@@ -192,7 +192,9 @@
     if (busy) return;
     var form = event.target;
     if (!form || form.tagName !== 'FORM' || form.dataset.uploadOptimized === 'done') return;
-    if (!form.querySelector('input[type="file"]')) return;
+    var inputs = form.querySelectorAll('input[type="file"]');
+    var hasFiles = Array.prototype.some.call(inputs, function (input) { return input.files && input.files.length; });
+    if (!hasFiles) return; // Text-only edits must submit normally, without an upload detour.
     // Keep the button the editor pressed: some forms branch on its name/value.
     var submitter = event.submitter || null;
     event.preventDefault();
@@ -200,11 +202,16 @@
     form.setAttribute('data-upload-optimizing', '1');
     var resume = function () {
       busy = false;
-      if (typeof form.requestSubmit === 'function') {
-        form.requestSubmit(submitter || undefined);
-      } else if (typeof form.submit === 'function') {
-        form.submit();
-      }
+      // Resolved promises can run before the original submit event finishes.
+      // requestSubmit() is silently ignored while that event is still firing
+      // (notably for small, already-optimised files). Resume in the next task.
+      setTimeout(function () {
+        if (typeof form.requestSubmit === 'function') {
+          form.requestSubmit(submitter || undefined);
+        } else if (typeof form.submit === 'function') {
+          form.submit();
+        }
+      }, 0);
     };
     optimizeForm(form).then(function (touched) {
       form.setAttribute('data-upload-optimized', 'done');
@@ -213,6 +220,8 @@
       touched.forEach(function (input) { notify(input, 'optimized'); });
       resume();
     }).catch(function () {
+      // Fall back to the original files once; do not re-enter a failed optimizer.
+      form.setAttribute('data-upload-optimized', 'done');
       form.removeAttribute('data-upload-optimizing');
       resume();
     });

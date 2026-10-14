@@ -148,7 +148,19 @@ try {
 
   const detailFixture='test-results/browser-detail-routes.json';
   const detailRoutes=fs.existsSync(detailFixture)?JSON.parse(fs.readFileSync(detailFixture,'utf8')):[];
-  for (const route of detailRoutes) {
+  // A missing fixture file used to report a misleading PASS for zero details.
+  // Add one actually published URL of each kind from the dynamic sitemap.
+  const sitemap=await page.request.get(new URL('sitemap.xml',base.endsWith('/')?base:base+'/').href);
+  assert.equal(sitemap.status(),200,'detail discovery needs the real fixture database');
+  const detailKinds=new Set();
+  for (const match of (await sitemap.text()).matchAll(/<loc>(.*?)<\/loc>/g)) {
+    const loc=new URL(match[1].replaceAll('&amp;','&'));
+    const pathKind=loc.pathname.match(/\/(news|articles|research|reports|announcements|programs|religious-activities|qa|speech|books|lessons|video|audio|category)\/[^/]+$/)?.[1];
+    const kind=pathKind || ((loc.searchParams.has('slug') || loc.searchParams.has('id')) ? loc.searchParams.get('p') : null);
+    if (kind && !detailKinds.has(kind)) { detailKinds.add(kind); detailRoutes.push(loc.pathname+loc.search); }
+  }
+  assert.ok(detailRoutes.length>0,'at least one real public detail is tested');
+  for (const route of new Set(detailRoutes)) {
     const siteRoot=new URL(base.endsWith('/')?base:base+'/');
     const response=await page.goto(new URL(route.replace(/^\/+/,''),siteRoot).href,{waitUntil:'networkidle'});
     assert.equal(response?.status(),200,`HTTP detail ${route}`);
@@ -160,7 +172,7 @@ try {
       assert.equal(overflow,false,`horizontal overflow ${route} at ${width}px`);
     }
   }
-  console.log('PASS browser detail audit: '+detailRoutes.length+' database-backed detail routes × 3 widths');
+  console.log('PASS browser detail audit: '+new Set(detailRoutes).size+' database-backed detail routes × 5 widths');
 
   await page.setViewportSize({width:390,height:844});
   await page.goto(base,{waitUntil:'networkidle'});

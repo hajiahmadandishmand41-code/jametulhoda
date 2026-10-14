@@ -84,7 +84,7 @@ async function openBrowser() {
     };
   }
   const { chromium } = await import('@playwright/test');
-  const browser = await chromium.launch({ args: ['--no-sandbox'] });
+  const browser = await chromium.launch({ executablePath: process.env.BROWSER_EXECUTABLE || undefined, args: ['--no-sandbox'] });
   return {
     kind: 'playwright',
     browser,
@@ -143,15 +143,15 @@ const measure = () => {
     }
     return false;
   };
-  const cards = Array.from(document.querySelectorAll('.jhd-card')).filter((card) => {
+  const cards = Array.from(document.querySelectorAll('.jhd-card, .jhd-editorial-row')).filter((card) => {
     const rect = card.getBoundingClientRect();
     return rect.width > 0 && rect.height > 0 && !hiddenAncestor(card);
   });
   const metrics = cards.slice(0, 4).map((card) => {
     const rect = card.getBoundingClientRect();
-    const media = card.querySelector('.jhd-card-media');
+    const media = card.querySelector('.jhd-card-media, .jhd-editorial-thumb');
     const mediaImg = media ? media.querySelector('img') : null;
-    const title = card.querySelector('.jhd-card-title');
+    const title = card.querySelector('.jhd-card-title, .jhd-editorial-title');
     const summary = card.querySelector('.jhd-card-summary');
     const titleStyle = title ? getComputedStyle(title) : null;
     const box = (el) => (el ? Math.round(el.getBoundingClientRect().height) : 0);
@@ -189,15 +189,15 @@ const measure = () => {
   }
 
   // Broken images: a card image that failed to load shows as an empty frame.
-  const images = Array.from(document.querySelectorAll('.jhd-card-media img'));
+  const images = Array.from(document.querySelectorAll('.jhd-card-media img, .jhd-editorial-thumb img'));
   const brokenImages = images.filter((img) => img.complete && img.naturalWidth === 0).length;
 
   // Touch targets: the two controls an editor's thumb actually aims at are the
   // media box and the "read more" button. On mobile the whole card is also a
   // stretched link, so the real target is the card itself.
   const sizes = [];
-  for (const selector of ['.jhd-card-media', '.btn-read-more']) {
-    for (const el of document.querySelectorAll('.jhd-card ' + selector)) {
+  for (const selector of ['.jhd-card-media', '.jhd-editorial-thumb', '.btn-read-more', '.jhd-editorial-cta']) {
+    for (const el of document.querySelectorAll('.jhd-card ' + selector + ', .jhd-editorial-row ' + selector)) {
       const box = el.getBoundingClientRect();
       if (box.width === 0 || box.height === 0) continue;
       sizes.push(Math.min(box.width, box.height));

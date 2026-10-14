@@ -105,12 +105,21 @@ const publicQueryRoutes = new Set([
   'post', 'program', 'programs', 'qa', 'religious', 'religious-activities', 'report',
   'reports', 'research', 'speech', 'speeches', 'topic', 'topics', 'video', 'videos',
 ]);
-const forbidden = /^https?:\/\/[^/]+\/(admin|login|logout|register|account|profile|password-change|search|install|php\/|migrate|api\/|config\/|includes\/|bin\/|storage\/|tests\/|uploads\/)/i;
+const forbidden = /^\/(?:admin|login|logout|register|account|profile|password-change|search|install|php|migrate|api|config|includes|bin|storage|tests|uploads)(?:[/.]|$)/i;
 const queryUrlIsPublic = (value) => {
   try {
     const url = new URL(value);
     if (!url.search) return true;
-    if (!url.searchParams.has('p')) return false;
+    // Collection/volume query paths are the public controller's existing
+    // canonical URLs, not search/filter duplicates (in both URL modes).
+    const collection = url.searchParams.get('collection');
+    if (collection && (url.pathname.endsWith('/lessons') ||
+        (url.pathname.endsWith('/index.php') && url.searchParams.get('p') === 'lessons'))) {
+      const keys = [...url.searchParams.keys()];
+      return keys.every((key) => ['p','collection','volume'].includes(key)
+        && url.searchParams.getAll(key).length === 1 && url.searchParams.get(key)?.trim());
+    }
+    if (!url.pathname.endsWith('/index.php') || !url.searchParams.has('p')) return false;
     const routes = url.searchParams.getAll('p');
     if (routes.length !== 1 || !publicQueryRoutes.has(routes[0])) return false;
     const keys = [...url.searchParams.keys()];

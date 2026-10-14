@@ -137,7 +137,7 @@ $bookDownloadWordUrl = $bookDetailUrl . (str_contains($bookDetailUrl, '?') ? '&'
   <?php if (!empty($book['description'])): ?>
   <section class="jhd-book-section jhd-book-introduction" aria-labelledby="book-introduction-title">
     <h2 id="book-introduction-title" class="jhd-book-section-title"><i class="bi bi-info-circle" aria-hidden="true"></i>معرفی کتاب</h2>
-    <div class="post-content jhd-book-copy"><?= nl2br(sanitize($book['description'])) ?></div>
+    <div class="jhd-prose jhd-book-copy"><?= safeRichText($book['description']) ?></div>
   </section>
   <?php endif; ?>
 

@@ -2287,7 +2287,7 @@ function jhd_promote_article_headings(string $html): string {
         'پرسش‌های متداول درباره مهدویت',
     ];
     foreach ($headings as $heading) {
-        $pattern = '~(?:^|(?:\r\n|\n|\r){2,})\s*' . preg_quote($heading, '~') . '\s*(?=(?:\r\n|\n|\r){2,}|$)~u';
+        $pattern = '~<p>\s*' . preg_quote($heading, '~') . '\s*</p>~u';
         $replacement = '<h2>' . htmlspecialchars($heading, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</h2>';
         $html = (string)preg_replace($pattern, $replacement, $html, 1);
     }
@@ -2351,7 +2351,11 @@ function postTypeBadge(string $type): string {
     return '<span class="badge bg-' . $color . '">' . postTypeLabel($type) . '</span>';
 }
 function excerpt(string $text, int $chars = 150): string {
-    $text = strip_tags($text);
+    // Excerpts are text, unlike the rich body: preserve word boundaries
+    // between HTML blocks and decode entities once before the caller escapes.
+    $text = preg_replace('~<(?:br\b[^>]*|/(?:p|div|h[1-6]|li|blockquote|section))>~iu', ' ', $text) ?? $text;
+    $text = html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $text = trim(preg_replace('/\s+/u', ' ', $text) ?? $text);
     if (mb_strlen($text, 'UTF-8') <= $chars) return $text;
     return mb_substr($text, 0, $chars, 'UTF-8') . '...';
 }
@@ -2811,42 +2815,117 @@ function lessonJsonLd(array $lesson): string {
 
 // ─── Safe rich text ───────────────────────────────────────────────────────────
 
+/**
+ * The admin textareas store their value verbatim (including CRLF/newlines).
+ * Render legacy plain text as semantic paragraphs, but never run nl2br() over
+ * structured HTML. Sanitize on read so old records are protected too, without
+ * rewriting the database or losing the editor's original value.
+ */
 function safeRichText(?string $html): string {
-    if (!$html) return '';
+    $html = trim(str_replace(["\r\n", "\r"], "\n", (string)$html));
+    if ($html === '') return '';
+    if (!preg_match('~</?[a-z][a-z0-9:-]*(?:\s[^<>]*|\s*/?)>~i', $html)) {
+        $paragraphs = preg_split('/\n[ \t]*\n(?:[ \t]*\n)*/u', $html) ?: [$html];
+        return implode("\n", array_map(static function (string $text): string {
+            return '<p>' . str_replace("\n", "<br>\n", sanitize(trim($text))) . '</p>';
+        }, $paragraphs));
+    }
+
     $dom = new DOMDocument('1.0', 'UTF-8');
     $previous = libxml_use_internal_errors(true);
-    $dom->loadHTML('<?xml encoding="UTF-8\"><div>' . $html . '</div>', LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
-    libxml_clear_errors(); libxml_use_internal_errors($previous);
-    $allowed = ['p','div','span','strong','b','em','i','u','ul','ol','li','blockquote','h2','h3','h4','h5','br','hr','a','img','table','thead','tbody','tr','th','td'];
-    $clean = function (DOMNode $node) use (&$clean,$allowed): void {
+    try {
+        // Correct UTF-8 declaration; the old string contained a literal \".
+        $loaded = $dom->loadHTML('<?xml encoding="UTF-8"><!doctype html><html><body>' . $html . '</body></html>', LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+    } finally {
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+    }
+    if (!$loaded) return '';
+    $allowed = ['p','div','span','strong','b','em','i','u','s','del','sup','sub','ul','ol','li','dl','dt','dd','blockquote','h2','h3','h4','h5','h6','br','hr','a','img','pre','code','figure','figcaption','table','caption','thead','tbody','tfoot','tr','th','td'];
+    $safeUrl = static function (string $value, bool $anchor): bool {
+        if (preg_match('/[\x00-\x20\x7f\\\\]/', $value)) return false;
+        return safeExternalUrl($value) !== ''
+            || (str_starts_with($value, '/') && !str_starts_with($value, '//'))
+            || ($anchor && str_starts_with($value, '#'));
+    };
+    $clean = function (DOMNode $node) use (&$clean, $allowed, $safeUrl): void {
         foreach (iterator_to_array($node->childNodes) as $child) {
             if ($child instanceof DOMComment || $child instanceof DOMProcessingInstruction) { $node->removeChild($child); continue; }
-            if (!($child instanceof DOMElement)) continue;
+            if (!$child instanceof DOMElement) continue;
             $tag = strtolower($child->tagName);
-            if (in_array($tag,['script','style','iframe','object','embed','svg','math','form','input','button','meta','link','base'],true)) { $node->removeChild($child); continue; }
+            if (in_array($tag, ['script','style','iframe','object','embed','svg','math','form','input','button','textarea','select','template','meta','link','base'], true)) { $node->removeChild($child); continue; }
             $clean($child);
-            if (!in_array($tag,$allowed,true)) {
-                while ($child->firstChild) $node->insertBefore($child->firstChild,$child);
-                $node->removeChild($child); continue;
+            if (!in_array($tag, $allowed, true)) {
+                while ($child->firstChild) $node->insertBefore($child->firstChild, $child);
+                $node->removeChild($child);
+                continue;
             }
             foreach (iterator_to_array($child->attributes) as $attr) {
-                $name=strtolower($attr->name); $value=$attr->value;
-                $keep = in_array($name,['title','alt'],true);
-                if (($tag==='a' && $name==='href') || ($tag==='img' && $name==='src')) {
-                    $keep = safeExternalUrl($value)!=='' || (str_starts_with($value,'/') && !str_starts_with($value,'//') && !str_contains($value,'\\'));
-                }
+                $name = strtolower($attr->name);
+                $value = $attr->value;
+                $keep = in_array($name, ['title','alt'], true);
+                if (($tag === 'a' && $name === 'href') || ($tag === 'img' && $name === 'src')) $keep = $safeUrl($value, $tag === 'a');
+                if ($name === 'dir') $keep = in_array($value, ['rtl','ltr','auto'], true);
+                if ($name === 'id' && in_array($tag, ['h2','h3','h4','h5','h6'], true)) $keep = (bool)preg_match('/^[\p{L}\p{N}_][\p{L}\p{N}\p{M}_.:\x{200C}\x{200D}-]{0,199}$/uD', $value);
+                if ($tag === 'img' && in_array($name, ['width','height'], true)) $keep = ctype_digit($value) && (int)$value > 0 && (int)$value <= 8192;
+                if ($name === 'lang') $keep = (bool)preg_match('/^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$/iD', $value);
+                if (in_array($tag, ['td','th'], true) && in_array($name, ['colspan','rowspan'], true)) $keep = ctype_digit($value) && (int)$value > 0 && (int)$value <= 100;
+                if ($tag === 'th' && $name === 'scope') $keep = in_array($value, ['row','col','rowgroup','colgroup'], true);
+                if (($tag === 'ol' && $name === 'start') || ($tag === 'li' && $name === 'value')) $keep = (bool)preg_match('/^-?\d{1,6}$/D', $value);
+                if ($tag === 'ol' && $name === 'reversed') $keep = true;
                 if (!$keep) $child->removeAttribute($attr->name);
             }
-            if ($tag==='a') $child->setAttribute('rel','noopener noreferrer');
-            if ($tag==='img') { $child->setAttribute('loading','lazy'); $child->setAttribute('decoding','async'); }
+            if ($tag === 'a') $child->setAttribute('rel', 'noopener noreferrer');
+            if ($tag === 'img') {
+                if (!$child->hasAttribute('src')) { $node->removeChild($child); continue; }
+                $child->setAttribute('loading', 'lazy');
+                $child->setAttribute('decoding', 'async');
+            }
         }
     };
-    $body=$dom->getElementsByTagName('body')->item(0);
+    $body = $dom->getElementsByTagName('body')->item(0);
     if (!$body) return '';
-    $clean($body); $out='';
-    foreach ($body->childNodes as $child) $out.=$dom->saveHTML($child);
-    return $out;
+    $clean($body);
+    // Browser/pasted editor HTML often uses divs or loose inline text. Group
+    // those runs in paragraphs too, without adding breaks inside existing p,
+    // headings, lists, tables or preformatted HTML.
+    $blocks = ['p','div','ul','ol','dl','blockquote','h2','h3','h4','h5','h6','hr','pre','figure','table'];
+    $paragraphize = function (DOMNode $parent) use (&$paragraphize, $dom, $blocks): void {
+        $paragraph = null;
+        foreach (iterator_to_array($parent->childNodes) as $child) {
+            if ($child instanceof DOMElement && in_array(strtolower($child->tagName), $blocks, true)) {
+                $paragraph = null;
+                if (strtolower($child->tagName) === 'div') $paragraphize($child);
+                continue;
+            }
+            if ($child instanceof DOMText && trim($child->textContent) === '' && $paragraph === null) continue;
+            if ($paragraph === null) {
+                $paragraph = $dom->createElement('p');
+                $parent->insertBefore($paragraph, $child);
+            }
+            if ($child instanceof DOMText) {
+                $parts = preg_split('/(\n[ \t]*\n(?:[ \t]*\n)*)/u', $child->textContent, -1, PREG_SPLIT_DELIM_CAPTURE) ?: [];
+                foreach ($parts as $i => $part) {
+                    if ($i % 2 === 1) { $paragraph = null; continue; }
+                    if ($part === '') continue;
+                    if ($paragraph === null) { $paragraph = $dom->createElement('p'); $parent->insertBefore($paragraph, $child); }
+                    foreach (explode("\n", $part) as $lineIndex => $line) {
+                        if ($lineIndex > 0) $paragraph->appendChild($dom->createElement('br'));
+                        $paragraph->appendChild($dom->createTextNode($line));
+                    }
+                }
+                $parent->removeChild($child);
+            } else {
+                $paragraph->appendChild($child);
+            }
+        }
+    };
+    $paragraphize($body);
+    $out = '';
+    foreach ($body->childNodes as $child) $out .= $dom->saveHTML($child);
+    return trim($out);
 }
+
 function safeExternalUrl(string $url): string {
     return preg_match('~^https://~i', $url) && filter_var($url,FILTER_VALIDATE_URL) && !preg_match('/[<>"\x00-\x20]/', $url) ? $url : '';
 }

@@ -550,61 +550,43 @@ function renderMiniItem(array $post, array $opts = []): string {
 }
 
 /**
- * ردیف سرمقاله‌ای مقالات/پژوهش.
- * برخلاف کارت‌های عمومی، این نوع برای محتوای متنی فشرده است: عنوان و خلاصه
- * قهرمان‌اند، تصویر فقط یک بندانگشتی کوچک است و کل ردیف به همان URL داخلی
- * canonical وصل می‌شود. این الگو برای صفحهٔ اصلی و آرشیو مقاله/پژوهش خواناتر
- * و از نظر تراکم اطلاعات مناسب‌تر است.
+ * Full-width article/research archive card. The homepage deliberately uses
+ * jhd_news_list() instead; archive media must not leak into that text list.
  */
 function renderEditorialRow(array $post, array $opts = []): string {
     $href = (string)($opts['url'] ?? postUrl($post));
     $title = (string)($post['title'] ?? '');
-    $summary = excerpt(
-        (string)($post['summary'] ?? $post['content'] ?? ''),
-        (int)($opts['excerpt'] ?? 105)
-    );
+    $summaryText = trim((string)($post['summary'] ?? '')) ?: (string)($post['content'] ?? '');
+    $summary = excerpt($summaryText, (int)($opts['excerpt'] ?? 220));
     $rawDate = (string)($post['published_at'] ?? $post['created_at'] ?? '');
-    $topics = []; // Public topic chips are retired; taxonomy data remains stored.
-    $index = isset($opts['index']) ? max(0, (int)$opts['index']) : null;
-    $image = trim((string)($post['featured_image'] ?? ''));
     $type = (string)($post['post_type'] ?? 'article');
     $badge = (string)($opts['badge'] ?? postTypeLabel($type));
+    $images = jhd_card_image_set($post);
+    $image = $images[0] ?? null;
+    $src = $image ? imgUrl((string)$image['path']) : '';
+    $author = trim((string)($post['author_name'] ?? ''));
     $meta = jhd_card_meta_line([
-        'chips' => jhd_topic_chips($topics),
         'date_label' => $rawDate !== '' ? persianDate($rawDate) : '',
         'date_raw' => $rawDate,
     ]);
 
-    $thumb = '';
-    if ($image !== '') {
-        $src = imgUrl($image);
-        $thumb = '<a class="jhd-editorial-thumb" href="' . sanitize($href) . '"'
-            . ' aria-label="' . sanitize($title) . '">'
-            . '<img src="' . sanitize($src) . '" alt="' . sanitize($title) . '"'
-            . ' loading="' . (!empty($opts['eager']) ? 'eager' : 'lazy') . '" decoding="async"'
-            . ' width="180" height="112"></a>';
-    }
-
+    $thumb = $src !== ''
+        ? '<a class="jhd-editorial-thumb" href="' . sanitize($href) . '" tabindex="-1" aria-label="' . sanitize($title) . '">'
+            . '<img src="' . sanitize($src) . '" alt="' . sanitize((string)($image['alt'] ?: $title)) . '"'
+            . ' loading="' . (!empty($opts['eager']) ? 'eager' : 'lazy') . '" decoding="async" width="640" height="360"></a>'
+        : '';
     $cta = (string)($opts['cta'] ?? 'مطالعه مقاله');
     $body = '<div class="jhd-editorial-main">'
-        . ($meta !== '' ? '<div class="jhd-editorial-meta">' . $meta . '</div>' : '')
-        . '<h3 class="jhd-editorial-title">'
-        . ($href !== '' ? '<a href="' . sanitize($href) . '">' . sanitize($title) . '</a>' : sanitize($title))
-        . '</h3>'
+        . '<div class="jhd-editorial-meta"><span class="jhd-editorial-badge">' . sanitize($badge) . '</span>' . $meta . '</div>'
+        . '<h3 class="jhd-editorial-title"><a href="' . sanitize($href) . '">' . sanitize($title) . '</a></h3>'
         . ($summary !== '' ? '<p class="jhd-card-summary">' . sanitize($summary) . '</p>' : '')
-        . '<a class="jhd-editorial-cta" href="' . sanitize($href) . '">'
-        . sanitize($cta) . ' <i class="bi bi-arrow-left" aria-hidden="true"></i></a>'
-        . '</div>';
+        . '<div class="jhd-editorial-foot">'
+        . ($author !== '' ? '<span class="jhd-card-author"><i class="bi bi-person" aria-hidden="true"></i>' . sanitize($author) . '</span>' : '')
+        . '<a class="jhd-editorial-cta" href="' . sanitize($href) . '">' . sanitize($cta) . ' <i class="bi bi-arrow-left" aria-hidden="true"></i></a>'
+        . '</div></div>';
 
-    $number = $index !== null
-        ? '<span class="jhd-row-index" aria-hidden="true">' . str_pad((string)$index, 2, '0', STR_PAD_LEFT) . '</span>'
-        : '';
-
-    return '<div class="col-12"><article class="jhd-editorial-row">'
-        . $thumb . $body
-        . '<span class="jhd-editorial-badge">' . sanitize($badge) . '</span>'
-        . $number
-        . '</article></div>';
+    return '<div class="col-12"><article class="jhd-editorial-row' . ($thumb === '' ? ' jhd-editorial-row--noimage' : '') . '">'
+        . $thumb . $body . '</article></div>';
 }
 
 /** رویداد/برنامه/اطلاعیه — همان کارت، با جعبهٔ تاریخ در متادیتا. */

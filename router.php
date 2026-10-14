@@ -381,10 +381,11 @@ if (UPLOAD_STORAGE === 'local' && preg_match('~^/uploads/(?:[a-zA-Z0-9_-]+/)+[a-
 // ─── ۲) مسیرهای دقیق و الگوهای پویا ─────────────────────────────────────────
 $definition = require __DIR__ . '/config/routes.php';
 
-// Query-URL mode (index.php?p=news / ?p=topic&slug=x) is resolved first and
-// independently of mod_rewrite: a shared host that cannot rewrite URLs still
-// serves every page because links are generated as ?p=… by url(). Unknown ?p=
-// values fall through to a real 404 (never a soft-404 or the homepage).
+// Only the query front controller owns ?p=. A stale/foreign p parameter on
+// /login used to override that explicit path and could render /register (or
+// turn /sitemap.xml into HTML). Real paths, including legacy .php spellings,
+// always win. Keep /?p=… and /index.php?p=… working on non-rewrite hosts.
+if (!in_array($path, ['/', '/index.php'], true)) unset($_GET['p']);
 $queryRoute = (isset($_GET['p']) && is_string($_GET['p'])) ? trim($_GET['p']) : '';
 // `?p=home` maps to index.php, which itself dispatches `?p=`; resolving it here
 // would recurse. The home route is simply the homepage.
