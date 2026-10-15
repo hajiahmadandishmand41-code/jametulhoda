@@ -617,6 +617,7 @@ function renderBookCard(array $book, array $opts = []): string {
         'has_pdf'     => !empty($book['file_path']) || $fileType === 'PDF',
     ];
     return jhd_card($card, [
+        'variant' => !empty($opts['compact']) ? 'compact' : 'default',
         'col'   => array_key_exists('col', $opts) ? (string)$opts['col'] : JHD_CARD_COL,
         'media' => 'contain',
         'eager' => !empty($opts['eager']),
@@ -650,6 +651,7 @@ function renderLessonCard(array $lesson, array $opts = []): string {
         'has_pdf'     => !empty($lesson['pdf_file']) || !empty($lesson['pdf_path']) || !empty($lesson['attachment']),
     ];
     return jhd_card($card, [
+        'variant' => !empty($opts['compact']) ? 'compact' : 'default',
         'col'    => array_key_exists('col', $opts) ? (string)$opts['col'] : 'col-12 col-sm-6 col-lg-3',
         'class'  => trim((string)($opts['class'] ?? '')),
         'eager'  => !empty($opts['eager']),
@@ -693,6 +695,7 @@ function renderTopicCard(array $topic, array $opts = []): string {
         'body_extra' => $kids !== '' ? '<div class="jhd-card-kids">' . $kids . '</div>' : '',
     ];
     return jhd_card($card, [
+        'variant' => !empty($opts['compact']) ? 'compact' : 'default',
         'col'    => array_key_exists('col', $opts) ? (string)$opts['col'] : 'col-12 col-sm-6 col-lg-3',
         'class'  => 'jhd-card--topic'
             . ($minimal ? ' jhd-card--topic-home' : '')
@@ -747,6 +750,7 @@ function renderMediaCard(array $media, array $opts = []): string {
         'body_extra'  => (string)($media['body_extra'] ?? ''),
     ];
     return jhd_card($card, [
+        'variant' => !empty($opts['compact']) ? 'compact' : 'default',
         'col'   => array_key_exists('col', $opts) ? (string)$opts['col'] : JHD_CARD_COL,
         'eager' => !empty($opts['eager']),
     ]);
@@ -1178,6 +1182,70 @@ function jhd_rail_list(array $items, array $opts = []): string {
             . ' <i class="bi bi-arrow-left" aria-hidden="true"></i></a>';
     }
     return $html . '</section>';
+}
+
+/**
+ * دو ریل کوچک و افقی «تازه‌ترین‌ها» و «پربازدیدترین‌ها» در انتهای مطلب —
+ * بعد از متن اصلی و پیش از فوتر. داده‌ها هم‌نوعِ خودِ مطلب‌اند و از
+ * jhd_post_end_rail_items() می‌آیند (تاریخ واقعی انتشار و شمارندهٔ واقعی
+ * بازدید). هر دو فهرست خالی باشند، هیچ چیزی رندر نمی‌شود؛ پس متن اصلی هرگز
+ * بی‌دلیل سنگین‌تر نمی‌شود و محتوای ساختگی هم در کار نیست.
+ */
+function jhd_post_end_rails(array $post): string {
+    $items = jhd_post_end_rail_items($post);
+    $latest = $items['latest'];
+    $popular = $items['popular'];
+    if (!$latest && !$popular) return '';
+
+    $type = (string)($post['post_type'] ?? '');
+    $plural = match ($type) {
+        'news'         => 'اخبار',
+        'article'      => 'مقالات',
+        'research'     => 'پژوهش‌ها',
+        'report'       => 'گزارش‌ها',
+        'announcement' => 'اطلاعیه‌ها',
+        'program'      => 'برنامه‌های آموزشی',
+        'religious'    => 'فعالیت‌های مذهبی',
+        'event'        => 'رویدادها',
+        'speech'       => 'سخنرانی‌ها',
+        'qa'           => 'پرسش و پاسخ‌ها',
+        default        => 'مطالب',
+    };
+    $archive = match ($type) {
+        'news'         => url('news'),
+        'article'      => url('articles'),
+        'research'     => url('articles', ['type' => 'research']),
+        'report'       => url('reports'),
+        'announcement' => url('announcements'),
+        'program'      => url('programs'),
+        'religious'    => url('religious-activities'),
+        'event'        => url('events'),
+        'speech'       => url('speeches'),
+        'qa'           => url('qa'),
+        default        => url('articles'),
+    };
+
+    $columns = '';
+    if ($latest) {
+        $columns .= '<div class="col-12 col-md-6">' . jhd_rail_list($latest, [
+            'title' => 'تازه‌ترین ' . $plural,
+            'icon'  => 'bi-clock-history',
+            'id'    => 'jhd-end-latest',
+            'more'  => 'مشاهدهٔ همه',
+            'more_url' => $archive,
+        ]) . '</div>';
+    }
+    if ($popular) {
+        $columns .= '<div class="col-12 col-md-6">' . jhd_rail_list($popular, [
+            'title' => 'پربازدیدترین ' . $plural,
+            'icon'  => 'bi-eye',
+            'id'    => 'jhd-end-popular',
+            'more'  => 'مشاهدهٔ همه',
+            'more_url' => $archive,
+        ]) . '</div>';
+    }
+    return '<section class="jhd-end-rails" aria-label="تازه‌ترین‌ها و پربازدیدترین‌های هم‌نوع">'
+        . '<div class="row g-3">' . $columns . '</div></section>';
 }
 
 /**

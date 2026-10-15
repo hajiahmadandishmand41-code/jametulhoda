@@ -81,6 +81,16 @@ jobs:
           set -o pipefail
           node tests/homepage-settings.mjs 2>&1 | tee homepage-report.txt
 
+      - name: Compact design, end-of-article rails and their admin controls
+        env:
+          TEST_BASE_URL: http://127.0.0.1:8080
+          ADMIN_USER: admin
+          ADMIN_PASSWORD: TestAdmin123!@#
+          SQLITE_PATH: /tmp/jametulhoda-home.sqlite
+        run: |
+          set -o pipefail
+          node tests/compact-design.mjs 2>&1 | tee compact-design-report.txt
+
       - name: Editorial browser regression
         env:
           TEST_BASE_URL: http://127.0.0.1:8080
@@ -134,4 +144,5 @@ jobs:
             homepage-report.txt
             links-report.txt
             http-report.txt
+            compact-design-report.txt
           if-no-files-found: ignore

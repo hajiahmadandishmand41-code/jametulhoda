@@ -316,7 +316,7 @@ require_once __DIR__ . '/../includes/header.php';
     <?= jhd_share_row($postCanonicalUrl, (string)$post['title']) ?>
     <?php if ($related): ?>
     <section class="mt-4" aria-labelledby="related-heading"><h2 class="h4" id="related-heading">مطالب مرتبط</h2>
-      <div class="row g-3"><?php foreach ($related as $item) echo renderPostCard($item, ['col' => 'col-12 col-md-6']); ?></div>
+      <div class="row g-2"><?php foreach ($related as $item) echo renderPostCard($item, ['col' => 'col-12 col-md-6', 'compact' => true]); ?></div>
     </section>
     <?php endif; ?>
 
@@ -329,6 +329,12 @@ require_once __DIR__ . '/../includes/header.php';
             . jhd_post_nav($adjacent['prev'] ?? null, $adjacent['next'] ?? null)
             . '</nav>';
     }
+    /*
+     * دو ریل کوچک و افقی «تازه‌ترین‌ها» و «پربازدیدترین‌ها» از هم‌نوعِ این
+     * مطلب — بعد از متن اصلی و پیش از فوتر. روشن/خاموش، تعداد و آستانهٔ
+     * پربازدید از /admin/settings کنترل می‌شود؛ دادهٔ خالی = بخش رندرنشده.
+     */
+    echo jhd_post_end_rails($post);
     ?>
 </article>
 </div>
@@ -339,18 +345,21 @@ require_once __DIR__ . '/../includes/header.php';
     /*
      * ستون کناری: مطالب مرتبط، تازه‌ترین‌ها و پربازدیدترین‌ها — هر سه با
      * تصویر کوچک در سمت راست (ابتدای خط در راست‌چین) و فهرست یکدست.
+     * تعداد و آستانه از همان تنظیمات ریل‌ها می‌آید و مطلب جاری هرگز در
+     * فهرست خودش تکرار نمی‌شود. در موبایل این دو ریل پنهان‌اند، چون
+     * ریل‌های هم‌نوعِ انتهای مطلب همان نقش را فشرده‌تر ایفا می‌کنند.
      */
-    $railLatest = getLatestPosts(5);
-    $railPopular = getMostViewedPosts(5);
-    if ($railPopular) {
-        $railPopular = array_values(array_filter(
-            $railPopular,
-            static fn(array $row): bool => (int)($row['id'] ?? 0) !== (int)($post['id'] ?? 0)
-        ));
-    }
+    $railsCfg = jhd_content_rails_settings();
+    $railLatest = $railsCfg['latest_enabled']
+        ? getPosts(['sort' => 'newest', 'limit' => $railsCfg['latest_count'], 'exclude_ids' => [(int)$post['id']]])
+        : [];
+    $railPopular = $railsCfg['popular_enabled']
+        ? getPosts(['sort' => 'popular', 'min_views' => $railsCfg['min_views'], 'limit' => $railsCfg['popular_count'], 'exclude_ids' => [(int)$post['id']]])
+        : [];
     ?>
 
     <?php if ($railLatest): ?>
+    <div class="d-none d-lg-block">
     <?= jhd_rail_list($railLatest, [
         'title' => 'تازه‌ترین‌ها',
         'icon'  => 'bi-clock-history',
@@ -358,9 +367,11 @@ require_once __DIR__ . '/../includes/header.php';
         'more'  => 'همهٔ اخبار',
         'more_url' => url('news'),
     ]) ?>
+    </div>
     <?php endif; ?>
 
     <?php if ($railPopular): ?>
+    <div class="d-none d-lg-block">
     <?= jhd_rail_list($railPopular, [
         'title' => 'پربازدیدترین‌ها',
         'icon'  => 'bi-eye',
@@ -368,6 +379,7 @@ require_once __DIR__ . '/../includes/header.php';
         'more'  => 'همهٔ مطالب',
         'more_url' => url('articles'),
     ]) ?>
+    </div>
     <?php endif; ?>
 
     <?php if ($relatedBooks): ?>

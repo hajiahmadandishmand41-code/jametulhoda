@@ -11,6 +11,7 @@
     "test:links": "node tests/links.mjs",
     "test:editorial": "php tests/editorial.php",
     "test:homepage": "node tests/homepage-settings.mjs",
+    "test:compact": "node tests/compact-design.mjs",
     "test:editorial-browser": "node tests/editorial-browser.mjs"
   },
   "devDependencies": {

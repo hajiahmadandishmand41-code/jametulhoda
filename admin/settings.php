@@ -54,6 +54,8 @@ $homepageSectionLabels = jhd_home_section_labels();
 $homepageCfg = jhd_homepage_settings();
 $homepageEnabled = $homepageCfg['sections'];
 $homepageHeroId = $homepageCfg['hero_post_id'];
+// ریل‌های انتهای مطلب: کلیدهای تازه در همان جدول settings (بدون migration).
+$railsCfg = jhd_content_rails_settings();
 $homepageCategories = $db->query('SELECT id, name FROM categories ORDER BY name')->fetchAll();
 
 $homepagePosts = [];
@@ -127,7 +129,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
          */
         $homepagePanelPosted = !empty($_POST['homepage_sections_present']);
         if ($homepagePanelPosted) {
-            foreach (['homepage_hero_post_id', 'homepage_hero_mode', 'homepage_hero_kind', 'homepage_other_id', 'homepage_feature_ref'] as $field) {
+            foreach (['homepage_hero_post_id', 'homepage_hero_mode', 'homepage_hero_kind', 'homepage_other_id', 'homepage_feature_ref', 'homepage_density', 'homepage_thumb'] as $field) {
                 if (isset($_POST[$field]) && !is_string($_POST[$field])) {
                     http_response_code(400); exit('Invalid homepage setting');
                 }
@@ -161,11 +163,41 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 } else { $homepageHeroId = 0; }
             }
             $homepageCfg['layout'] = is_array($_POST['homepage_layout'] ?? null) ? $_POST['homepage_layout'] : $homepageCfg['layout'];
+            // تراکم چیدمان و اندازهٔ بندانگشتی — jhd_normalize_home_config
+            // مقدارها را به گزینه‌های مجاز محدود می‌کند.
+            $homepageCfg['density'] = (string)($_POST['homepage_density'] ?? 'compact');
+            $homepageCfg['thumb'] = (string)($_POST['homepage_thumb'] ?? 'sm');
         }
         if ($homepagePanelPosted) {
             $homepageCfg['sections'] = array_replace($homepageCfg['sections'], $homepageEnabled);
             $homepageCfg['hero_post_id'] = $homepageHeroId;
         }
+        /*
+         * ریل‌های انتهای مطلب هم مانند بخش‌های صفحهٔ اصلی با نشانگر پنهان
+         * از «درخواست ناقص» جدا می‌شوند؛ بدون نشانگر، تنظیمات ذخیره‌شده
+         * دست‌نخورده می‌ماند.
+         */
+        $railsPanelPosted = !empty($_POST['content_rails_present']);
+        if ($railsPanelPosted) {
+            foreach (['rails_latest_count', 'rails_popular_count', 'rails_min_views'] as $field) {
+                if (isset($_POST[$field]) && !is_string($_POST[$field])) {
+                    http_response_code(400); exit('Invalid rails setting');
+                }
+            }
+            $postedRails = $_POST['content_rails'] ?? [];
+            if (!is_array($postedRails)) $postedRails = [];
+            $postedRails = array_values(array_filter(array_map(
+                static fn($value) => is_string($value) ? $value : '',
+                $postedRails
+            )));
+            $railsCfg['latest_enabled'] = in_array('latest', $postedRails, true);
+            $railsCfg['popular_enabled'] = in_array('popular', $postedRails, true);
+            $railsCfg['latest_count'] = (int)($_POST['rails_latest_count'] ?? 4);
+            $railsCfg['popular_count'] = (int)($_POST['rails_popular_count'] ?? 4);
+            $railsCfg['min_views'] = (int)($_POST['rails_min_views'] ?? 50);
+        }
+        $railsCfg = jhd_normalize_rails_config($railsCfg);
+        $railsConfigValue = json_encode($railsCfg, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $homepageCfg = jhd_normalize_home_config($homepageCfg);
         if ($homepagePanelPosted && $homepageCfg['hero_mode'] === 'manual' && !jhd_home_feature($homepageCfg)) {
             $error = 'مطلب شاخص معتبر نیست؛ یک محتوای منتشرشده انتخاب کنید.';
@@ -201,6 +233,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     upsertSetting($db, $field, $formValues[$field] ?? '');
                 }
                 upsertSetting($db, 'homepage_config', $homepageConfigValue);
+                upsertSetting($db, 'content_rails_config', $railsConfigValue);
                 if ($newLogo !== '') upsertSetting($db, 'site_logo', $newLogo);
                 $db->commit();
 
@@ -284,6 +317,15 @@ $sets = array_merge($sets, $formValues);
                                   <label>ترتیب (کوچک‌تر، بالاتر)<input class="form-control" type="number" min="0" max="99" name="homepage_layout[<?= $sectionKey ?>][order]" value="<?= $homepageCfg['layout'][$sectionKey]['order'] ?>"></label>
                                   <label>تعداد<input class="form-control" type="number" min="1" max="<?= in_array($sectionKey, ['latest','popular'], true) ? 3 : 12 ?>" name="homepage_layout[<?= $sectionKey ?>][limit]" value="<?= $homepageCfg['layout'][$sectionKey]['limit'] ?>"></label>
                                 </div>
+                                <?php if ($sectionKey !== 'feature'): ?>
+                                <label class="form-label">حالت کارت‌ها
+                                  <select class="form-select" name="homepage_layout[<?= $sectionKey ?>][mode]">
+                                    <?php foreach (['auto' => 'خودکار: ردیف فشرده در موبایل، کاشی کوچک در دسکتاپ', 'rows' => 'همیشه ردیف افقی فشرده', 'grid' => 'کاشی بزرگ شبکه‌ای'] as $modeValue => $modeLabel): ?>
+                                    <option value="<?= $modeValue ?>" <?= $homepageCfg['layout'][$sectionKey]['mode'] === $modeValue ? 'selected' : '' ?>><?= $modeLabel ?></option>
+                                    <?php endforeach; ?>
+                                  </select>
+                                </label>
+                                <?php endif; ?>
                                 <?php if (in_array($sectionKey, ['popular','latest','news','writing','research'], true)): ?>
                                 <label class="form-label">دسته‌بندی
                                   <select class="form-select" name="homepage_layout[<?= $sectionKey ?>][category]">
@@ -317,10 +359,63 @@ $sets = array_merge($sets, $formValues);
                           </optgroup>
                           <?php endforeach; ?>
                         </select>
-                        <div class="form-text">این مطلب با تصویر بزرگ در یک طرف و تیتر و خلاصه در طرف دیگر، بالای صفحهٔ اصلی می‌نشیند.</div>
+                        <div class="form-text">این مطلب با تصویر در یک طرف و تیتر و خلاصه در طرف دیگر، به‌شکل افقی و کنترل‌شده بالای صفحهٔ اصلی می‌نشیند؛ در موبایل هم افقی می‌ماند.</div>
+                        <div class="row g-2 mt-1">
+                          <div class="col-12 col-sm-6">
+                            <label class="form-label">تراکم چیدمان صفحهٔ اصلی
+                              <select class="form-select" name="homepage_density">
+                                <?php foreach (['compact' => 'فشرده (اسکرول کمتر، مطالب بیشتر)', 'cozy' => 'راحت (فاصلهٔ بیشتر بین بخش‌ها)'] as $densityValue => $densityLabel): ?>
+                                <option value="<?= $densityValue ?>" <?= $homepageCfg['density'] === $densityValue ? 'selected' : '' ?>><?= $densityLabel ?></option>
+                                <?php endforeach; ?>
+                              </select>
+                            </label>
+                          </div>
+                          <div class="col-12 col-sm-6">
+                            <label class="form-label">اندازهٔ بندانگشتی کارت‌های فشرده
+                              <select class="form-select" name="homepage_thumb">
+                                <?php foreach (['sm' => 'کوچک (پیش‌فرض)', 'md' => 'متوسط'] as $thumbValue => $thumbLabel): ?>
+                                <option value="<?= $thumbValue ?>" <?= $homepageCfg['thumb'] === $thumbValue ? 'selected' : '' ?>><?= $thumbLabel ?></option>
+                                <?php endforeach; ?>
+                              </select>
+                            </label>
+                          </div>
+                        </div>
                     </div>
                     <div class="alert alert-light border mt-3 mb-0 small">
                         تیک «برگزیدهٔ سردبیر» را هنگام ایجاد یا ویرایش هر مطلب فعال کنید تا در فهرست‌های دیگر هم بالا بیاید. در حالت خودکار، جدیدترین مطلب منتشرشده (با ترتیب تاریخ و سپس شناسه) شاخص می‌شود؛ حالت دستی فقط همان محتوای انتخاب‌شده را نمایش می‌دهد.
+                    </div>
+                </div>
+            </section>
+
+            <section class="admin-card mb-4" aria-labelledby="admin-rails-heading">
+                <div class="admin-card-header" id="admin-rails-heading">انتهای مطلب: تازه‌ترین‌ها و پربازدیدترین‌ها</div>
+                <div class="admin-card-body">
+                    <p class="admin-settings-help">دو فهرست کوچک و افقی که پس از متن هر خبر/مقاله و پیش از فوتر می‌آیند: «تازه‌ترین‌های هم‌نوع» با تاریخ واقعی انتشار و «پربازدیدترین‌های هم‌نوع» با شمارندهٔ واقعی بازدید. اگر مطلب واجد شرایطی نباشد، بخش مربوطه نمایش داده نمی‌شود و هیچ محتوای ساختگی جای آن را نمی‌گیرد.</p>
+                    <?php /* نشانگر پنهان: تیک‌های خالی از درخواست ناقص جدا می‌شوند. */ ?>
+                    <input type="hidden" name="content_rails_present" value="1">
+                    <div class="row g-2">
+                        <div class="col-12 col-sm-6">
+                            <label class="form-check border rounded-3 p-2 d-flex gap-2 align-items-center">
+                                <input class="form-check-input m-0" type="checkbox" name="content_rails[]" value="latest" <?= $railsCfg['latest_enabled'] ? 'checked' : '' ?>>
+                                <span>نمایش «تازه‌ترین‌های هم‌نوع»</span>
+                            </label>
+                            <label class="form-label">تعداد موارد تازه‌ترین‌ها
+                                <input class="form-control" type="number" min="1" max="8" name="rails_latest_count" value="<?= (int)$railsCfg['latest_count'] ?>">
+                            </label>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label class="form-check border rounded-3 p-2 d-flex gap-2 align-items-center">
+                                <input class="form-check-input m-0" type="checkbox" name="content_rails[]" value="popular" <?= $railsCfg['popular_enabled'] ? 'checked' : '' ?>>
+                                <span>نمایش «پربازدیدترین‌های هم‌نوع»</span>
+                            </label>
+                            <label class="form-label">تعداد موارد پربازدیدترین‌ها
+                                <input class="form-control" type="number" min="1" max="8" name="rails_popular_count" value="<?= (int)$railsCfg['popular_count'] ?>">
+                            </label>
+                            <label class="form-label">آستانهٔ پربازدیدشدن (حداقل بازدید واقعی)
+                                <input class="form-control" type="number" min="1" max="100000" name="rails_min_views" value="<?= (int)$railsCfg['min_views'] ?>">
+                            </label>
+                            <div class="form-text">این آستانه برای بخش «پربازدیدترین‌ها» در صفحهٔ اصلی هم اعمال می‌شود.</div>
+                        </div>
                     </div>
                 </div>
             </section>

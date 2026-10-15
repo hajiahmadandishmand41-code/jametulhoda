@@ -1145,8 +1145,10 @@ function getPosts(array $opts = []): array {
         $params   = array_merge($params, [$s, $s, $s]);
     }
     if (isset($opts['min_views'])) {
+        // آستانه از تنظیمات مدیریت می‌آید (پیش‌فرض ۵۰)؛ خودِ getPosts عدد
+        // مدیر را بی‌صدا بازنویسی نمی‌کند، فقط منفی را صفر می‌کند.
         $where[] = "p.view_count >= ?";
-        $params[] = max(50, (int)$opts['min_views']);
+        $params[] = max(0, (int)$opts['min_views']);
     }
     if (!empty($opts['exclude_ids'])) {
         $ids = array_values(array_map('intval', $opts['exclude_ids']));
@@ -1247,7 +1249,7 @@ function recordContentView(int $postId): void {
 
 /** Only genuinely eligible posts; never relabel fresh posts as popular. */
 function getMostViewedPosts(int $limit = 3, array $types = []): array {
-    return getPosts(['types' => $types, 'limit' => max(1, min(3, $limit)), 'sort' => 'popular', 'min_views' => 50]);
+    return getPosts(['types' => $types, 'limit' => max(1, min(3, $limit)), 'sort' => 'popular', 'min_views' => jhd_popular_min_views()]);
 }
 
 function getLatestPosts(int $limit = 3, array $types = []): array {
@@ -1950,11 +1952,15 @@ function jhd_normalize_home_config(array $cfg): array {
             if ($legacyValues) $out['sections'][$key] = in_array(true, $legacyValues, true);
         }
         $item = is_array($cfg['layout'][$key] ?? null) ? $cfg['layout'][$key] : [];
+        $itemMode = is_string($item['mode'] ?? null) ? $item['mode'] : 'auto';
         $out['layout'][$key] = [
             'title' => mb_substr(trim(is_string($item['title'] ?? null) ? $item['title'] : $label), 0, 100) ?: $label,
             'order' => max(0, min(99, (int)($item['order'] ?? array_search($key, array_keys($labels))))),
             'limit' => max(1, min(in_array($key, ['popular', 'latest'], true) ? 3 : 12, (int)($item['limit'] ?? 3))),
             'category' => max(0, (int)($item['category'] ?? 0)),
+            // «خودکار»: در موبایل ردیف فشرده و در صفحه‌های بزرگ‌تر کاشی کوچک؛
+            // «ردیف‌ها»: همیشه ردیف افقی فشرده؛ «کاشی‌ها»: کارت بزرگ‌تر شبکه‌ای.
+            'mode' => in_array($itemMode, ['auto', 'rows', 'grid'], true) ? $itemMode : 'auto',
         ];
     }
     $out['hero_post_id'] = max(0, (int)($cfg['hero_post_id'] ?? 0));
@@ -1962,13 +1968,72 @@ function jhd_normalize_home_config(array $cfg): array {
     $out['hero_mode'] = in_array($mode, ['auto', 'manual', 'off'], true) ? $mode : 'auto';
     $kind = is_string($cfg['hero_kind'] ?? null) ? $cfg['hero_kind'] : 'post';
     $out['hero_kind'] = in_array($kind, ['post', 'book', 'lesson'], true) ? $kind : 'post';
+    // تراکم چیدمان و اندازهٔ بندانگشتی — دو کلید سراسری برای صفحهٔ نخست.
+    $density = is_string($cfg['density'] ?? null) ? $cfg['density'] : 'compact';
+    $out['density'] = in_array($density, ['compact', 'cozy'], true) ? $density : 'compact';
+    $thumb = is_string($cfg['thumb'] ?? null) ? $cfg['thumb'] : 'sm';
+    $out['thumb'] = in_array($thumb, ['sm', 'md'], true) ? $thumb : 'sm';
     return $out;
+}
+
+/**
+ * تنظیمات ریل‌های «تازه‌ترین‌ها» و «پربازدیدترین‌ها» (انتهای مطلب و ستون کناری).
+ * مانند چیدمان صفحهٔ اصلی، یک JSON معتبرسازی‌شده در همان جدول settings است؛
+ * پس هیچ migration تازه‌ای لازم ندارد و داده‌های موجود دست‌نخورده می‌ماند.
+ */
+function jhd_content_rails_settings(): array {
+    $cfg = json_decode((string)getSetting('content_rails_config', ''), true);
+    return jhd_normalize_rails_config(is_array($cfg) ? $cfg : []);
+}
+
+function jhd_normalize_rails_config(array $cfg): array {
+    return [
+        'latest_enabled' => array_key_exists('latest_enabled', $cfg) ? (bool)$cfg['latest_enabled'] : true,
+        'popular_enabled' => array_key_exists('popular_enabled', $cfg) ? (bool)$cfg['popular_enabled'] : true,
+        'latest_count' => max(1, min(8, (int)($cfg['latest_count'] ?? 4))),
+        'popular_count' => max(1, min(8, (int)($cfg['popular_count'] ?? 4))),
+        // آستانهٔ «پربازدید»: فقط بازدیدهای واقعیِ دست‌کم این عدد فهرست می‌شوند.
+        'min_views' => max(1, min(100000, (int)($cfg['min_views'] ?? 50))),
+    ];
+}
+
+/** آستانهٔ سراسری پربازدیدشدن — یک عدد برای صفحهٔ اصلی و انتهای مطلب. */
+function jhd_popular_min_views(): int {
+    return jhd_content_rails_settings()['min_views'];
+}
+
+/**
+ * دادهٔ دو ریل انتهای مطلب: تازه‌ترین و پربازدیدترین مطالب «هم‌نوع».
+ *
+ * - تازه‌ترین‌ها با تاریخ واقعی انتشار (published_at) مرتب می‌شوند.
+ * - پربازدیدترین‌ها فقط از شمارندهٔ واقعی بازدید می‌آیند و به آستانهٔ
+ *   تنظیم‌شده احترام می‌گذارند؛ اگر مطلب واجدی نباشد، فهرست خالی می‌ماند
+ *   تا هیچ محتوای ساختگی نمایش داده نشود.
+ * - مطلب جاری، پیش‌نویس‌ها و موارد تکراری هرگز در فهرست نیستند.
+ */
+function jhd_post_end_rail_items(array $post): array {
+    $cfg = jhd_content_rails_settings();
+    $id = (int)($post['id'] ?? 0);
+    $type = trim((string)($post['post_type'] ?? ''));
+    if ($id < 1 || $type === '') return ['latest' => [], 'popular' => []];
+    $latest = $cfg['latest_enabled']
+        ? getPosts(['type' => $type, 'sort' => 'newest', 'limit' => $cfg['latest_count'], 'exclude_ids' => [$id]])
+        : [];
+    $popular = [];
+    if ($cfg['popular_enabled']) {
+        $exclude = array_merge([$id], array_column($latest, 'id'));
+        $popular = getPosts([
+            'type' => $type, 'sort' => 'popular', 'min_views' => $cfg['min_views'],
+            'limit' => $cfg['popular_count'], 'exclude_ids' => $exclude,
+        ]);
+    }
+    return ['latest' => $latest, 'popular' => $popular];
 }
 
 function jhd_home_section_labels(): array {
     return ['feature' => 'مطلب شاخص', 'popular' => 'پربازدیدترین‌ها', 'latest' => 'تازه‌ترین‌ها',
-        'news' => 'اخبار', 'writing' => 'مقالات', 'research' => 'پژوهش‌ها',
-        'books' => 'کتاب‌ها', 'lessons' => 'آموزش‌ها', 'media' => 'رسانه‌ها'];
+        'news' => 'اخبار', 'announcements' => 'اطلاعیه‌ها', 'writing' => 'مقالات', 'research' => 'پژوهش‌ها',
+        'books' => 'کتاب‌ها', 'lessons' => 'آموزش‌ها', 'topics' => 'موضوعات علمی', 'media' => 'رسانه‌ها'];
 }
 
 function jhd_home_feature(array $cfg): ?array {
@@ -1991,11 +2056,12 @@ function jhd_home_feature(array $cfg): ?array {
     return $row;
 }
 
-/** نگاشت کلیدهای قدیمی چیدمان صفحهٔ اصلی به پنج هاب تازه. */
+/** نگاشت کلیدهای قدیمی چیدمان صفحهٔ اصلی به هاب‌های تازه. */
 function jhd_homepage_legacy_keys(): array {
     return [
         'hero'    => ['hero'],
         'feature' => ['editor_picks', 'latest', 'news', 'events'],
+        'announcements' => ['announcements'],
         'lessons' => ['lessons'],
         'books'   => ['books'],
         'writing' => ['articles', 'research', 'reports', 'qa', 'speeches'],
@@ -2027,6 +2093,25 @@ function jhd_home_lesson_collections(int $limit = 4): array {
     } catch (Throwable) {
         return [];
     }
+}
+
+/**
+ * موضوعات علمی منتخب صفحهٔ اصلی — نخست موضوعات «ویژه» و در نبودِ آن‌ها
+ * بقیهٔ موضوعات فعال با همان ترتیب مدیریتی. فقط دادهٔ واقعی جدول topics؛
+ * اگر هیچ موضوع فعالی نباشد، فهرست خالی برمی‌گردد و بخش رندر نمی‌شود.
+ */
+function jhd_home_topics(int $limit = 6): array {
+    $limit = max(1, min(12, $limit));
+    if (!jhd_db_ready()) return [];
+    $topics = getTopics(['active' => 1, 'featured' => 1, 'limit' => $limit]);
+    if (count($topics) < $limit) {
+        $have = array_map('intval', array_column($topics, 'id'));
+        foreach (getTopics(['active' => 1]) as $row) {
+            if (count($topics) >= $limit) break;
+            if (!in_array((int)$row['id'], $have, true)) $topics[] = $row;
+        }
+    }
+    return $topics;
 }
 
 /**
@@ -2996,7 +3081,21 @@ function safeRichText(?string $html): string {
     if (!preg_match('~</?[a-z][a-z0-9:-]*(?:\s[^<>]*|\s*/?)>~i', $html)) {
         $paragraphs = preg_split('/\n[ \t]*\n(?:[ \t]*\n)*/u', $html) ?: [$html];
         return implode("\n", array_map(static function (string $text): string {
-            return '<p>' . str_replace("\n", "<br>\n", sanitize(trim($text))) . '</p>';
+            $text = trim($text);
+            /*
+             * تیترهای تایپ‌شده در ویرایشگر ساده: وقتی مدیر متن را بدون HTML
+             * می‌نویسد، سطرِ «## موضوع» به تیتر تیرهٔ h2 (و ### به h3، #### به
+             * h4) تبدیل می‌شود تا در نمایش عمومی همان استایل تیره و برجستهٔ
+             * تیترهای مقاله را بگیرد و در فهرست مطالب هم بنشیند.
+             */
+            if (!str_contains($text, "\n") && preg_match('/^(#{2,4})[ \t]+(\S.*)$/u', $text, $match)) {
+                $level = strlen($match[1]);
+                return '<h' . $level . '>' . sanitize(trim($match[2])) . '</h' . $level . '>';
+            }
+            $escaped = sanitize($text);
+            // «**بولد**» در متن ساده — بعد از escape، پس هیچ تزریقی رخ نمی‌دهد.
+            $escaped = preg_replace('/\*\*(?=\S)(.+?)(?<=\S)\*\*/us', '<strong>$1</strong>', $escaped) ?? $escaped;
+            return '<p>' . str_replace("\n", "<br>\n", $escaped) . '</p>';
         }, $paragraphs));
     }
 
