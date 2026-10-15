@@ -4,7 +4,7 @@
 
 ## وضعیت پذیرش
 
-اصلاحات کد و آزمون محلی انجام شده‌اند. تأیید Production، اجرای migration روی دیتابیس واقعی و آزمون ماندگاری تنظیمات پس از **استقرار واقعی مجدد** هنوز انجام نشده‌اند. این گزارش به معنی تکمیل همهٔ معیارهای پذیرش نیست.
+اصلاحات کد، آزمون‌های محلی و CI و آزمون خواندنیِ پیش‌نمایش واقعی Vercel انجام شده‌اند. تأیید نسخهٔ جدید در Production، اجرای migration روی دیتابیس واقعی و آزمون ماندگاری تنظیمات ادمین پس از **استقرار واقعی مجدد** هنوز انجام نشده‌اند. این گزارش به معنی تکمیل همهٔ معیارهای پذیرش نیست.
 
 ## بررسی و علت‌ها
 
@@ -84,7 +84,9 @@
 | `npm audit` | صفر آسیب‌پذیری پس از ارتقای sharp |
 | `git diff --check` | بدون اشکال whitespace |
 
-`npm run test:http` کامل **پاس نشده است**: بررسی‌های مسیر/امنیت/ورود/پنل تا ارسال multipart اجرا شدند؛ ارسال چندرسانه‌ای با runtime تعبیه‌شده در ۳۰ ثانیه timeout شد. این محدودیت آزمون محلی است، نه شاهد موفقیت upload واقعی؛ اجرای CI با PHP CLI برای تفکیک علت لازم است. این وضعیت نباید پنهان یا به موفق تبدیل شود.
+`npm run test:http` در runtime تعبیه‌شدهٔ محلی هنگام multipart پس از ۳۰ ثانیه timeout شد. برای تفکیک علت، آزمون کامل در GitHub Actions با PHP CLI واقعی و دیتابیس مجزای آزمون اجرا شد: **۲۳۳ از ۲۳۳ موفق**، شامل upload تصویر/صوت/ویدیو/PDF، انتشار، ویرایش، گالری، مجوزها و CSRF. بنابراین مانع اجرای محلی دور زده و رفتار واقعی در PHP CLI آزموده شد؛ این همچنان آزمون upload روی دیتابیس Production نیست.
+
+شاهد عمومی نتیجه: [گزارش کامل HTTP در commit آزموده‌شده](https://github.com/hajiahmadandishmand41-code/jametulhoda/commit/91ef785b7114069a691db198e3c646d1b7ae10aa#commitcomment-205143904).
 
 برای قابلیت‌های جدید آزمون PHP و HTTP و مرورگر اضافه و workflowهای موجود به‌روز شدند. تست‌های تغییرپذیر مدیریت فقط روی localhost مجازند و فرم تنظیمات را بازمی‌گردانند. probe زندهٔ جدید فقط خواندنی است و اطلاعاتی ایجاد/ویرایش/حذف نمی‌کند.
 
@@ -99,8 +101,63 @@ workflow `Editorial preview evidence` برای شاخهٔ جلسه اضافه ش
 - استقرار نسخهٔ جدید روی مقصد مورد تأیید و پاسخ واقعی صفحات؛
 - آزمون ادمین روی همان DB و ماندگاری پس از redeploy؛
 - آزمون PostgreSQL/MySQL واقعی (منطق محلی با SQLite و لایهٔ سازگاری اجرا شد)؛
-- تکمیل آزمون HTTP چندرسانه‌ای در CI/محیط دارای PHP CLI.
+- آزمون HTTP چندرسانه‌ای CI تکمیل شده است (۲۳۳/۲۳۳)؛ upload ادمین روی سایت واقعی هنوز تأیید نشده است.
 
 ## فایل‌ها
 
 فهرست فایل‌های تغییرکرده به‌همراه نقش آن‌ها در خروجی `git diff --stat` شاخه ثبت است. گروه‌های اصلی: `index.php`؛ `includes/functions.php`, `cards.php`, `header.php`؛ `admin/settings.php`؛ `pages/news.php`, `articles.php`, `research.php`, `post.php`؛ `router.php`, `config/routes.php`؛ `assets/css/design-system.css`؛ schemaهای MySQL/PostgreSQL و دو migration جدید receipt؛ `.env.example`؛ `package.json`, `package-lock.json`؛ آزمون‌های جدید `editorial.php`, `editorial-browser.mjs`, `editorial-live.mjs`؛ آزمون‌های موجود homepage/browser/http/auth/date/direct-upload و fixture schema؛ workflowهای homepage/php-syntax و preview جدید؛ همین گزارش.
+
+
+## شواهد نهایی GitHub و Vercel
+
+نسخهٔ کد آزموده‌شده: `91ef785b7114069a691db198e3c646d1b7ae10aa` (کد کاربردی همان `5ed8327`؛ commit دوم آزمون کامل HTTP را به CI اضافه کرد).
+
+- پیش‌نمایش واقعی: **https://jametulhoda-b9x6i1e9c-eshop4.vercel.app**
+- deployment شناسهٔ `7100586862` برای همین SHA در محیط **Preview** ساخته شد.
+- [آزمون خواندنی صفحات زنده](https://github.com/hajiahmadandishmand41-code/jametulhoda/actions/runs/38783421743) موفق؛ **۲۷ بررسی** روی خانه، اخبار، مقالات، درباره، canonical، حذف معرفی، سقف سه، وجود محتوای واقعی آرشیو، کنترل‌های فیلتر، کارت تک‌تصویری، تغییرمسیرهای قدیمی و ۴۰۴ مسیرهای حساس.
+- [شاهد چاپ‌شدهٔ نتایج زنده](https://github.com/hajiahmadandishmand41-code/jametulhoda/commit/91ef785b7114069a691db198e3c646d1b7ae10aa#commitcomment-205143871)؛ صرفاً نتیجهٔ «Deployment completed» مبنای سلامت نبوده است.
+- [CI مدیریت/مرورگر/لینک/HTTP](https://github.com/hajiahmadandishmand41-code/jametulhoda/actions/runs/38783421578): موفق؛ مرحلهٔ HTTP کامل ۲۳۳/۲۳۳.
+- [PHP syntax و آزمون منطق جدید](https://github.com/hajiahmadandishmand41-code/jametulhoda/actions/runs/38783421522): موفق.
+- [API موبایل](https://github.com/hajiahmadandishmand41-code/jametulhoda/actions/runs/38783421526): موفق.
+- [واکنش‌گرایی و مسیر ذخیرهٔ رسانه](https://github.com/hajiahmadandishmand41-code/jametulhoda/actions/runs/38783421681): موفق؛ upload با و بدون GD روی **شبیه‌ساز Blob آزمون** بررسی شد، نه storage اصلی.
+- [SEO نمونهٔ محلی](https://github.com/hajiahmadandishmand41-code/jametulhoda/actions/runs/38783421488): موفق؛ این با probe زندهٔ Preview فرق دارد.
+- workflow با عنوان «Production checks» سبز است اما بخش **End-to-end audit (needs secrets)** به علت نبود Secrets ادمین، اجرای E2E را **skip** کرده است. این سبز بودن، تأیید ورود ادمین و ذخیرهٔ واقعی Production نیست.
+- لاگ‌های ZIP Actions از میزبان آرشیو در این محیط قابل دریافت نبودند؛ نتیجه‌ها از job/step API و گزارش‌های چاپ‌شده روی commit خوانده شدند. برای آزمون‌های موفق Preview ادعای خواندن لاگ داخلی تابع Vercel نمی‌شود.
+
+شاخهٔ اصلی merge نشده و Production با این کار تعویض نشده است. فقط شاخهٔ جلسه push و پیش‌نمایش آن آزمایش شده است. تغییرات گزارش پس از این SHA صرفاً مستندات هستند؛ شواهد اجرای کد به SHA بالا مربوط‌اند.
+
+### فهرست دقیق فایل‌های تغییرکرده
+
+- `.env.example`
+- `.github/workflows/editorial-preview.yml`
+- `.github/workflows/homepage-audit.yml`
+- `.github/workflows/php-syntax.yml`
+- `admin/settings.php`
+- `assets/css/design-system.css`
+- `config/routes.php`
+- `database/database.mysql.sql`
+- `database/database.postgres.sql`
+- `database/migrations/0003-view-receipts.mysql.sql`
+- `database/migrations/0003-view-receipts.postgres.sql`
+- `docs/editorial-upgrade-report-fa.md`
+- `includes/cards.php`
+- `includes/functions.php`
+- `includes/header.php`
+- `index.php`
+- `package-lock.json`
+- `package.json`
+- `pages/articles.php`
+- `pages/news.php`
+- `pages/post.php`
+- `pages/research.php`
+- `router.php`
+- `tests/afghan-dates.mjs`
+- `tests/auth-flows.mjs`
+- `tests/browser.mjs`
+- `tests/direct-upload-regression.mjs`
+- `tests/editorial-browser.mjs`
+- `tests/editorial-live.mjs`
+- `tests/editorial.php`
+- `tests/fixtures/schema.sqlite.sql`
+- `tests/homepage-settings.mjs`
+- `tests/http.mjs`
