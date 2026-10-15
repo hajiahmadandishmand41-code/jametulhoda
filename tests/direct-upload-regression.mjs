@@ -194,6 +194,7 @@ try {
   });
 
   await page.goto(appOrigin + '/admin/test');
+  const wasMultipleInput = (await page.locator('input[type="file"]').getAttribute('multiple')) !== null;
   await page.locator('input[type="file"]').setInputFiles([
     { name: 'large-video.mp4', mimeType: 'video/mp4', buffer: largeVideo },
     { name: 'small-video.mp4', mimeType: 'video/mp4', buffer: smallVideo },
@@ -210,7 +211,7 @@ try {
   check('final form contains both staging paths but neither original file', appPosts.length === 1 && appPosts[0].directPathCount === expectedFileCount && !appPosts[0].containsLargeName && !appPosts[0].containsSmallName, JSON.stringify(appPosts[0] || {}));
   check('save was not submitted while TUS upload was incomplete', prematureSaves.length === 0, String(prematureSaves.length) + ' early submit(s)');
   check('TUS actually transferred the full file lengths by chunks', Array.from(uploads.values()).every((item) => item.offset === item.size && item.bytes === item.size && item.patches.length > 0), JSON.stringify(Array.from(uploads.values()).map((u) => ({ path: u.path, size: u.size, chunks: u.patches }))));
-  check('test covers multi-file input on a mobile viewport', await page.locator('input[type="file"]').getAttribute('multiple') !== null && page.viewportSize()?.width === 390, 'multiple + 390px viewport');
+  check('test covers multi-file input on a mobile viewport', wasMultipleInput && page.viewportSize()?.width === 390, 'multiple + 390px viewport');
   console.log('\nDirect upload regression: ' + storedObjects.size + '/' + expectedFileCount + ' files stored; final request ' + (appPosts[0] ? appPosts[0].bytes : 0) + ' bytes.');
   await context.close();
 } finally {
