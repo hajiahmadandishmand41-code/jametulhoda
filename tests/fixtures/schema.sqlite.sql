@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS posts (
   author_id       INTEGER REFERENCES users(id) ON DELETE SET NULL,
   status          VARCHAR(30) NOT NULL DEFAULT 'draft' CHECK (status IN ('published','draft')),
   is_featured     SMALLINT       NOT NULL DEFAULT 0,
+  view_count      INTEGER      NOT NULL DEFAULT 0,
   published_at    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
   created_at      DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at      DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -153,6 +154,7 @@ CREATE TABLE IF NOT EXISTS lessons (
   collection_id  INTEGER REFERENCES lesson_collections(id) ON DELETE SET NULL,
   volume_id      INTEGER REFERENCES lesson_volumes(id) ON DELETE SET NULL,
   is_featured    SMALLINT NOT NULL DEFAULT 0,
+  view_count     INTEGER  NOT NULL DEFAULT 0,
   created_by     INTEGER     NULL,
   created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -349,6 +351,7 @@ ALTER TABLE media_files ADD COLUMN featured_order INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS media_files_featured ON media_files (ref_type, ref_id, kind, is_featured, featured_order, id);
 CREATE INDEX IF NOT EXISTS posts_slug_idx ON posts (slug);
 CREATE INDEX IF NOT EXISTS posts_featured_listing ON posts (status, is_featured, published_at);
+CREATE INDEX IF NOT EXISTS posts_view_count_listing ON posts (view_count DESC, published_at DESC);
 CREATE INDEX IF NOT EXISTS topics_slug_idx ON topics (slug);
 CREATE INDEX IF NOT EXISTS books_slug_idx ON books (slug);
 CREATE INDEX IF NOT EXISTS lessons_slug_idx ON lessons (slug);

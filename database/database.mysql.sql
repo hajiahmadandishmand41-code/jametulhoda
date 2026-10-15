@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS posts (
   author_id       INTEGER REFERENCES users(id) ON DELETE SET NULL,
   status          VARCHAR(30) NOT NULL DEFAULT 'draft' CHECK (status IN ('published','draft')),
   is_featured     SMALLINT       NOT NULL DEFAULT 0,
+  view_count      INT          NOT NULL DEFAULT 0,
   published_at    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
   created_at      DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at      DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -109,6 +110,10 @@ CREATE INDEX post_images_idx_post ON post_images (post_id);
 -- treats "duplicate column name" as an already-applied migration, so this
 -- statement is safe to run on every deploy.
 ALTER TABLE post_images ADD COLUMN sort_order INT NOT NULL DEFAULT 0;
+-- View counter (see database/migrations/0002-content-view-counts.sql).
+-- MySQL has no legacy `views` column, so there is nothing to back up.
+ALTER TABLE posts ADD COLUMN view_count INT NOT NULL DEFAULT 0;
+ALTER TABLE lessons ADD COLUMN view_count INT NOT NULL DEFAULT 0;
 CREATE INDEX post_images_idx_order ON post_images (post_id, sort_order, id);
 
 -- Junction: posts <-> topics (many-to-many)

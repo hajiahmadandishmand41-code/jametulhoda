@@ -77,6 +77,7 @@ CREATE TABLE IF NOT EXISTS posts (
   author_id       INTEGER REFERENCES users(id) ON DELETE SET NULL,
   status          VARCHAR(30) NOT NULL DEFAULT 'draft' CHECK (status IN ('published','draft')),
   is_featured     SMALLINT       NOT NULL DEFAULT 0,
+  view_count      INTEGER       NOT NULL DEFAULT 0,
   published_at    TIMESTAMPTZ         NOT NULL DEFAULT CURRENT_TIMESTAMP,
   created_at      TIMESTAMPTZ         NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at      TIMESTAMPTZ         NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -276,10 +277,26 @@ ALTER TABLE lessons ADD COLUMN IF NOT EXISTS video_file TEXT;
 ALTER TABLE lessons ADD COLUMN IF NOT EXISTS pdf_file TEXT;
 ALTER TABLE media_files ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0;
 
--- Cleanup legacy columns if they exist (idempotent)
-ALTER TABLE posts DROP COLUMN IF EXISTS views;
-ALTER TABLE lessons DROP COLUMN IF EXISTS views;
+-- Legacy `views` columns are KEPT, never dropped: dropping them would destroy
+-- historical data on an installation that still carries them. Their values seed
+-- the new, better-behaved counter (see database/migrations/0002-…).
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS view_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE lessons ADD COLUMN IF NOT EXISTS view_count INTEGER NOT NULL DEFAULT 0;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'posts' AND column_name = 'views') THEN
+    UPDATE posts SET view_count = views WHERE view_count = 0 AND views IS NOT NULL;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'lessons' AND column_name = 'views') THEN
+    UPDATE lessons SET view_count = views WHERE view_count = 0 AND views IS NOT NULL;
+  END IF;
+END $$;
 DROP TABLE IF EXISTS post_likes;
+
+-- Indexes for the "پربازدیدترین‌ها" and the public listings. They must come
+-- after the columns above, otherwise the whole (transactional) script aborts.
+CREATE INDEX IF NOT EXISTS idx_posts_view_count ON posts (view_count DESC, published_at DESC);
+CREATE INDEX IF NOT EXISTS idx_posts_published ON posts (status, published_at DESC);
 
 -- Backfill new books columns if upgrading from old schema
 ALTER TABLE books ADD COLUMN IF NOT EXISTS author VARCHAR(250);

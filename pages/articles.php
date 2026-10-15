@@ -149,6 +149,15 @@ require_once __DIR__ . '/../includes/header.php';
       endforeach; ?>
     <?= jhd_grid_close() ?>
 
+    <?= jhd_discovery_band([
+        'latest'  => getLatestPosts(5),
+        'popular' => getMostViewedPosts(5),
+        'latest_title' => 'تازه‌ترین‌ها',
+        'latest_more'  => 'همهٔ اخبار',
+        'latest_more_url' => url('news'),
+        'popular_title' => 'پربازدیدترین‌ها',
+    ]) ?>
+
     <!-- صفحه‌بندی -->
     <?php if ($pages > 1): ?>
     <div class="mt-5">

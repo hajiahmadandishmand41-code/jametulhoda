@@ -1234,6 +1234,45 @@ function jhd_about_band(array $opts = []): string {
 }
 
 /**
+ * نوار کشف — «تازه‌ترین‌ها» و «پربازدیدترین‌ها» در کنار هم.
+ *
+ * روی صفحه‌های فهرست استفاده می‌شود تا خواننده هم مسیر تازه‌ها را ببیند و
+ * هم محتوای پربازدید را. هر دو ریل تصویر کوچک در سمت راست دارند.
+ */
+function jhd_discovery_band(array $opts = []): string {
+    $latest  = (array)($opts['latest'] ?? []);
+    $popular = (array)($opts['popular'] ?? []);
+    if (!$latest && !$popular) return '';
+
+    $columns = '';
+    if ($latest) {
+        $columns .= '<div class="col-12 col-lg-6">'
+            . jhd_rail_list($latest, [
+                'title' => (string)($opts['latest_title'] ?? 'تازه‌ترین‌ها'),
+                'icon'  => (string)($opts['latest_icon'] ?? 'bi-clock-history'),
+                'id'    => (string)($opts['latest_id'] ?? 'jhd-rail-latest'),
+                'more'  => (string)($opts['latest_more'] ?? ''),
+                'more_url' => (string)($opts['latest_more_url'] ?? ''),
+            ]) . '</div>';
+    }
+    if ($popular) {
+        $columns .= '<div class="col-12 col-lg-6">'
+            . jhd_rail_list($popular, [
+                'title' => (string)($opts['popular_title'] ?? 'پربازدیدترین‌ها'),
+                'icon'  => 'bi-eye',
+                'id'    => (string)($opts['popular_id'] ?? 'jhd-rail-popular'),
+                'more'  => (string)($opts['popular_more'] ?? ''),
+                'more_url' => (string)($opts['popular_more_url'] ?? ''),
+            ]) . '</div>';
+    }
+    if ($columns === '') return '';
+
+    return '<section class="jhd-section jhd-section--tight jhd-discovery" aria-label="مطالب پیشنهادی">'
+        . '<div class="container"><div class="row g-3">' . $columns . '</div></div>'
+        . '</section>';
+}
+
+/**
  * نوار پایانی صفحهٔ اصلی: یک دعوت کوتاه و دو پیوند. تنها «تبلیغ» مجاز این
  * صفحه است؛ پس هیچ کارت ساختگی یا محتوای نمونه‌ای در آن نیست.
  */

@@ -1163,9 +1163,14 @@ function getPosts(array $opts = []): array {
     $whereStr = implode(' AND ', $where);
     // Homepage feeds opt into chronological order; all existing calls retain
     // their established featured-first ordering unless they request otherwise.
-    $orderBy = ($opts['sort'] ?? '') === 'newest'
-        ? 'COALESCE(p.published_at, p.created_at) DESC, p.id DESC'
-        : 'p.is_featured DESC, p.published_at DESC, p.id DESC';
+    $sort = (string)($opts['sort'] ?? '');
+    if ($sort === 'newest') {
+        $orderBy = 'COALESCE(p.published_at, p.created_at) DESC, p.id DESC';
+    } elseif ($sort === 'popular') {
+        $orderBy = 'p.view_count DESC, COALESCE(p.published_at, p.created_at) DESC, p.id DESC';
+    } else {
+        $orderBy = 'p.is_featured DESC, p.published_at DESC, p.id DESC';
+    }
     $sql = "SELECT p.*, c.name AS cat_name, COALESCE(NULLIF(p.author_name,''), NULLIF(p.speaker,''), u.full_name) AS author_name FROM posts p LEFT JOIN categories c ON c.id = p.category_id LEFT JOIN users u ON u.id = p.author_id WHERE $whereStr ORDER BY $orderBy LIMIT $limit OFFSET $offset";
     try {
         $stmt = $db->prepare($sql);
@@ -1173,6 +1178,109 @@ function getPosts(array $opts = []): array {
         return $stmt->fetchAll();
     } catch (PDOException $e) {
         error_log('getPosts failed: ' . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Record one view for a published post.
+ *
+ * The counter is what the "پربازدیدترین‌ها" rail is built from. It is written
+ * with a single indexed UPDATE and never inside the renderer's critical path:
+ * a failure here must not break the page, so the error is logged and ignored.
+ *
+ * Editors and administrators are not counted — their own previews would
+ * otherwise dominate the ranking.
+ */
+function recordContentView(int $postId): void {
+    if ($postId < 1) return;
+    if (function_exists('isLoggedIn') && isLoggedIn()) return;
+    $db = jhd_db();
+    if ($db === null) return;
+    try {
+        $db->prepare("UPDATE posts SET view_count = view_count + 1 WHERE id = ? AND status = 'published'")->execute([$postId]);
+    } catch (PDOException $e) {
+        error_log('view counter update failed: ' . $e->getMessage());
+    } catch (Throwable $e) {
+        error_log('view counter update failed: ' . get_class($e));
+    }
+}
+
+/**
+ * The most-read published posts.
+ *
+ * Falls back to the newest posts when no post has been read yet, so the rail
+ * never shows an empty box on a fresh installation.
+ */
+function getMostViewedPosts(int $limit = 5, array $types = []): array {
+    $limit = max(1, min(30, $limit));
+    $rows = getPosts(['types' => $types, 'limit' => $limit, 'sort' => 'popular']);
+    if ($rows) return $rows;
+    return getPosts(['types' => $types, 'limit' => $limit, 'sort' => 'newest']);
+}
+
+/**
+ * The newest published posts, used by the "تازه‌ترین‌ها" rail.
+ */
+function getLatestPosts(int $limit = 5, array $types = []): array {
+    return getPosts(['types' => $types, 'limit' => max(1, min(30, $limit)), 'sort' => 'newest']);
+}
+
+/**
+ * One published post by its id — the manual "مطلب شاخص" of the homepage.
+ */
+function getPublishedPostById(int $id): ?array {
+    if ($id < 1) return null;
+    $db = jhd_db();
+    if ($db === null) return null;
+    try {
+        $stmt = $db->prepare(
+            "SELECT p.*, c.name AS cat_name,
+                    COALESCE(NULLIF(p.author_name,''), NULLIF(p.speaker,''), u.full_name) AS author_name
+             FROM posts p
+             LEFT JOIN categories c ON c.id = p.category_id
+             LEFT JOIN users u ON u.id = p.author_id
+             WHERE p.id = ? AND p.status = 'published'
+             LIMIT 1"
+        );
+        $stmt->execute([$id]);
+        $row = $stmt->fetch();
+        return is_array($row) ? $row : null;
+    } catch (PDOException $e) {
+        error_log('getPublishedPostById failed: ' . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * The newest published audio and video items for the homepage media hub.
+ *
+ * The list mirrors the public media library: items attached to a published
+ * post or lesson, plus lessons and posts whose own media column points at a
+ * file. Only published content is exposed.
+ */
+function getLatestMediaItems(int $limit = 6): array {
+    $limit = max(1, min(24, $limit));
+    $db = jhd_db();
+    if ($db === null) return [];
+    $sql = "SELECT m.id AS media_id, m.file_path AS path, m.kind AS media_kind, m.title AS media_title,
+                   COALESCE(NULLIF(m.title,''), p.title, l.title, 'رسانه') AS title,
+                   COALESCE(p.slug, l.slug, '') AS slug,
+                   COALESCE(p.post_type, 'media') AS post_type,
+                   p.featured_image AS featured_image,
+                   COALESCE(p.published_at, l.created_at, m.created_at) AS published_at
+            FROM media_files m
+            LEFT JOIN posts p   ON p.id = m.ref_id   AND m.ref_type = 'post'   AND p.status = 'published'
+            LEFT JOIN lessons l ON l.id = m.ref_id   AND m.ref_type = 'lesson' AND l.status = 'published'
+            WHERE m.kind IN ('audio','video') AND (p.id IS NOT NULL OR l.id IS NOT NULL)
+            ORDER BY published_at DESC, m.id DESC
+            LIMIT $limit";
+    try {
+        $stmt = $db->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    } catch (PDOException $e) {
+        error_log('getLatestMediaItems failed: ' . $e->getMessage());
         return [];
     }
 }
