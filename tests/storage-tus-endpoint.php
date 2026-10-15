@@ -88,7 +88,29 @@ verifyTus($custom === 'https://example.test/custom/tus/sign',
 
 $restore();
 
-// ── 3. The signed token must be a compact JWS ───────────────────────────────
+// ── 3. Signed upload URLs must resolve against the Supabase Storage API ─────
+putenv('SUPABASE_URL=https://abcdefghijklmnop.supabase.co');
+$relativeSignedUrl = '/object/upload/sign/site-media/staging/sample.mp4?token=short-lived-token';
+verifyTus(
+    supabaseResolveSignedUploadUrl($relativeSignedUrl) === 'https://abcdefghijklmnop.supabase.co/storage/v1/object/upload/sign/site-media/staging/sample.mp4?token=short-lived-token',
+    'a root-relative signed upload URL resolves to the Supabase Storage API origin'
+);
+verifyTus(
+    supabaseResolveSignedUploadUrl('object/upload/sign/site-media/staging/sample.mp4?token=short-lived-token') === 'https://abcdefghijklmnop.supabase.co/storage/v1/object/upload/sign/site-media/staging/sample.mp4?token=short-lived-token',
+    'a path-relative signed upload URL resolves under /storage/v1'
+);
+$absoluteSignedUrl = 'https://abcdefghijklmnop.supabase.co/storage/v1/object/upload/sign/site-media/staging/sample.mp4?token=short-lived-token';
+verifyTus(
+    supabaseResolveSignedUploadUrl($absoluteSignedUrl) === $absoluteSignedUrl,
+    'an absolute HTTP(S) signed upload URL is preserved'
+);
+verifyTus(
+    supabaseResolveSignedUploadUrl('javascript:alert(1)') === '',
+    'non-HTTP(S) signed upload URL schemes are rejected'
+);
+$restore();
+
+// ── 4. The signed token must be a compact JWS ───────────────────────────────
 // Handing a non-JWT to the browser only reproduces the opaque 403, so the
 // server refuses to pass such a token on.
 $jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk';
@@ -101,7 +123,7 @@ verifyTus(!supabaseTokenIsCompactJws('a..c'), 'an empty segment is rejected');
 verifyTus(!supabaseTokenIsCompactJws('a.b.c!'), 'a non base64url character is rejected');
 verifyTus(!supabaseTokenIsCompactJws('<html>error</html>'), 'an HTML error page is rejected');
 
-// ── 4. The normalisation helper on its own ──────────────────────────────────
+// ── 5. The normalisation helper on its own ──────────────────────────────────
 verifyTus(supabaseTusSignedEndpoint('https://x.test/upload/resumable') === 'https://x.test/upload/resumable/sign',
     'supabaseTusSignedEndpoint() appends /sign');
 verifyTus(supabaseTusSignedEndpoint('https://x.test/upload/resumable/sign') === 'https://x.test/upload/resumable/sign',
