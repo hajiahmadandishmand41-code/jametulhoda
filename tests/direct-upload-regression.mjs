@@ -55,6 +55,21 @@ try {
       return route.fulfill({ status: 204, headers: corsHeaders, body: '' });
     }
 
+    // Exercise the signed-PUT fallback with a real request shape. This fake
+    // Storage server records the complete file body without involving Vercel.
+    const signedPutMatch = url.pathname.match(/\\/storage\\/v1\\/object\\/upload\\/sign\\/site-media\\/(.+)$/);
+    if (req.method() === 'PUT' && signedPutMatch) {
+      const path = decodeURIComponent(signedPutMatch[1]);
+      const grant = grants.get(path);
+      const payload = req.postDataBuffer() || Buffer.alloc(0);
+      if (!grant || url.searchParams.get('token') !== grant.token || payload.length !== grant.size) {
+        return route.fulfill({ status: 403, headers: corsHeaders, body: 'invalid signed PUT' });
+      }
+      const uploadId = 'signed-' + (++uploadSequence);
+      uploads.set(uploadId, { path, size: grant.size, offset: payload.length, bytes: payload.length, patches: [payload.length], signedPut: true });
+      return route.fulfill({ status: 200, headers: corsHeaders, body: JSON.stringify({ Key: path }) });
+    }
+
     if (url.pathname === '/storage/v1/upload/resumable/sign' && req.method() === 'POST') {
       const metadata = {};
       for (const item of (headers['upload-metadata'] || '').split(',')) {
@@ -66,6 +81,11 @@ try {
       const grant = grants.get(metadata.objectName);
       if (!grant || headers['x-signature'] !== grant.token || Number(headers['upload-length']) !== grant.size) {
         return route.fulfill({ status: 403, headers: corsHeaders, body: 'invalid signed grant' });
+      }
+      // The audio fixture intentionally simulates a deployment where the TUS
+      // route is missing; the browser must upload it through signed PUT.
+      if (metadata.objectName.endsWith('.mp3')) {
+        return route.fulfill({ status: 404, headers: corsHeaders, body: 'not found' });
       }
       const uploadId = String(++uploadSequence);
       uploads.set(uploadId, { path: metadata.objectName, size: grant.size, offset: 0, bytes: 0, patches: [] });
@@ -146,7 +166,13 @@ try {
         return route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({ ok: true, ...grant, tus_endpoint: endpoint, public_url: 'https://test-project.supabase.co/storage/v1/object/public/site-media/' + path }),
+          body: JSON.stringify({
+            ok: true,
+            ...grant,
+            tus_endpoint: endpoint,
+            signed_url: storageOrigin + '/storage/v1/object/upload/sign/site-media/' + path + '?token=' + encodeURIComponent(grant.token),
+            public_url: 'https://test-project.supabase.co/storage/v1/object/public/site-media/' + path
+          }),
         });
       }
       if (form.get('action') === 'finalize') {
@@ -217,7 +243,8 @@ try {
   check('final form payload stayed below 4.5 MiB', appPosts.length === 1 && appPosts[0].bytes < limit, String(appPosts[0] ? appPosts[0].bytes : 0) + ' bytes');
   check('final form contains both staging paths but neither original file', appPosts.length === 1 && appPosts[0].directPathCount === expectedFileCount && !appPosts[0].containsLargeName && !appPosts[0].containsSmallName && !appPosts[0].containsAudioName, JSON.stringify(appPosts[0] || {}));
   check('save was not submitted while TUS upload was incomplete', prematureSaves.length === 0, String(prematureSaves.length) + ' early submit(s)');
-  check('TUS actually transferred the full file lengths by chunks', Array.from(uploads.values()).every((item) => item.offset === item.size && item.bytes === item.size && item.patches.length > 0), JSON.stringify(Array.from(uploads.values()).map((u) => ({ path: u.path, size: u.size, chunks: u.patches }))));
+  check('TUS chunks or signed PUT transferred every full file', Array.from(uploads.values()).length === expectedFileCount && Array.from(uploads.values()).every((item) => item.offset === item.size && item.bytes === item.size && item.patches.length > 0), JSON.stringify(Array.from(uploads.values()).map((u) => ({ path: u.path, size: u.size, chunks: u.patches, transport: u.signedPut ? 'signed PUT fallback' : 'TUS' }))));
+  check('audio succeeded through signed PUT after the simulated TUS 404', uploads.get('signed-3')?.signedPut === true && storedObjects.get('staging/direct-3.mp3')?.size === smallAudio.length, 'TUS 404 → direct signed PUT → finalize');
   check('test covers multi-file input on a mobile viewport', wasMultipleInput && page.viewportSize()?.width === 390, 'multiple + 390px viewport');
   console.log('\nDirect upload regression: ' + storedObjects.size + '/' + expectedFileCount + ' files stored; final request ' + (appPosts[0] ? appPosts[0].bytes : 0) + ' bytes.');
   await context.close();
