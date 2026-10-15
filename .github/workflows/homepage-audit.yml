@@ -104,6 +104,7 @@ jobs:
         run: |
           set -o pipefail
           node tests/http.mjs 2>&1 | tee http-report.txt
+          node tests/user-registration-admin.mjs 2>&1 | tee -a http-report.txt
 
       - name: Publish HTTP evidence
         if: always()

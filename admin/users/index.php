@@ -14,7 +14,11 @@ $db = getDB();
 $error = '';
 $success = '';
 $edit = null;
-$filter = (string)($_GET['role'] ?? '');
+$filter = jhd_string_field($_GET, 'role');
+if (!in_array($filter, jhd_role_values(), true)) $filter = '';
+$search = mb_substr(trim(jhd_string_field($_GET, 'q')), 0, 180);
+$page = max(1, (int)($_GET['page'] ?? 1));
+$perPage = 50;
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     requirePostCsrf();
@@ -65,9 +69,17 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
 if (!empty($_GET['edit'])) {
     $edit = jhd_user_by_id((int)$_GET['edit']);
+    if ($edit) {
+        $terms = $db->prepare('SELECT agreed_terms FROM users WHERE id=?');
+        $terms->execute([$edit['id']]);
+        $edit['agreed_terms'] = (int)$terms->fetchColumn();
+    }
 }
 
-$users = jhd_list_users($filter !== '' ? $filter : null, 300);
+$roleFilter = $filter !== '' ? $filter : null;
+$totalUsers = jhd_count_filtered_users($roleFilter, $search);
+$page = min($page, max(1, (int)ceil($totalUsers / $perPage)));
+$users = jhd_list_users($roleFilter, $perPage, ($page - 1) * $perPage, $search);
 $counts = jhd_count_users();
 ?>
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
@@ -81,6 +93,29 @@ $counts = jhd_count_users();
 </div>
 <p class="text-muted" style="font-size:.9rem">همهٔ حساب‌ها (مدیر، مدیر ارشد و عضو سایت) در یک جدول مدیریت می‌شوند و نقش، سطح دسترسی را تعیین می‌کند. حذف اطلاعات انجام نمی‌شود؛ دسترسی را غیرفعال کنید.</p>
 <?php if ($error !== ''): ?><div class="alert alert-danger"><?= sanitize($error) ?></div><?php endif; ?>
+
+<?php if ($edit): ?>
+<section class="admin-card mb-4" aria-labelledby="registration-details-heading">
+    <h2 class="admin-card-header h6" id="registration-details-heading">مشخصات ثبت‌نام و حساب کاربر #<?= (int)$edit['id'] ?></h2>
+    <div class="admin-card-body">
+        <dl class="row mb-0">
+        <?php foreach ([
+            'نام کامل' => $edit['full_name'], 'نام کاربری' => $edit['username'],
+            'کشور' => $edit['country'], 'پیش‌شمارهٔ کشور' => $edit['country_code'] !== '' ? '+' . ltrim($edit['country_code'], '+') : '',
+            'شماره تلفن ثبت‌شده' => $edit['phone'], 'شماره تلفن بین‌المللی' => $edit['phone_normalized'],
+            'ایمیل' => $edit['email'], 'نقش' => jhd_role_label($edit['role']),
+            'تاریخ ثبت‌نام' => $edit['created_at'], 'آخرین ورود' => $edit['last_login'],
+            'وضعیت حساب' => $edit['is_active'] ? 'فعال' : 'غیرفعال',
+            'پذیرش قوانین' => $edit['agreed_terms'] ? 'ثبت شده' : 'ثبت نشده',
+        ] as $label => $value): ?>
+            <dt class="col-sm-4"><?= sanitize($label) ?></dt>
+            <dd class="col-sm-8"><bdi><?= sanitize($value !== '' ? (string)$value : 'ثبت نشده') ?></bdi></dd>
+        <?php endforeach; ?>
+        </dl>
+        <p class="form-text mb-0">رمز عبور و اطلاعات امنیتی نمایش داده نمی‌شوند. مشخصات کشور و تلفن با ویرایش نام یا نقش بازنویسی نمی‌شوند.</p>
+    </div>
+</section>
+<?php endif; ?>
 
 <div class="admin-card mb-4">
     <div class="admin-card-header"><?= $edit ? 'ویرایش حساب «' . sanitize($edit['full_name'] !== '' ? $edit['full_name'] : ($edit['username'] !== '' ? $edit['username'] : $edit['email'])) . '»' : 'ساخت حساب تازه' ?></div>
@@ -115,25 +150,41 @@ $counts = jhd_count_users();
     </div>
 </div>
 
+<form method="get" action="<?= formUrl('admin/users') ?>" class="d-flex flex-wrap gap-2 mb-3" role="search">
+    <?= formRouteFields('admin/users') ?>
+    <input type="hidden" name="role" value="<?= sanitize($filter) ?>">
+    <label class="visually-hidden" for="users-search">جست‌وجوی کاربران</label>
+    <input id="users-search" class="form-control" style="max-width:420px" type="search" name="q" value="<?= sanitize($search) ?>" placeholder="نام، ایمیل، تلفن یا کشور" maxlength="180">
+    <button class="btn btn-outline-primary" type="submit">جست‌وجو</button>
+    <span class="align-self-center text-muted"><?= number_format($totalUsers) ?> حساب</span>
+</form>
 <div class="table-responsive admin-card">
 <table class="table admin-table mb-0">
-<thead><tr><th>نام</th><th>نام کاربری</th><th>ایمیل / تلفن</th><th>نقش</th><th>دسترسی‌ها</th><th>وضعیت</th><th>آخرین ورود</th><th></th></tr></thead>
+<thead><tr><th>شناسه</th><th>نام</th><th>نام کاربری</th><th>ایمیل</th><th>کشور / پیش‌شماره</th><th>شماره تلفن</th><th>تلفن بین‌المللی</th><th>نقش</th><th>دسترسی‌ها</th><th>وضعیت</th><th>تاریخ ثبت‌نام</th><th>آخرین ورود</th><th>جزئیات</th></tr></thead>
 <tbody>
 <?php if (!$users): ?>
-<tr><td colspan="8" class="text-center text-muted py-4">حسابی با این فیلتر پیدا نشد.</td></tr>
+<tr><td colspan="13" class="text-center text-muted py-4">حسابی با این فیلتر پیدا نشد.</td></tr>
 <?php endif; ?>
 <?php foreach ($users as $user): ?>
-<tr>
+<tr data-user-id="<?= (int)$user['id'] ?>">
+    <td><?= (int)$user['id'] ?></td>
     <td><?= sanitize($user['full_name'] !== '' ? $user['full_name'] : '—') ?></td>
     <td><?= sanitize($user['username'] !== '' ? $user['username'] : '—') ?></td>
-    <td><?= sanitize($user['email'] !== '' ? $user['email'] : ($user['phone'] !== '' ? $user['phone'] : '—')) ?></td>
+    <td><bdi><?= sanitize($user['email'] !== '' ? $user['email'] : '—') ?></bdi></td>
+    <td><?= sanitize($user['country'] !== '' ? $user['country'] : 'ثبت نشده') ?><?php if ($user['country_code'] !== ''): ?><br><bdi dir="ltr">+<?= sanitize(ltrim($user['country_code'], '+')) ?></bdi><?php endif; ?></td>
+    <td><bdi dir="ltr"><?= sanitize($user['phone'] !== '' ? $user['phone'] : '—') ?></bdi></td>
+    <td><bdi dir="ltr"><?= sanitize($user['phone_normalized'] !== '' ? $user['phone_normalized'] : '—') ?></bdi></td>
     <td><span class="badge <?= $user['role'] === JHD_ROLE_SUPER_ADMIN ? 'bg-dark' : ($user['role'] === JHD_ROLE_ADMIN ? 'bg-primary' : 'bg-secondary') ?>"><?= sanitize(jhd_role_label($user['role'])) ?></span></td>
     <td class="text-muted" style="font-size:.78rem"><?= sanitize(jhd_role_permission_summary($user['role'])) ?></td>
     <td><?= (int)$user['is_active'] === 1 ? '<span class="text-success">فعال</span>' : '<span class="text-danger">غیرفعال</span>' ?></td>
+    <td class="text-muted"><?= sanitize($user['created_at'] !== '' ? persianDate($user['created_at']) : '—') ?></td>
     <td class="text-muted" style="font-size:.8rem"><?= sanitize($user['last_login'] !== '' ? persianDate($user['last_login']) : '—') ?></td>
-    <td><a href="<?= url('admin/users', ['edit' => $user['id']]) ?>" class="btn btn-sm btn-outline-primary py-0 px-2">ویرایش</a></td>
+    <td><a href="<?= url('admin/users', ['edit' => $user['id']]) ?>" class="btn btn-sm btn-outline-primary py-0 px-2">مشخصات و ویرایش</a></td>
 </tr>
 <?php endforeach; ?>
 </tbody></table>
 </div>
+<?php if ($totalUsers > $perPage): ?>
+<div class="mt-3"><?= paginate($totalUsers, $perPage, $page, url('admin/users', ['role' => $filter, 'q' => $search, 'page' => '%d'])) ?></div>
+<?php endif; ?>
 <?php require __DIR__ . '/../includes/footer.php'; ?>
