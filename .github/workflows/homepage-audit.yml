@@ -5,8 +5,8 @@ name: Homepage and link audit
 # the front page ignored them completely. This workflow therefore proves,
 # against a real HTTP instance, that:
 #
-#   • the editorial homepage renders the lead story, the «معرفی مدرسه» band,
-#     the hub rail and the content hubs;
+#   • the editorial homepage renders the lead story, no introduction band,
+#     configurable content sections;
 #   • a content page shows the «مطالب مرتبط»، «تازه‌ترین‌ها» and
 #     «پربازدیدترین‌ها» rails, with the thumbnail on the right in RTL;
 #   • switching a section off in the admin panel really removes it from the
@@ -80,6 +80,14 @@ jobs:
         run: |
           set -o pipefail
           node tests/homepage-settings.mjs 2>&1 | tee homepage-report.txt
+
+      - name: Editorial browser regression
+        env:
+          TEST_BASE_URL: http://127.0.0.1:8080
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          node tests/editorial-browser.mjs
 
       - name: Check the internal links
         env:

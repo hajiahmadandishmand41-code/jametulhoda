@@ -180,6 +180,10 @@ return [
 
     // نشانی‌های قدیمی و مترادف
     'aliases' => [
+        '/school-news' => '/news',
+        '/all-news' => '/news',
+        '/scientific-articles' => '/articles',
+        '/scientific-papers' => '/articles',
         '/library'   => '/books',
         '/files'     => '/books',
         '/dashboard' => '/admin',

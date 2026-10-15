@@ -43,31 +43,18 @@ $defaults = [
     'social_instagram' => '',
 ];
 /*
- * چیدمان صفحهٔ اصلی. برچسب‌ها همان کلیدهایی‌اند که
+ * مدیریت صفحهٔ اصلی. برچسب‌ها همان کلیدهایی‌اند که
  * jhd_homepage_settings() می‌شناسد و صفحهٔ نخست (index.php) مستقیماً از
  * آن‌ها می‌خواند؛ پس هر تیک اینجا بلافاصله در صفحهٔ نخست اثر می‌گذارد.
  * کلیدهای قدیمی (گزارش‌ها، رویدادها، پرسش‌وپاسخ و …) در همان تابع به این
  * شش نگاشت می‌شوند، پس تنظیماتِ ذخیره‌شدهٔ نصب‌های پیشین بی‌صدا از دست
  * نمی‌رود.
  */
-$homepageSectionLabels = [
-    'hero'    => 'تابلوی اصلی: برند، معرفی مدرسه و ریل هاب‌ها',
-    'feature' => 'مطلب شاخص، مطالب فرعی و تازه‌ترین اخبار',
-    'writing' => 'هاب نوشتارها (مقاله، پژوهش و گزارش)',
-    'books'   => 'هاب کتابخانهٔ دیجیتال',
-    'lessons' => 'هاب دروس و دوره‌ها',
-    'media'   => 'هاب صوت و تصویر',
-];
-
-$homepageCfgRaw = trim((string)($sets['homepage_config'] ?? ''));
-$homepageCfg = json_decode($homepageCfgRaw, true);
-if (!is_array($homepageCfg)) $homepageCfg = [];
-$homepageEnabled = [];
-foreach ($homepageSectionLabels as $sectionKey => $_label) {
-    $homepageEnabled[$sectionKey] = array_key_exists($sectionKey, $homepageCfg['sections'] ?? [])
-        ? (bool)$homepageCfg['sections'][$sectionKey] : true;
-}
-$homepageHeroId = max(0, (int)($homepageCfg['hero_post_id'] ?? 0));
+$homepageSectionLabels = jhd_home_section_labels();
+$homepageCfg = jhd_homepage_settings();
+$homepageEnabled = $homepageCfg['sections'];
+$homepageHeroId = $homepageCfg['hero_post_id'];
+$homepageCategories = $db->query('SELECT id, name FROM categories ORDER BY name')->fetchAll();
 
 $homepagePosts = [];
 try {
@@ -76,11 +63,16 @@ try {
          FROM posts
          WHERE status='published'
          ORDER BY published_at DESC, id DESC
-         LIMIT 120"
+"
     );
     $homepagePosts = $homepagePostsStmt->fetchAll();
 } catch (Throwable) {
     $homepagePosts = [];
+}
+
+$homepageSources = ['post' => $homepagePosts];
+foreach (['book' => 'books', 'lesson' => 'lessons'] as $kind => $table) {
+    $homepageSources[$kind] = $db->query("SELECT id,title FROM $table WHERE status='published' ORDER BY created_at DESC,id DESC")->fetchAll();
 }
 
 $formValues = [];
@@ -125,7 +117,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         }
 
         /*
-         * چیدمان صفحهٔ اصلی فقط وقتی بازنویسی می‌شود که فرم واقعاً این بخش را
+         * مدیریت صفحهٔ اصلی فقط وقتی بازنویسی می‌شود که فرم واقعاً این بخش را
          * هم فرستاده باشد. یک فرم HTML، تیک‌های خالی را اصلاً نمی‌فرستد، پس
          * «بدون کلید» می‌تواند یا یعنی کاربر همه را برداشته، یا یعنی درخواست
          * از جای دیگری آمده است (مثلاً یک اسکریپت قدیمی که فقط نام سایت را
@@ -135,6 +127,19 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
          */
         $homepagePanelPosted = !empty($_POST['homepage_sections_present']);
         if ($homepagePanelPosted) {
+            foreach (['homepage_hero_post_id', 'homepage_hero_mode', 'homepage_hero_kind', 'homepage_other_id', 'homepage_feature_ref'] as $field) {
+                if (isset($_POST[$field]) && !is_string($_POST[$field])) {
+                    http_response_code(400); exit('Invalid homepage setting');
+                }
+            }
+            $postedLayout = $_POST['homepage_layout'] ?? [];
+            if (!is_array($postedLayout)) { http_response_code(400); exit('Invalid layout'); }
+            foreach ($postedLayout as $item) {
+                if (!is_array($item)) { http_response_code(400); exit('Invalid layout'); }
+                foreach ($item as $value) {
+                    if (!is_string($value)) { http_response_code(400); exit('Invalid layout'); }
+                }
+            }
             $postedSections = $_POST['homepage_sections'] ?? [];
             if (!is_array($postedSections)) $postedSections = [];
             $postedSections = array_values(array_filter(array_map(
@@ -145,21 +150,27 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 $homepageEnabled[$sectionKey] = in_array($sectionKey, $postedSections, true);
             }
             $homepageHeroId = max(0, (int)($_POST['homepage_hero_post_id'] ?? 0));
-            if ($homepageHeroId > 0) {
-                $heroExists = false;
-                foreach ($homepagePosts as $hp) {
-                    if ((int)$hp['id'] === $homepageHeroId) { $heroExists = true; break; }
-                }
-                if (!$heroExists) {
-                    $homepageHeroId = 0;
-                    $error = 'مطلب شاخص صفحه اصلی معتبر نیست؛ یک مطلب منتشرشده انتخاب کنید.';
-                }
+            $homepageCfg['hero_mode'] = (string)($_POST['homepage_hero_mode'] ?? ($homepageHeroId ? 'manual' : 'auto'));
+            $homepageCfg['hero_kind'] = (string)($_POST['homepage_hero_kind'] ?? 'post');
+            if ($homepageCfg['hero_kind'] !== 'post') $homepageHeroId = max(0, (int)($_POST['homepage_other_id'] ?? 0));
+            if (isset($_POST['homepage_feature_ref'])) {
+                $ref = (string)$_POST['homepage_feature_ref'];
+                if (preg_match('/^(post|book|lesson):([0-9]+)$/D', $ref, $match)) {
+                    $homepageCfg['hero_kind'] = $match[1];
+                    $homepageHeroId = (int)$match[2];
+                } else { $homepageHeroId = 0; }
             }
+            $homepageCfg['layout'] = is_array($_POST['homepage_layout'] ?? null) ? $_POST['homepage_layout'] : $homepageCfg['layout'];
         }
-        $homepageConfigValue = json_encode([
-            'sections' => $homepageEnabled,
-            'hero_post_id' => $homepageHeroId,
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($homepagePanelPosted) {
+            $homepageCfg['sections'] = array_replace($homepageCfg['sections'], $homepageEnabled);
+            $homepageCfg['hero_post_id'] = $homepageHeroId;
+        }
+        $homepageCfg = jhd_normalize_home_config($homepageCfg);
+        if ($homepagePanelPosted && $homepageCfg['hero_mode'] === 'manual' && !jhd_home_feature($homepageCfg)) {
+            $error = 'مطلب شاخص معتبر نیست؛ یک محتوای منتشرشده انتخاب کنید.';
+        }
+        $homepageConfigValue = json_encode($homepageCfg, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         $newLogo = '';
         if ($error === '' && (isset($_FILES['logo']) || jhdDirectUploadPath('logo') !== '')) {
@@ -249,8 +260,11 @@ $sets = array_merge($sets, $formValues);
             </section>
 
             <section class="admin-card mb-4" aria-labelledby="admin-homepage-heading">
-                <div class="admin-card-header" id="admin-homepage-heading">چیدمان صفحهٔ اصلی</div>
+                <div class="admin-card-header" id="admin-homepage-heading">مدیریت صفحهٔ اصلی</div>
                 <div class="admin-card-body">
+                    <?php if (APP_ENV === 'production' && env_value('VIEW_HASH_KEY', '') === ''): ?>
+                    <div class="alert alert-warning">ثبت بازدید جدید تا تنظیم VIEW_HASH_KEY در محیط استقرار غیرفعال است؛ آمار قبلی حفظ شده است. پیش از فعال‌سازی، migration شمارهٔ ۰۰۰۳ را اجرا کنید.</div>
+                    <?php endif; ?>
                     <p class="admin-settings-help">هر تیک، یکی از بخش‌های صفحهٔ اصلی را روشن یا خاموش می‌کند و نتیجه <strong>بلافاصله</strong> در صفحهٔ نخست دیده می‌شود. خاموش کردن یک بخش، آن را از سایت حذف نمی‌کند: آرشیو، ناوبری «بیشتر»، فوتر و نقشهٔ سایت همیشه پابرجا می‌مانند.</p>
                     <div class="mb-4">
                         <label class="form-label fw-bold">بخش‌های قابل نمایش در صفحهٔ اصلی</label>
@@ -263,24 +277,50 @@ $sets = array_merge($sets, $formValues);
                                     <input class="form-check-input m-0" type="checkbox" name="homepage_sections[]" value="<?= sanitize($sectionKey) ?>" <?= !empty($homepageEnabled[$sectionKey]) ? 'checked' : '' ?>>
                                     <span><?= sanitize($sectionLabel) ?></span>
                                 </label>
+                                <label class="form-label">عنوان نمایشی
+                                  <input class="form-control" name="homepage_layout[<?= $sectionKey ?>][title]" maxlength="100" value="<?= sanitize($homepageCfg['layout'][$sectionKey]['title']) ?>">
+                                </label>
+                                <div class="d-flex gap-2">
+                                  <label>ترتیب (کوچک‌تر، بالاتر)<input class="form-control" type="number" min="0" max="99" name="homepage_layout[<?= $sectionKey ?>][order]" value="<?= $homepageCfg['layout'][$sectionKey]['order'] ?>"></label>
+                                  <label>تعداد<input class="form-control" type="number" min="1" max="<?= in_array($sectionKey, ['latest','popular'], true) ? 3 : 12 ?>" name="homepage_layout[<?= $sectionKey ?>][limit]" value="<?= $homepageCfg['layout'][$sectionKey]['limit'] ?>"></label>
+                                </div>
+                                <?php if (in_array($sectionKey, ['popular','latest','news','writing','research'], true)): ?>
+                                <label class="form-label">دسته‌بندی
+                                  <select class="form-select" name="homepage_layout[<?= $sectionKey ?>][category]">
+                                    <option value="0">همهٔ دسته‌ها</option>
+                                    <?php foreach ($homepageCategories as $cat): ?>
+                                    <option value="<?= (int)$cat['id'] ?>" <?= $homepageCfg['layout'][$sectionKey]['category'] === (int)$cat['id'] ? 'selected' : '' ?>><?= sanitize($cat['name']) ?></option>
+                                    <?php endforeach; ?>
+                                  </select>
+                                </label>
+                                <?php endif; ?>
                             </div>
                             <?php endforeach; ?>
                         </div>
                     </div>
                     <div>
-                        <label for="homepage-hero-post" class="form-label fw-bold">مطلب شاخص صفحهٔ اصلی</label>
-                        <select id="homepage-hero-post" name="homepage_hero_post_id" class="form-select">
-                            <option value="0">بدون انتخاب دستی — برگزیدهٔ سردبیر، وگرنه تازه‌ترین خبر</option>
-                            <?php foreach ($homepagePosts as $hp): ?>
-                            <option value="<?= (int)$hp['id'] ?>" <?= $homepageHeroId === (int)$hp['id'] ? 'selected' : '' ?>>
-                                <?= sanitize(postTypeLabel((string)$hp['post_type'])) ?> — <?= sanitize($hp['title']) ?>
-                            </option>
+                        <label class="form-label">روش انتخاب مطلب شاخص
+                          <select class="form-select" name="homepage_hero_mode">
+                            <?php foreach (['auto' => 'خودکار: جدیدترین مطلب منتشرشده', 'manual' => 'انتخاب دستی', 'off' => 'غیرفعال'] as $mode => $label): ?>
+                            <option value="<?= $mode ?>" <?= $homepageCfg['hero_mode'] === $mode ? 'selected' : '' ?>><?= $label ?></option>
                             <?php endforeach; ?>
+                          </select>
+                        </label>
+                        <label for="homepage-hero-post" class="form-label fw-bold">انتخاب از همهٔ محتوای منتشرشده</label>
+                        <select id="homepage-hero-post" name="homepage_feature_ref" class="form-select">
+                          <option value="">انتخاب محتوا</option>
+                          <?php foreach ($homepageSources as $kind => $items): ?>
+                          <optgroup label="<?= $kind === 'post' ? 'مطالب' : ($kind === 'book' ? 'کتاب‌ها' : 'درس‌ها') ?>">
+                            <?php foreach ($items as $hp): $ref = $kind . ':' . (int)$hp['id']; ?>
+                            <option value="<?= $ref ?>" <?= $homepageCfg['hero_kind'] === $kind && $homepageHeroId === (int)$hp['id'] ? 'selected' : '' ?>><?= sanitize(postTypeLabel($kind === 'post' ? $hp['post_type'] : $kind)) ?> — <?= sanitize($hp['title']) ?></option>
+                            <?php endforeach; ?>
+                          </optgroup>
+                          <?php endforeach; ?>
                         </select>
                         <div class="form-text">این مطلب با تصویر بزرگ در یک طرف و تیتر و خلاصه در طرف دیگر، بالای صفحهٔ اصلی می‌نشیند.</div>
                     </div>
                     <div class="alert alert-light border mt-3 mb-0 small">
-                        تیک «برگزیدهٔ سردبیر» را هنگام ایجاد یا ویرایش هر مطلب فعال کنید تا در فهرست‌های دیگر هم بالا بیاید. اگر «مطلب شاخص» دستی انتخاب نشده باشد، خودِ برگزیدهٔ سردبیر و در نبود آن تازه‌ترین خبر، مطلب شاخص می‌شود.
+                        تیک «برگزیدهٔ سردبیر» را هنگام ایجاد یا ویرایش هر مطلب فعال کنید تا در فهرست‌های دیگر هم بالا بیاید. در حالت خودکار، جدیدترین مطلب منتشرشده (با ترتیب تاریخ و سپس شناسه) شاخص می‌شود؛ حالت دستی فقط همان محتوای انتخاب‌شده را نمایش می‌دهد.
                     </div>
                 </div>
             </section>

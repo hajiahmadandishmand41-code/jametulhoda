@@ -464,3 +464,12 @@ CREATE TABLE IF NOT EXISTS content_likes (
 );
 CREATE INDEX IF NOT EXISTS content_likes_ref ON content_likes(ref_type, ref_id);
 COMMIT;
+
+-- Additive view deduplication. No existing counter is reset or reinterpreted.
+CREATE TABLE IF NOT EXISTS content_view_receipts (
+    post_id INTEGER NOT NULL,
+    visitor_hash VARCHAR(64) NOT NULL,
+    view_day DATE NOT NULL,
+    PRIMARY KEY (post_id, visitor_hash, view_day)
+);
+ALTER TABLE content_view_receipts ENABLE ROW LEVEL SECURITY;

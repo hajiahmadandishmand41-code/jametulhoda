@@ -139,11 +139,11 @@ if (process.env.TEST_BASE_URL) {
   // The homepage was rebuilt as an editorial front page: a lead-story block
   // followed by the writing, books, lessons and media hubs. The section
   // headings are the anchors this check protects.
-  for (const headingId of ['home-lead-heading', 'home-writing-heading', 'home-books-heading', 'home-lessons-heading', 'home-media-heading']) {
+  for (const headingId of ['home-feature-heading', 'home-writing-heading', 'home-books-heading', 'home-lessons-heading', 'home-media-heading']) {
     assert.ok(homeHtml.includes(`id="${headingId}"`), `Homepage includes ${headingId}`);
   }
   assert.ok(homeHtml.includes('class="jhd-lead"'), 'Homepage renders the lead story');
-  assert.ok(homeHtml.includes('class="jhd-about"'), 'Homepage renders the «معرفی مدرسه» band');
+  assert.ok(!homeHtml.includes('class="jhd-about"'), 'Homepage excludes the introduction band');
   assert.ok(homeHtml.includes('همهٔ اخبار'), 'Homepage includes همهٔ اخبار CTA');
   assert.ok(homeHtml.includes('social-link--telegram') && homeHtml.includes('<span>کانال تلگرام</span>'), 'Footer includes labeled Telegram button');
   assert.ok(afghanMonthsRe.test(homeHtml), 'Homepage renders Afghan Solar Hijri month names');

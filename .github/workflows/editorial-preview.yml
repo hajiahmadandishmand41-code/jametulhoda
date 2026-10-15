@@ -1,0 +1,60 @@
+name: Editorial preview evidence
+on:
+  push:
+    branches: ['arena/75b73a50-jametulhoda']
+permissions:
+  contents: write
+  deployments: read
+jobs:
+  public-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Resolve successful deployment for this exact commit
+        id: deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 36); do
+            id=$(gh api "repos/$GITHUB_REPOSITORY/deployments?sha=$GITHUB_SHA" --jq '.[0].id // empty')
+            if [ -n "$id" ]; then
+              state=$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses" --jq '.[0].state // empty')
+              if [ "$state" = "success" ]; then
+                target=$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses" --jq '.[0].environment_url // empty')
+                echo "url=$target" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              if [ "$state" = "failure" ] || [ "$state" = "error" ]; then
+                gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses" --jq '.[0] | {state,description,log_url}'
+                exit 1
+              fi
+            fi
+            sleep 10
+          done
+          echo 'No successful deployment for this commit; no deployment health claim can be made.'
+          exit 1
+      - name: Exercise real public pages (read only)
+        env:
+          TEST_BASE_URL: ${{ steps.deployment.outputs.url }}
+        run: node tests/editorial-live.mjs
+      - name: Publish evidence on the tested commit
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -f test-results/editorial-live.md ]; then
+            cat test-results/editorial-live.md >> "$GITHUB_STEP_SUMMARY"
+            gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/comments" -f body="$(cat test-results/editorial-live.md)"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: editorial-preview-evidence
+          path: test-results/editorial-live.*
+          if-no-files-found: ignore

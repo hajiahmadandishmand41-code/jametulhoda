@@ -32,6 +32,7 @@ jobs:
           exit "$status"
       - name: Rich text and sitemap regression checks (in-memory only)
         run: |
+          php tests/editorial.php
           php tests/polish.php
           SITE_URL=https://example.test/school BASE_PATH=/school JHD_PRETTY_URLS=false php tests/polish.php
       - name: Signed resumable-upload contract (in-memory only)

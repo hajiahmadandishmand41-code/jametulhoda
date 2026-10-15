@@ -1,235 +1,91 @@
-// Regression test for the editorial homepage and its admin settings.
-//
-// The homepage configuration saved by /admin/settings used to have NO effect:
-// jhd_homepage_settings() was defined but never called, so every section
-// toggle and the manual "مطلب شاخص" were stored, validated and then ignored.
-//
-// This test therefore proves three things against a real HTTP instance:
-//   1. the homepage renders the editorial structure (lead story with image
-//      and summary, the «معرفی جامعه‌الهدی» band, the hub rail and the
-//      content hubs);
-//   2. a content page shows the «مطالب مرتبط»، «تازه‌ترین‌ها» and
-//      «پربازدیدترین‌ها» rails with a small thumbnail on the right;
-//   3. toggling a section in the admin panel really changes the homepage —
-//      and the change is reverted afterwards so the instance is left as it
-//      was found.
-//
-// Usage:  TEST_BASE_URL=http://127.0.0.1:8080 node tests/homepage-settings.mjs
-// Admin credentials come from ADMIN_USER / ADMIN_PASSWORD (the seeded
-// development account is used by default). When the login is not possible the
-// administrative part is skipped, never silently passed.
-import fs from 'node:fs';
-
+// Mutates only an isolated local fixture instance; restores the entire settings form.
+import assert from 'node:assert/strict';
 const base = (process.env.TEST_BASE_URL || 'http://127.0.0.1:8080').replace(/\/$/, '');
-const adminUser = process.env.ADMIN_USER || 'admin';
-const adminPassword = process.env.ADMIN_PASSWORD || 'TestAdmin123!@#';
-
-let passed = 0;
-const failures = [];
-
-function check(ok, label) {
-  if (ok) { passed++; console.log(`PASS ${label}`); }
-  else { failures.push(label); console.log(`FAIL ${label}`); }
-}
-
-const errors = /(Warning|Fatal error|Parse error|Deprecated|Notice):|Uncaught (Error|Exception)|شناسه پیگیری/;
-
-// A tiny cookie jar: the CSRF token is bound to the PHP session, so the
-// session cookie has to travel with every request.
+assert.ok(['localhost', '127.0.0.1', '[::1]'].includes(new URL(base).hostname), 'Never mutate production');
 const jar = new Map();
-function cookieHeader() {
-  return [...jar.entries()].map(([k, v]) => `${k}=${v}`).join('; ');
+let checks = 0;
+const check = (ok, label) => { assert.ok(ok, label); checks++; console.log('PASS '+label); };
+const decode = s => s.replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&#0?39;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+async function get(path, options={}) {
+  const response = await fetch(new URL(path,base), {redirect:'manual',signal:AbortSignal.timeout(20000),...options,
+    headers:{Cookie:[...jar].map(([k,v])=>`${k}=${v}`).join('; '),...options.headers}});
+  for (const c of response.headers.getSetCookie()) { const pair=c.split(';')[0]; const i=pair.indexOf('='); jar.set(pair.slice(0,i),pair.slice(i+1)); }
+  const body=await response.text();
+  check(!/Warning:|Fatal error:|Uncaught|شناسه پیگیری/.test(body), 'no PHP error '+path);
+  return {response,body};
 }
-function rememberCookies(response) {
-  const raw = response.headers.getSetCookie ? response.headers.getSetCookie() : [];
-  for (const line of raw) {
-    const [pair] = line.split(';');
-    const index = pair.indexOf('=');
-    if (index > 0) jar.set(pair.slice(0, index).trim(), pair.slice(index + 1).trim());
+const csrf = s => s.match(/name="csrf_token"\s+value="([^"]+)"/)?.[1];
+function formValues(html) {
+  const out=new URLSearchParams();
+  const form=html.match(/<form[^>]*class="admin-form"[\s\S]*?<\/form>/)?.[0];
+  assert.ok(form,'settings form');
+  for(const m of form.matchAll(/<input\b[^>]*>/g)) {
+    const tag=m[0], name=tag.match(/name="([^"]+)"/)?.[1];
+    if(!name || /type="(?:file|submit)"/.test(tag) || (/type="checkbox"/.test(tag)&&!tag.includes('checked'))) continue;
+    out.append(decode(name),decode(tag.match(/value="([^"]*)"/)?.[1]||''));
   }
-}
-
-async function get(path, options = {}) {
-  const headers = { ...(options.headers || {}) };
-  const cookies = cookieHeader();
-  if (cookies) headers.Cookie = cookies;
-  const response = await fetch(base + path, {
-    redirect: 'manual',
-    signal: AbortSignal.timeout(30000),
-    ...options,
-    headers,
-  });
-  rememberCookies(response);
-  const body = await response.text();
-  return { response, body };
-}
-
-function csrfFrom(html) {
-  const match = html.match(/name="csrf_token"\s+value="([^"]+)"/)
-    || html.match(/value="([^"]+)"\s+name="csrf_token"/);
-  return match ? match[1] : '';
-}
-
-// ── 1. The homepage structure ───────────────────────────────────────────────
-{
-  const { response, body } = await get('/');
-  check(response.status === 200, `homepage answers 200 (got ${response.status})`);
-  check(!errors.test(body), 'homepage has no PHP error output');
-
-  check(/class="jhd-lead"/.test(body), 'homepage shows a lead story');
-  check(/class="jhd-lead__media"[\s\S]{0,400}?<img/.test(body),
-    'the lead story has an image next to its text');
-  check(/class="jhd-lead__title"/.test(body), 'the lead story has a title');
-  check(/class="jhd-lead__summary"/.test(body), 'the lead story has a summary');
-  check(/jhd-lead__cta/.test(body), 'the lead story has a call to action');
-  check(/loading="eager"[^>]*fetchpriority="high"|fetchpriority="high"/.test(body),
-    'the lead image is preloaded (largest contentful paint)');
-
-  check(/class="jhd-about"/.test(body), 'homepage shows the «معرفی جامعه‌الهدی» band');
-  check(/class="jhd-about__title"/.test(body), 'the about band has a heading');
-  check(/class="jhd-about__stats"/.test(body), 'the about band has statistics');
-
-  check(/class="jhd-hub-rail/.test(body), 'homepage shows the hub rail');
-  const hubTiles = (body.match(/class="jhd-hub-tile/g) || []).length;
-  check(hubTiles >= 2, `the hub rail has several hubs (got ${hubTiles})`);
-
-  const sectionHeads = (body.match(/class="jhd-section-head"/g) || []).length;
-  check(sectionHeads >= 2, `the homepage has several content hubs (got ${sectionHeads})`);
-  check(/id="home-lead-heading"/.test(body), 'the lead section is labelled for assistive technology');
-}
-
-// ── 2. The rails on a content page ──────────────────────────────────────────
-{
-  const list = await get('/articles');
-  check(list.response.status === 200, 'the article archive answers 200');
-  check(!errors.test(list.body), 'the article archive has no PHP error output');
-  check(/class="jhd-rail__title"[^>]*>[^<]*(?:<[^>]+>)*\s*تازه‌ترین‌ها/.test(list.body),
-    'the article archive shows the «تازه‌ترین‌ها» rail');
-  check(/پربازدیدترین‌ها/.test(list.body),
-    'the article archive shows the «پربازدیدترین‌ها» rail');
-  check(/class="jhd-rail__media"/.test(list.body),
-    'the rails show a small thumbnail');
-  // RTL: the thumbnail must come before the text, i.e. it sits on the right.
-  const railItem = (list.body.match(/<li class="jhd-rail__item">[\s\S]{0,400}?<\/li>/) || [''])[0];
-  check(railItem.indexOf('jhd-rail__media') !== -1
-    && railItem.indexOf('jhd-rail__media') < railItem.indexOf('jhd-rail__link'),
-    'the rail thumbnail is placed before the text (right side in RTL)');
-}
-
-// ── 3. The admin settings really change the homepage ────────────────────────
-{
-  const loginPage = await get('/login');
-  const loginToken = csrfFrom(loginPage.body);
-  check(loginToken !== '', 'the login form exposes a CSRF token');
-
-  const login = await get('/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
-    body: new URLSearchParams({
-      csrf_token: loginToken,
-      identifier: adminUser,
-      password: adminPassword,
-    }).toString(),
-  });
-  const loggedIn = login.response.status === 303 && jar.has('jamiat_session');
-
-  if (!loggedIn) {
-    console.log(`SKIP the administrative part — could not log in as "${adminUser}"`);
-  } else {
-    check(true, 'the administrator can log in');
-
-    const settingsPage = await get('/admin/settings', {});
-    check(settingsPage.response.status === 200, 'the settings panel is reachable');
-    const settingsToken = csrfFrom(settingsPage.body);
-    check(settingsToken !== '', 'the settings panel exposes a CSRF token');
-
-    const sectionNames = [...settingsPage.body.matchAll(/name="homepage_sections\[\]"\s+value="([a-z]+)"/g)]
-      .map((m) => m[1]);
-    check(['hero', 'feature', 'writing', 'books', 'lessons', 'media']
-      .every((key) => sectionNames.includes(key)),
-      'the settings panel offers every homepage section');
-
-    // Save with the "media" hub switched off and everything else on.
-    const before = await get('/');
-    const save = await get('/admin/settings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-      },
-      body: new URLSearchParams([
-        ['csrf_token', settingsToken],
-        ['site_name', 'مدرسه جامعه‌الهدی'],
-        ['site_slogan', 'مرکز علمی، آموزشی و پژوهشی در پرتو قرآن و عترت'],
-        ['about_short', 'مدرسه علمیه جامعه‌الهدی در کابل.'],
-        ['about_long', ''],
-        ['address', 'کابل، افغانستان'],
-        ['phone', '0798228441'],
-        ['email', 'hajiahmads299@gmail.com'],
-        ['social_telegram', ''],
-        ['social_youtube', ''],
-        ['social_instagram', ''],
-        ['homepage_sections[]', 'hero'],
-        ['homepage_sections[]', 'feature'],
-        ['homepage_sections[]', 'writing'],
-        ['homepage_sections[]', 'books'],
-        ['homepage_sections[]', 'lessons'],
-        ['homepage_sections_present', '1'],
-        ['homepage_hero_post_id', '0'],
-      ]).toString(),
-    });
-    check(save.response.status === 303, 'the settings panel saves with a redirect');
-
-    const after = await get('/');
-    check(!/id="home-media-heading"/.test(after.body),
-      'switching a section off removes it from the homepage');
-    check(/id="home-lead-heading"/.test(after.body),
-      'the remaining sections stay on the homepage');
-    check(/class="jhd-about"/.test(after.body),
-      'the «معرفی مدرسه» band follows the hero toggle');
-    check(before.response.status === 200 && after.response.status === 200,
-      'the homepage still answers 200 after the change');
-
-    // Put the media hub back on.
-    const settingsPage2 = await get('/admin/settings', {});
-    const settingsToken2 = csrfFrom(settingsPage2.body);
-    await get('/admin/settings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-      },
-      body: new URLSearchParams([
-        ['csrf_token', settingsToken2],
-        ['site_name', 'مدرسه جامعه‌الهدی'],
-        ['site_slogan', 'مرکز علمی، آموزشی و پژوهشی در پرتو قرآن و عترت'],
-        ['about_short', 'مدرسه علمیه جامعه‌الهدی در کابل.'],
-        ['about_long', ''],
-        ['address', 'کابل، افغانستان'],
-        ['phone', '0798228441'],
-        ['email', 'hajiahmads299@gmail.com'],
-        ['social_telegram', ''],
-        ['social_youtube', ''],
-        ['social_instagram', ''],
-        ['homepage_sections[]', 'hero'],
-        ['homepage_sections[]', 'feature'],
-        ['homepage_sections[]', 'writing'],
-        ['homepage_sections[]', 'books'],
-        ['homepage_sections[]', 'lessons'],
-        ['homepage_sections[]', 'media'],
-        ['homepage_sections_present', '1'],
-        ['homepage_hero_post_id', '0'],
-      ]).toString(),
-    });
-    const restored = await get('/');
-    check(/id="home-media-heading"/.test(restored.body),
-      'the media hub comes back when it is switched on again');
+  for(const m of form.matchAll(/<textarea[^>]*name="([^"]+)"[^>]*>([\s\S]*?)<\/textarea>/g)) out.set(decode(m[1]),decode(m[2]));
+  for(const m of form.matchAll(/<select[^>]*name="([^"]+)"[^>]*>([\s\S]*?)<\/select>/g)) {
+    const opts=[...m[2].matchAll(/<option\b([^>]*)>([\s\S]*?)<\/option>/g)];
+    const opt=opts.find(o=>o[1].includes('selected')) || opts[0];
+    out.set(decode(m[1]), decode(opt?.[1].match(/value="([^"]*)"/)?.[1]||''));
   }
+  return out;
 }
-
-console.log('');
-if (failures.length) {
-  console.log(`${passed}/${passed + failures.length} checks passed`);
-  console.log('Failures:');
-  failures.forEach((f) => console.log(`  - ${f}`));
-  process.exit(1);
+async function save(params) {
+  const current=await get('/admin/settings');
+  params=new URLSearchParams(params); params.set('csrf_token',csrf(current.body));
+  const result=await get('/admin/settings',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:params});
+  check(result.response.status===303,'settings committed with 303');
 }
-console.log(`${passed}/${passed} checks passed`);
+let home=await get('/');
+check(home.response.status===200 && !home.body.includes('class="jhd-about"') && !home.body.includes('معرفی مدرسه'),'no homepage introduction');
+for(const key of ['latest','popular']) {
+  const section=home.body.match(new RegExp(`<section[^>]*data-home-section="${key}"[\\s\\S]*?<\\/section>`))?.[0]||'';
+  check((section.match(/<article\b/g)||[]).length<=3,'max three '+key);
+}
+for(const [path,target] of [['school-news','news'],['all-news','news'],['scientific-articles','articles'],['scientific-papers','articles'],['research','articles']]) {
+  const r=await get('/'+path+'?q=test&page=2');
+  check(r.response.status===301 && r.response.headers.get('location').includes(target) && r.response.headers.get('location').includes('q=test'),'permanent legacy redirect '+path);
+}
+for(const archive of ['news','articles']) {
+  const r=await get('/'+archive+'?q=قرآن&sort=oldest&cat=1');
+  check(r.response.status===200 && r.body.includes('name="cat"') && r.body.includes('name="sort"'),'search/category/sort '+archive);
+}
+let r=await get('/login');
+r=await get('/login',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({csrf_token:csrf(r.body),identifier:process.env.ADMIN_USER||'admin',password:process.env.ADMIN_PASSWORD||'TestAdmin123!@#'})});
+check(r.response.status===303,'admin login required and succeeds');
+const originalPage=await get('/admin/settings');
+const original=formValues(originalPage.body);
+const modified=new URLSearchParams(original);
+const sectionKeys=['feature','popular','latest','news','writing','research','books','lessons','media'];
+modified.delete('homepage_sections[]');
+for(const k of sectionKeys.filter(k=>k!=='media')) modified.append('homepage_sections[]',k);
+modified.set('homepage_layout[news][title]','خبرهای منتخب آزمون');
+modified.set('homepage_layout[news][order]','0');
+modified.set('homepage_layout[feature][order]','99');
+modified.set('homepage_layout[latest][limit]','99'); // server must clamp
+modified.set('homepage_layout[news][category]','5');
+try {
+  await save(modified);
+  home=await get('/');
+  check(!home.body.includes('data-home-section="media"'),'disabled section has no markup/blank space');
+  check(home.body.includes('خبرهای منتخب آزمون'),'custom title rendered');
+  check(home.body.indexOf('data-home-section="news"')<home.body.indexOf('data-home-section="feature"'),'custom order rendered');
+  const reload=await get('/admin/settings'); const reloaded=formValues(reload.body);
+  check(reloaded.get('homepage_layout[news][title]')==='خبرهای منتخب آزمون' && reloaded.get('homepage_layout[news][category]')==='5','title/category persisted after reload');
+  check(reloaded.get('homepage_layout[latest][limit]')==='3','max three enforced server side');
+  const options=[...originalPage.body.matchAll(/<option value="((post|book|lesson):\d+)"[^>]*>([^<]+)<\/option>/g)];
+  for(const [kind,label] of [['post','خبر'],['post','گزارش'],['post','مقاله'],['book','کتاب'],['lesson','درس']]) {
+    const item=options.find(m=>m[2]===kind && decode(m[3]).trim().startsWith(label+' —'));
+    assert.ok(item,'published selector includes '+label);
+    modified.set('homepage_feature_ref',item[1]); modified.set('homepage_hero_mode','manual');
+    await save(modified);
+    home=await get('/');
+    const lead=home.body.match(/<article class="jhd-lead">[\s\S]*?<\/article>/)?.[0]||'';
+    check(lead.includes(decode(item[3]).split(' — ')[1].trim()) && lead.includes(label),'real featured '+label);
+  }
+  modified.set('homepage_hero_mode','off'); await save(modified); home=await get('/');
+  check(!home.body.includes('data-home-section="feature"'),'featured can be disabled independently');
+} finally { await save(original); }
+console.log(`${checks} homepage HTTP/settings checks passed; original settings restored.`);

@@ -429,6 +429,12 @@ $definition = require __DIR__ . '/config/routes.php';
 // always win. Keep /?p=… and /index.php?p=… working on non-rewrite hosts.
 if (!in_array($path, ['/', '/index.php'], true)) unset($_GET['p']);
 $queryRoute = (isset($_GET['p']) && is_string($_GET['p'])) ? trim($_GET['p']) : '';
+if (($legacyTarget = jhd_legacy_listing_target($queryRoute)) !== null) {
+    $legacyParams = $_GET; unset($legacyParams['p']);
+    header('Location: ' . url($legacyTarget, $legacyParams), true, 301);
+    exit;
+}
+
 // `?p=home` maps to index.php, which itself dispatches `?p=`; resolving it here
 // would recurse. The home route is simply the homepage.
 if ($queryRoute === 'home' || $queryRoute === '/') { $queryRoute = ''; unset($_GET['p']); }
@@ -511,6 +517,15 @@ if ($queryRoute !== '') {
     if (!empty($resolved['kind'])) $_GET['kind'] = $resolved['kind'];
     $target = $resolved['file'];
 } else {
+    $legacyListing = $definition['aliases'][rtrim($path, '/')] ?? null;
+    if ($legacyListing !== null) {
+        $route = jhd_route_name_for_path($legacyListing);
+        if ($route !== null) {
+            $params = $_GET; unset($params['p']);
+            header('Location: ' . url($route, $params), true, 301);
+            exit;
+        }
+    }
     $table = jhdRouteTable($definition['routes'], $definition['aliases']);
     $entry = $table[$path] ?? null;
 

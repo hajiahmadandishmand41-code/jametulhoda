@@ -11,7 +11,7 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../includes/functions.php';
 
 $query = [];
-foreach (['q', 'page'] as $key) {
+foreach (['q', 'page', 'cat', 'sort'] as $key) {
     $value = $_GET[$key] ?? '';
     if (is_string($value) && trim($value) !== '') $query[$key] = trim($value);
 }

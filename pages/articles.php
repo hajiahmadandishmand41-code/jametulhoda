@@ -35,11 +35,16 @@ startPublicSession();
 
 $search = trim($_GET['q'] ?? '');
 
+$category = max(0, (int)($_GET['cat'] ?? 0));
+$sort = (string)($_GET['sort'] ?? 'newest');
+if (!in_array($sort, ['newest', 'oldest', 'popular'], true)) $sort = 'newest';
+$archiveCategories = getCategories();
 $page = max(1, (int)($_GET['page'] ?? 1));
 $limit = 12;
 $offset = ($page - 1) * $limit;
 
-$base = ['types' => $types];
+$base = ['types' => $types, 'sort' => $sort];
+if ($category) $base['cat'] = $category;
 if ($search) $base['search'] = $search;
 
 $opts = $base + ['limit' => $limit, 'offset' => $offset];
@@ -48,8 +53,8 @@ $total = countPosts($base);
 $pages = (int)ceil($total / $limit);
 
 // Query fields that every link in this listing carries (search, type).
-$keep = static function (array $extra = []) use ($search, $typeKey): array {
-    $q = array_filter(['q' => $search, 'type' => $typeKey !== 'all' ? $typeKey : ''], static fn($v) => $v !== '');
+$keep = static function (array $extra = []) use ($search, $typeKey, $category, $sort): array {
+    $q = array_filter(['q' => $search, 'cat' => $category, 'sort' => $sort, 'type' => $typeKey !== 'all' ? $typeKey : ''], static fn($v) => $v !== '');
     return array_filter(array_replace($q, $extra), static fn($v) => $v !== '' && $v !== null);
 };
 
@@ -58,7 +63,7 @@ $noindexSeo = ($total === 0);
 
 // Filtered views share the listing's content: point their canonical at the
 // unfiltered (or single-type) listing so search engines index one version.
-$canonicalOverride = $typeKey === 'all' ? url('articles') : url('articles', ['type' => $typeKey]);
+$canonicalOverride = url('articles', $page > 1 ? ['page' => $page] : []);
 
 $breadcrumbs = [
     ['name' => 'صفحه اصلی', 'url' => url()],
@@ -101,7 +106,7 @@ require_once __DIR__ . '/../includes/header.php';
     <!-- فیلتر نوع: یک بخش، دو نما -->
     <nav class="jhd-type-tabs" aria-label="نوع مطلب">
       <?php foreach ($typeLabels as $key => $label):
-        $tabQuery = array_filter(['q' => $search, 'type' => $key !== 'all' ? $key : ''], static fn($v) => $v !== '');
+        $tabQuery = array_filter(['q' => $search, 'cat' => $category, 'sort' => $sort, 'type' => $key !== 'all' ? $key : ''], static fn($v) => $v !== '');
       ?>
       <a class="jhd-type-tab<?= $key === $typeKey ? ' is-active' : '' ?>"
          href="<?= sanitize(url('articles', $tabQuery)) ?>"
@@ -137,7 +142,26 @@ require_once __DIR__ . '/../includes/header.php';
         — <?= number_format($total) ?> مورد یافت شد
       </div>
       <?php endif; ?>
-    </form>
+
+        <div class="d-flex flex-wrap gap-2 my-2">
+          <label>دسته‌بندی
+            <select class="form-select" name="cat">
+              <option value="0">همهٔ دسته‌ها</option>
+              <?php foreach ($archiveCategories as $cat): ?>
+              <option value="<?= (int)$cat['id'] ?>" <?= $category === (int)$cat['id'] ? 'selected' : '' ?>><?= sanitize($cat['name']) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </label>
+          <label>مرتب‌سازی
+            <select class="form-select" name="sort">
+              <?php foreach (['newest' => 'جدیدترین', 'oldest' => 'قدیمی‌ترین', 'popular' => 'بیشترین بازدید'] as $value => $label): ?>
+              <option value="<?= $value ?>" <?= $sort === $value ? 'selected' : '' ?>><?= $label ?></option>
+              <?php endforeach; ?>
+            </select>
+          </label>
+          <button class="btn btn-outline-primary align-self-end" type="submit">اعمال فیلتر</button>
+        </div>
+</form>
 
     <?php if (empty($posts)): ?>
     <?= renderEmptyState('bi-file-text', $search ? 'مطلبی مطابق با جستجوی شما یافت نشد؛ عبارت دیگری را بیازمایید.' : 'هنوز مطلبی در این بخش ثبت نشده است.', url('articles'), 'مشاهده همه مقالات و پژوهش‌ها') ?>

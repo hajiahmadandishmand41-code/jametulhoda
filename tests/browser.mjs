@@ -21,26 +21,14 @@ try {
   assert.equal(await page.locator('html').getAttribute('data-theme'),'light','first visit defaults to light theme');
   await page.screenshot({path:'test-results/home-desktop.png',fullPage:true});
 
-  assert.equal(await page.locator('.jhd-home-intro').isVisible(),true,'homepage introduction is visible');
-  assert.equal(await page.locator('#home-brand-title').isVisible(),true,'homepage has a visible brand heading');
-  assert.equal(await page.locator('.jhd-hero-media').count(),0,'homepage omits the school-courtyard hero image');
-  assert.equal(await page.locator('.jhd-home-category').count(),0,'homepage has no quick-access tiles');
-  assert.equal(await page.locator('.jhd-hero-actions').count(),0,'homepage has no quick-action buttons');
-  assert.equal(await page.locator('.jhd-home-card-grid .jhd-card').count(),0,'homepage contains no content cards');
-  assert.equal(await page.locator('.jhd-home-topic-links').count(),0,'homepage has no topic chips');
-  assert.equal(await page.locator('.jhd-homepage .jhd-banner-section').count(),0,'homepage has no separate announcement banner');
-  const homeSections=await page.locator('.jhd-home-editorial-section').evaluateAll(sections=>sections.map(section=>({
-    heading:section.querySelector('h2')?.textContent?.trim()||'',
-    rows:section.querySelectorAll('.jhd-news-row').length,
-    hrefs:[...section.querySelectorAll('.jhd-news-row__title')].map(link=>link.getAttribute('href')||'')
-  })));
-  const allowedHomeHeadings=['اخبار و اطلاعیه‌ها','مقالات و پژوهش‌ها','گزارش‌ها','کتاب‌ها','درس‌ها','رویدادها'];
-  assert.ok(homeSections.length>=2&&homeSections.length<=6,'homepage displays active main sections with published content');
-  assert.ok(homeSections.every(section=>allowedHomeHeadings.includes(section.heading)),'homepage presents only active main content sections');
-  assert.ok(homeSections.every(section=>section.rows>0&&section.rows<=5),'each homepage list is non-empty and limited to five entries');
-  assert.ok(homeSections.every(section=>section.hrefs.every(href=>href.startsWith('/')||href.startsWith('http'))),'editorial list links are valid');
-  assert.equal(await page.locator('.jhd-home-all-news').count(),1,'homepage news section has a clear all-news button');
-  assert.equal(await page.locator('.jhd-home-search').count(),0,'homepage avoids a duplicate search form');
+  assert.equal(await page.locator('.jhd-about').count(),0,'homepage introduction removed without deleting /about');
+  assert.equal(await page.locator('h1').isVisible(),true,'homepage has one visible heading');
+  const sections=page.locator('[data-home-section]');
+  assert.ok(await sections.count()>=2,'homepage has real content sections');
+  for(const key of ['latest','popular']) {
+    assert.ok(await page.locator(`[data-home-section="${key}"] .jhd-card`).count()<=3,`${key} has max three cards`);
+  }
+  assert.equal(await page.locator('.jhd-homepage .jhd-card-gallery').count(),0,'homepage cards never use galleries');
   const headerSearch=page.locator('.jhd-search #header-search');
   assert.equal(await headerSearch.isVisible(),true,'shared header search is visible on desktop');
   await headerSearch.fill('قرآن');
