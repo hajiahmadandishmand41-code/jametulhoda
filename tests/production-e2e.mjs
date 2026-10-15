@@ -96,44 +96,133 @@ if (![302, 303].includes(login.status())) {
 const dashboard = await api.get('/admin/');
 check('admin dashboard after login', dashboard.status() === 200, String(dashboard.status()));
 /*
- * Browser-path verification: exercise the real admin form so the client-side
- * Supabase TUS bridge gets used. 4 MiB is above the 3.5 MiB direct threshold.
+ * Regression E2E: use the real form to upload a 13 MiB video through Supabase
+ * TUS. Observe every browser POST so a 413-sized body can never pass unnoticed.
  */
+const diagBeforeDirectResponse = await api.get('/admin/diagnostics');
+const diagBeforeDirectHtml = await diagBeforeDirectResponse.text();
+const diagnosticRow = (html, name) => {
+  const rows = [...html.matchAll(/<td>([a-z_]+)<\/td>\s*<td>([^<]*)<\/td>\s*<td>([^<]*)<\/td>/g)];
+  const row = rows.find((match) => match[1] === name);
+  return row ? Number.parseInt(row[3].trim().replace(/,/g, ''), 10) : null;
+};
+const storedFilesBeforeDirect = diagnosticRow(diagBeforeDirectHtml, 'stored_files');
+const mediaFilesBeforeDirect = diagnosticRow(diagBeforeDirectHtml, 'media_files');
+
 const browser = await chromium.launch({ headless: true });
-const browserContext = await browser.newContext({ storageState });
+const browserContext = await browser.newContext({ storageState: await api.storageState() });
 const page = await browserContext.newPage();
-const directTitle = 'e2e-direct-' + stamp;
+const directTitle = 'e2e-direct-video-' + stamp;
 let directPostId = null;
+let directVideoUrl = '';
+const appOrigin = new URL(base).origin;
+const appCreatePosts = [];
+const oversizedAppPosts = [];
+const storagePatchBodies = [];
+page.on('request', (request) => {
+  const method = request.method();
+  const requestUrl = new URL(request.url());
+  const body = request.postDataBuffer() || Buffer.alloc(0);
+  if (requestUrl.origin === appOrigin && method === 'POST') {
+    if (body.length > 4.5 * 1024 * 1024) oversizedAppPosts.push({ path: requestUrl.pathname, bytes: body.length });
+    if (requestUrl.pathname.includes('/admin/news/create')) {
+      const text = body.toString('latin1');
+      appCreatePosts.push({
+        path: requestUrl.pathname,
+        bytes: body.length,
+        body: text,
+        contentType: request.headers()['content-type'] || '',
+      });
+    }
+  }
+  if (method === 'PATCH' && /\.storage\.supabase\.co$/i.test(requestUrl.hostname)
+      && requestUrl.pathname.includes('/storage/v1/upload/resumable/')) {
+    storagePatchBodies.push(body.length);
+  }
+});
 try {
   await page.goto(base + '/admin/news/create.php', { waitUntil: 'domcontentloaded', timeout: 90000 });
   await page.locator('input[name="title"]').fill(directTitle);
-  await page.locator('textarea[name="summary"]').fill('آزمون واقعی مسیر Direct/Resumable Supabase.');
-  await page.locator('textarea[name="content"]').fill('<p>آزمون مستقیم Storage</p>');
-  const directImage = Buffer.concat([imageBuffer, Buffer.alloc(Math.max(0, 4 * 1024 * 1024 - imageBuffer.length))]);
-  await page.locator('input[name="featured_image"]').setInputFiles({
-    name: 'direct-large.png',
-    mimeType: 'image/png',
-    buffer: directImage,
+  await page.locator('textarea[name="summary"]').fill('آزمون واقعی آپلود ویدیوی ۱۳ مگابایتی با TUS در Supabase.');
+  await page.locator('textarea[name="content"]').fill('<p>ویدیو با آپلود مستقیم و resumable ذخیره شده است.</p>');
+  const statusField = page.locator('select[name="status"]');
+  if (await statusField.count()) await statusField.selectOption('published');
+  const directVideo = Buffer.concat([
+    videoBuffer,
+    Buffer.alloc(Math.max(0, 13 * 1024 * 1024 - videoBuffer.length), 0),
+  ]);
+  check('regression file exceeds the Vercel 4.5 MiB limit', directVideo.length > 4.5 * 1024 * 1024, directVideo.length + ' bytes');
+  await page.locator('input[name="featured_video"]').setInputFiles({
+    name: 'direct-large.mp4',
+    mimeType: 'video/mp4',
+    buffer: directVideo,
   });
   await page.locator('button[type="submit"]').click();
-  await page.waitForFunction(() => new URL(location.href).searchParams.has('id'), { timeout: 180000 });
+  await page.waitForFunction(() => new URL(location.href).searchParams.has('id'), { timeout: 240000 });
   directPostId = new URL(page.url()).searchParams.get('id');
   check('browser direct/resumable upload form flow', Boolean(directPostId), page.url());
 
   const directEditHtml = await page.content();
-  check('direct upload stored as Supabase public URL',
-    /https:\/\/qlqytmeqgaugikfmrpvh\.supabase\.co\/storage\/v1\/object\/public\/site-media\//.test(directEditHtml),
-    'Supabase public storage URL found in editor');
+  const directPublicResponse = await api.get('/post.php?slug=' + encodeURIComponent(directTitle));
+  const directPublicHtml = await directPublicResponse.text();
+  const videoUrlPattern = /https:\/\/[^"'<>\\s]+\/storage\/v1\/object\/public\/site-media\/[^"'<>\\s]+?\.mp4(?:\?[^"'<>\\s]*)?/i;
+  directVideoUrl = (directEditHtml.match(videoUrlPattern) || directPublicHtml.match(videoUrlPattern) || [''])[0];
+  check('direct video resolves to the existing public Supabase bucket URL',
+    Boolean(directVideoUrl) && directVideoUrl.includes('/storage/v1/object/public/site-media/'),
+    directVideoUrl ? new URL(directVideoUrl).hostname : 'no public video URL found');
 
-  const diagAfterDirect = await api.get('/admin/diagnostics');
-  const diagDirectHtml = await diagAfterDirect.text();
-  const diagRows = [...diagDirectHtml.matchAll(/<td>([a-z_]+)<\/td>\s*<td>([^<]*)<\/td>\s*<td>([^<]*)<\/td>/g)];
-  const storedRow = diagRows.find((m) => m[1] === 'stored_files');
-  check('PostgreSQL stored_files metadata exists after direct upload',
-    Boolean(storedRow && Number.parseInt(storedRow[3].trim(), 10) >= 1),
-    storedRow ? 'rows=' + storedRow[3].trim() : 'stored_files row not found');
+  const createPost = appCreatePosts[appCreatePosts.length - 1];
+  check('no application POST sent a body over Vercel 4.5 MiB limit', oversizedAppPosts.length === 0,
+    oversizedAppPosts.length ? JSON.stringify(oversizedAppPosts) : '0 oversized first-party POSTs');
+  check('final content-form request stayed under 4.5 MiB',
+    Boolean(createPost && createPost.bytes < 4.5 * 1024 * 1024),
+    createPost ? createPost.bytes + ' bytes' : 'create request not observed');
+  check('the original video is absent from the final form payload',
+    Boolean(createPost && /jhd_direct\[featured_video\]\[\]/.test(createPost.body)
+      && !createPost.body.includes('filename="direct-large.mp4"')
+      && !createPost.body.includes(directVideo.toString('latin1').slice(0, 128))),
+    createPost ? createPost.bytes + ' byte metadata-only multipart payload' : 'create request not observed');
+  check('TUS PATCH requests transferred the full video from the browser directly to Storage',
+    storagePatchBodies.reduce((sum, bytes) => sum + bytes, 0) === directVideo.length
+      && storagePatchBodies.every((bytes) => bytes > 0),
+    storagePatchBodies.reduce((sum, bytes) => sum + bytes, 0) + ' bytes across ' + storagePatchBodies.length + ' chunks');
+
+  check('public detail page immediately displays the uploaded video',
+    directPublicResponse.status() === 200 && /<video\b/i.test(directPublicHtml)
+      && Boolean(directVideoUrl) && directPublicHtml.includes(directVideoUrl),
+    'HTTP ' + directPublicResponse.status());
+
+  if (directVideoUrl) {
+    const directAsset = await api.get(directVideoUrl, { timeout: 180000 });
+    const directAssetBytes = await directAsset.body();
+    check('full video is readable from public Supabase Storage',
+      directAsset.status() === 200 && directAssetBytes.length === directVideo.length,
+      'HTTP ' + directAsset.status() + ', ' + directAssetBytes.length + ' bytes');
+    const directBasename = decodeURIComponent(new URL(directVideoUrl).pathname.split('/').pop() || '');
+    const libraryResponse = await api.get('/admin/media/');
+    const libraryHtml = await libraryResponse.text();
+    const basenameOffset = libraryHtml.indexOf(directBasename);
+    const libraryRowSnippet = basenameOffset >= 0 ? libraryHtml.slice(basenameOffset, basenameOffset + 1000) : '';
+    check('PostgreSQL stored_files metadata has this video and its exact byte size',
+      libraryResponse.status() === 200 && basenameOffset >= 0
+        && libraryRowSnippet.includes(String(Math.round(directVideo.length / 1024)) + ' KB'),
+      directBasename + ' · expected ' + directVideo.length + ' bytes');
+  }
+
+  const diagAfterDirectResponse = await api.get('/admin/diagnostics');
+  const diagAfterDirectHtml = await diagAfterDirectResponse.text();
+  const storedFilesAfterDirect = diagnosticRow(diagAfterDirectHtml, 'stored_files');
+  const mediaFilesAfterDirect = diagnosticRow(diagAfterDirectHtml, 'media_files');
+  check('PostgreSQL recorded a new stored_files row',
+    storedFilesBeforeDirect !== null && storedFilesAfterDirect !== null
+      && storedFilesAfterDirect >= storedFilesBeforeDirect + 1,
+    'stored_files ' + storedFilesBeforeDirect + ' → ' + storedFilesAfterDirect);
+  check('PostgreSQL recorded the published video in media_files',
+    mediaFilesBeforeDirect !== null && mediaFilesAfterDirect !== null
+      && mediaFilesAfterDirect >= mediaFilesBeforeDirect + 1,
+    'media_files ' + mediaFilesBeforeDirect + ' → ' + mediaFilesAfterDirect);
 } catch (err) {
-  check('browser direct/resumable upload form flow', false, err?.message || String(err));
+  check('13 MiB browser direct/resumable video upload', false, err?.message || String(err));
 } finally {
   await browserContext.close().catch(() => {});
   await browser.close().catch(() => {});
