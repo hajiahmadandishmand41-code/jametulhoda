@@ -94,6 +94,10 @@ function contentStorageFolder(string $entity, int $id, array $context = []): str
     }
     if ($entity === 'lesson') {
         $collId = (int)($context['collection_id'] ?? 0);
+        $volumeId = (int)($context['volume_id'] ?? 0);
+        if ($collId > 0 && $volumeId > 0) {
+            return 'lessons/collection-' . $collId . '/volume-' . $volumeId . '/lesson-' . $id;
+        }
         if ($collId > 0) {
             return 'lessons/collection-' . $collId . '/lesson-' . $id;
         }
@@ -306,7 +310,7 @@ function supabaseStorageObjectInfo(string $key): array {
     if ($safe === '') return ['ok'=>false,'error'=>'Invalid key.'];
     [$status, $body, $error] = supabaseStorageRequest(
         'GET',
-        'object/info/' . rawurlencode(supabaseStorageBucket()) . '/' . implode('/', array_map('rawurlencode', explode('/', $safe)))
+        'object/info/public/' . rawurlencode(supabaseStorageBucket()) . '/' . implode('/', array_map('rawurlencode', explode('/', $safe)))
     );
     if ($status !== 200) return ['ok'=>false,'error'=>'Supabase object lookup failed (HTTP '.$status.').'.($error!==''?' '.$error:'')];
     $data = json_decode($body, true);
