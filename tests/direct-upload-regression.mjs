@@ -122,7 +122,7 @@ try {
         '<script defer src="/assets/js/upload-optimize.js"></script></head><body>' +
         '<form action="/admin/save" method="post" enctype="multipart/form-data">' +
         '<input type="hidden" name="csrf_token" value="test-csrf-token-with-more-than-twenty-characters">' +
-        '<label>ویدیوها <input type="file" name="video_files[]" accept="video/*" multiple></label>' +
+        '<label>ویدیوها <input type="file" name="video_files[]" accept="video/*" multiple required></label>' +
         '<button type="submit">ذخیره</button></form></body></html>';
       return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: html });
     }
