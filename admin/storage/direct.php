@@ -74,6 +74,11 @@ try {
             'path' => $key,
             'token' => (string)$signed['token'],
             'tus_endpoint' => supabaseTusEndpoint(),
+            // Direct signed PUT fallback: when the resumable route is not
+            // reachable the browser can still hand the file to Storage in one
+            // request, straight from the browser to Storage — never through
+            // the Vercel function, so the request-body limit cannot bite.
+            'signed_url' => (string)($signed['signed_url'] ?? ''),
             'bucket' => supabaseStorageBucket(),
             'public_url' => $public,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

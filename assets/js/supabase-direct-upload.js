@@ -64,7 +64,10 @@
     });
     var data = await r.json().catch(function(){ return {}; });
     if (!r.ok || !data.ok) throw new Error(data.error || 'دریافت مجوز آپلود مستقیم ناموفق بود.');
-    if (!data.tus_endpoint || !data.token || !data.path || !data.bucket) {
+    if (!data.token || !data.path || !data.bucket) {
+      throw new Error('مجوز Storage ناقص است؛ فایل ارسال نشد.');
+    }
+    if (!data.tus_endpoint && !data.signed_url) {
       throw new Error('مجوز Storage ناقص است؛ فایل ارسال نشد.');
     }
     return data;
@@ -72,6 +75,53 @@
 
   function b64(s) {
     return btoa(unescape(encodeURIComponent(s)));
+  }
+
+  /**
+   * One-shot signed upload: the browser hands the whole file to Storage in a
+   * single PUT against the signed URL the server issued.
+   *
+   * This is the documented fallback for the resumable route. It is also the
+   * only path that is safe on Vercel for a large file, because the bytes go
+   * straight from the browser to Storage and never touch the function's
+   * request body.
+   */
+  async function signedPutUpload(file, grant, status) {
+    if (!grant.signed_url) throw new Error('نشانی آپلود امضاشده در دسترس نیست.');
+    if (status) status.textContent = 'در حال آپلود مستقیم «' + file.name + '»…';
+    var put = await fetch(grant.signed_url, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': file.type || 'application/octet-stream',
+        'x-upsert': 'false',
+        'cache-control': '3600'
+      },
+      body: file
+    });
+    if (!put.ok) {
+      var body = await put.text().catch(function(){ return ''; });
+      throw new Error(storageErrorMessage(put.status, body) || 'آپلود امضاشدهٔ فایل ناموفق بود.');
+    }
+    if (status) status.textContent = 'آپلود مستقیم «' + file.name + '» کامل شد.';
+  }
+
+  /** Turn a Storage answer into a message an editor can act on. */
+  function storageErrorMessage(status, body) {
+    var text = String(body || '');
+    if (/invalid compact jws/i.test(text)) {
+      return 'Storage توکن آپلود امضاشده را نپذیرفت (Invalid Compact JWS). تنظیمات Supabase پروژه را بررسی کنید.';
+    }
+    if (status === 0) return '';
+    if (!text) return '';
+    try {
+      var parsed = JSON.parse(text);
+      if (parsed && (parsed.message || parsed.error)) {
+        return String(parsed.message || parsed.error);
+      }
+    } catch (_) {
+      /* not JSON — show the raw text */
+    }
+    return text.length > 300 ? text.slice(0, 300) : text;
   }
 
   async function tusUpload(file, grant, status) {
@@ -92,7 +142,8 @@
     });
     if (!create.ok) {
       var msg = await create.text().catch(function(){ return ''; });
-      throw new Error(msg || 'شروع آپلود resumable ناموفق بود.');
+      var detail = storageErrorMessage(create.status, msg);
+      throw new Error(detail || 'شروع آپلود resumable ناموفق بود.');
     }
     var location = create.headers.get('Location');
     if (!location) throw new Error('Storage نشانی ادامهٔ آپلود را برنگرداند.');
@@ -108,7 +159,10 @@
         headers: {
           'Tus-Resumable': '1.0.0',
           'Upload-Offset': String(offset),
-          'Content-Type': 'application/offset+octet-stream'
+          'Content-Type': 'application/offset+octet-stream',
+          // The signed token authorises every request of this upload, not
+          // only its creation; without it the chunk is rejected.
+          'x-signature': grant.token
         },
         body: chunk
       });
@@ -117,7 +171,7 @@
         // Ask the TUS server how many bytes it accepted before retrying.
         var head = await fetch(location, {
           method: 'HEAD',
-          headers: {'Tus-Resumable': '1.0.0'}
+          headers: {'Tus-Resumable': '1.0.0', 'x-signature': grant.token}
         }).catch(function(){ return null; });
         if (head && head.ok) {
           var serverOffset = parseInt(head.headers.get('Upload-Offset') || '', 10);
@@ -132,7 +186,8 @@
             continue;
           }
         }
-        throw new Error('ادامهٔ آپلود فایل در Storage ناموفق بود.');
+        var patchBody = await patch.text().catch(function(){ return ''; });
+        throw new Error(storageErrorMessage(patch.status, patchBody) || 'ادامهٔ آپلود فایل در Storage ناموفق بود.');
       }
       var next = parseInt(patch.headers.get('Upload-Offset') || '', 10);
       if (!Number.isFinite(next) || next <= offset || next > file.size) {
@@ -146,6 +201,30 @@
       }
     }
     if (offset !== file.size) throw new Error('آپلود فایل در Storage کامل نشد.');
+  }
+
+  /**
+   * Upload one file to Storage, resumable first and signed PUT second.
+   *
+   * The resumable route is preferred because it survives a dropped connection;
+   * the signed PUT is the documented fallback for a Storage deployment whose
+   * resumable route is unavailable. Both paths keep the file bytes out of the
+   * Vercel function, so neither can trip the 4.5 MB request-body limit.
+   */
+  async function uploadToStorage(file, grant, status) {
+    try {
+      await tusUpload(file, grant, status);
+      return;
+    } catch (error) {
+      var message = error && error.message ? error.message : '';
+      // Only a protocol/endpoint level failure justifies the fallback; a
+      // rejected file (wrong type, quota, existing object) must not be
+      // uploaded a second time.
+      var resumableBroken = /Invalid Compact JWS|نتوانست|ناموفق|بازگرداند|آفست/i.test(message);
+      if (!resumableBroken || !grant.signed_url) throw error;
+      if (status) status.textContent = 'آپلود resumable در دسترس نبود؛ آپلود امضاشدهٔ مستقیم…';
+      await signedPutUpload(file, grant, status);
+    }
   }
 
   async function finalizeUpload(grant, fileSize, csrf, useNativeFetch) {
@@ -305,7 +384,7 @@
           var kind = kindForInput(input, file);
           status.textContent = 'در حال آپلود مستقیم «' + file.name + '»…';
           var grant = await sign(file, kind);
-          await tusUpload(file, grant, status);
+          await uploadToStorage(file, grant, status);
           var path = await finalizeUpload(grant, file.size, csrfValue(), false);
           addHidden(form, input.name.replace(/\[\]$/, ''), path);
         }
@@ -404,7 +483,7 @@
         : /\.(doc|docx)$/i.test(value.name) ? 'word' : 'pdf';
       status.textContent = 'در حال آپلود مستقیم «' + value.name + '»…';
       var grant = await signWithCsrf(value, kind, csrf);
-      await tusUpload(value, grant, status);
+      await uploadToStorage(value, grant, status);
       await finalizeUpload(grant, value.size, csrf, nativeFetch);
       var field = key.replace(/\[(?:\d*)\]$/, '');
       formData.append('jhd_direct[' + field + '][]', grant.path);
@@ -443,7 +522,10 @@
     });
     var data = await r.json().catch(function(){ return {}; });
     if (!r.ok || !data.ok) throw new Error(data.error || 'مجوز آپلود مستقیم صادر نشد.');
-    if (!data.tus_endpoint || !data.token || !data.path || !data.bucket) {
+    if (!data.token || !data.path || !data.bucket) {
+      throw new Error('مجوز Storage ناقص است؛ فایل ارسال نشد.');
+    }
+    if (!data.tus_endpoint && !data.signed_url) {
       throw new Error('مجوز Storage ناقص است؛ فایل ارسال نشد.');
     }
     return data;
