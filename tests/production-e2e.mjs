@@ -53,6 +53,9 @@ const alertText = (html) => [...String(html).matchAll(/<div[^>]*class="[^"]*aler
   .filter(Boolean).join(' | ').slice(0, 500);
 
 const fixture = (name) => fs.readFileSync(new URL('./fixtures/' + name, import.meta.url));
+const imageBuffer = fixture('image.png');
+const videoBuffer = fixture('video.mp4');
+const audioBuffer = fixture('audio.mp3');
 const stamp = Date.now();
 const title = `e2e-audit-${stamp}`;
 // A minimal but structurally valid PDF (the %PDF- magic is validated server-side).
@@ -165,7 +168,7 @@ try {
   const directEditHtml = await page.content();
   const directPublicResponse = await api.get('/post.php?slug=' + encodeURIComponent(directTitle));
   const directPublicHtml = await directPublicResponse.text();
-  const videoUrlPattern = /https:\/\/[^"'<>\\s]+\/storage\/v1\/object\/public\/site-media\/[^"'<>\\s]+?\.mp4(?:\?[^"'<>\\s]*)?/i;
+  const videoUrlPattern = new RegExp("https://[^\\\"'<>\\s]+/storage/v1/object/public/site-media/[^\\\"'<>\\s]+?\\.mp4(?:\\?[^\\\"'<>\\s]*)?", "i");
   directVideoUrl = (directEditHtml.match(videoUrlPattern) || directPublicHtml.match(videoUrlPattern) || [''])[0];
   check('direct video resolves to the existing public Supabase bucket URL',
     Boolean(directVideoUrl) && directVideoUrl.includes('/storage/v1/object/public/site-media/'),
@@ -264,9 +267,6 @@ const createPage = await api.get('/admin/news/create.php');
 const createCsrf = csrfOf(await createPage.text());
 check('news create form', createPage.status() === 200 && Boolean(createCsrf), String(createPage.status()));
 
-const imageBuffer = fixture('image.png');
-const videoBuffer = fixture('video.mp4');
-const audioBuffer = fixture('audio.mp3');
 
 const create = await api.post('/admin/news/create.php', {
   timeout: 180000,
