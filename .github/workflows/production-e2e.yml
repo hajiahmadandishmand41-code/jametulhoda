@@ -49,6 +49,28 @@ jobs:
       - name: Install test dependencies
         run: npm install --no-audit --no-fund @playwright/test
 
+      - name: Resolve target URL
+        id: target
+        env:
+          TARGET_OVERRIDE: ${{ github.event_name == 'workflow_dispatch' && inputs.target || (github.ref == 'refs/heads/main' && 'https://jametulhoda.vercel.app' || '') }}
+          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+        run: |
+          if [ -n "$TARGET_OVERRIDE" ]; then
+            target_url="$TARGET_OVERRIDE"
+          else
+            branch_slug="$(printf '%s' "$BRANCH_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g')"
+            if [ -z "$branch_slug" ]; then
+              echo "Could not derive a preview alias from the branch name." >&2
+              exit 1
+            fi
+            target_url="https://jametulhoda-git-${branch_slug}-eshop4.vercel.app"
+          fi
+          case "$target_url" in
+            https://*) ;;
+            *) echo "Target URL must use HTTPS." >&2; exit 1 ;;
+          esac
+          echo "url=$target_url" >> "$GITHUB_OUTPUT"
+
       - name: Install the headless browser
         run: npx playwright install --with-deps chromium
 
@@ -66,9 +88,11 @@ jobs:
         id: probe
         continue-on-error: true
         env:
-          TEST_BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.target || (github.ref == 'refs/heads/main' && 'https://jametulhoda.vercel.app' || format('https://jametulhoda-git-{0}-eshop4.vercel.app', github.head_ref || github.ref_name)) }}
+          TEST_BASE_URL: ${{ steps.target.outputs.url }}
           PROBE_THROTTLE_MS: '400'
-        run: node tests/production-probe.mjs 2>&1 | tee probe-report.txt
+        run: |
+          set -o pipefail
+          node tests/production-probe.mjs 2>&1 | tee probe-report.txt
 
       # The report is published as a commit comment so it can be read through the
       # GitHub API alone, without access to the Actions log archive.
@@ -76,9 +100,10 @@ jobs:
         if: always() && github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TEST_BASE_URL: ${{ steps.target.outputs.url }}
         run: |
           {
-            echo "### Production probe — ${{ github.event_name == 'workflow_dispatch' && inputs.target || (github.ref == 'refs/heads/main' && 'https://jametulhoda.vercel.app' || format('https://jametulhoda-git-{0}-eshop4.vercel.app', github.head_ref || github.ref_name)) }}"
+            echo "### Production probe — $TEST_BASE_URL"
             echo
             echo "- commit: \`${GITHUB_SHA}\`"
             echo "- probe conclusion: ${{ steps.probe.outcome }}"
@@ -103,6 +128,28 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: Resolve target URL
+        id: target
+        env:
+          TARGET_OVERRIDE: ${{ github.event_name == 'workflow_dispatch' && inputs.target || (github.ref == 'refs/heads/main' && 'https://jametulhoda.vercel.app' || '') }}
+          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+        run: |
+          if [ -n "$TARGET_OVERRIDE" ]; then
+            target_url="$TARGET_OVERRIDE"
+          else
+            branch_slug="$(printf '%s' "$BRANCH_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g')"
+            if [ -z "$branch_slug" ]; then
+              echo "Could not derive a preview alias from the branch name." >&2
+              exit 1
+            fi
+            target_url="https://jametulhoda-git-${branch_slug}-eshop4.vercel.app"
+          fi
+          case "$target_url" in
+            https://*) ;;
+            *) echo "Target URL must use HTTPS." >&2; exit 1 ;;
+          esac
+          echo "url=$target_url" >> "$GITHUB_OUTPUT"
 
       # The audit needs real credentials. Without them it says so loudly and
       # stops, rather than reporting a pass it never earned.
@@ -129,7 +176,7 @@ jobs:
       - name: Run end-to-end audit
         if: steps.creds.outputs.ready == 'true'
         env:
-          TEST_BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.target || (github.ref == 'refs/heads/main' && 'https://jametulhoda.vercel.app' || format('https://jametulhoda-git-{0}-eshop4.vercel.app', github.head_ref || github.ref_name)) }}
+          TEST_BASE_URL: ${{ steps.target.outputs.url }}
           JHD_ADMIN_IDENTIFIER: ${{ secrets.JHD_ADMIN_IDENTIFIER }}
           JHD_ADMIN_PASSWORD: ${{ secrets.JHD_ADMIN_PASSWORD }}
           JHD_ADMIN_PASSWORD_ALT: ${{ secrets.JHD_ADMIN_PASSWORD_ALT }}
