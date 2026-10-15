@@ -226,6 +226,42 @@
     }
   }
 
+  function visibleStatus(form) {
+    var status = document.querySelector('[data-jhd-direct-status-global]');
+    if (!status) {
+      status = document.createElement('div');
+      status.setAttribute('data-jhd-direct-status-global', '');
+      status.setAttribute('role', 'status');
+      status.setAttribute('aria-live', 'polite');
+      status.className = 'alert alert-info shadow';
+      status.style.position = 'fixed';
+      status.style.top = '12px';
+      status.style.left = '12px';
+      status.style.right = '12px';
+      status.style.maxWidth = '760px';
+      status.style.margin = '0 auto';
+      status.style.zIndex = '2147483647';
+      status.style.whiteSpace = 'normal';
+      status.style.overflowWrap = 'anywhere';
+      document.body.appendChild(status);
+    }
+    if (form) status.dataset.formId = form.id || '';
+    return status;
+  }
+
+  function setStatus(status, message, failed) {
+    status.className = failed ? 'alert alert-danger shadow' : 'alert alert-info shadow';
+    status.textContent = message;
+    status.setAttribute('role', failed ? 'alert' : 'status');
+    status.style.display = 'block';
+  }
+
+  function setSubmitControlsDisabled(controls, disabled) {
+    controls.forEach(function (item) {
+      item.control.disabled = disabled ? true : item.wasDisabled;
+    });
+  }
+
   function formHandler(event) {
     var target = event.target;
     var form = target && target.closest ? target.closest('form') : null;
@@ -246,16 +282,12 @@
 
     event.preventDefault();
     form.dataset.jhdDirectBusy = '1';
-    var submitter = event.submitter;
-    var status = form.querySelector('[data-jhd-direct-status]');
-    if (!status) {
-      status = document.createElement('div');
-      status.setAttribute('data-jhd-direct-status', '');
-      status.setAttribute('role', 'status');
-      status.setAttribute('aria-live', 'polite');
-      status.className = 'alert alert-info py-2 mt-3';
-      form.appendChild(status);
-    }
+    var submitter = event.submitter || null;
+    var status = visibleStatus(form);
+    var submitControls = Array.prototype.slice.call(form.querySelectorAll('button[type="submit"], input[type="submit"], button:not([type])'))
+      .map(function (control) { return { control: control, wasDisabled: control.disabled }; });
+    setSubmitControlsDisabled(submitControls, true);
+    setStatus(status, 'آپلود مستقیم آغاز شد؛ این صفحه را نبندید. فایل‌ها به Storage منتقل می‌شوند، نه به Vercel.', false);
 
     (async function () {
       // Snapshot every File before touching FileList; when the aggregate is
@@ -278,7 +310,16 @@
           addHidden(form, input.name.replace(/\[\]$/, ''), path);
         }
         var keep = files.filter(function(file) { return directFiles.indexOf(file) === -1; });
-        if (keep.length !== files.length) replaceSelectedFiles(input, keep, files);
+        if (keep.length !== files.length) {
+          replaceSelectedFiles(input, keep, files);
+          // A cleared required file input fails native constraint validation even
+          // though its upload now lives in jhd_direct. Mark that requirement as
+          // satisfied by the verified staging reference.
+          if (directFiles.length > 0 && keep.length === 0 && input.required) {
+            input.required = false;
+            input.dataset.jhdDirectSatisfiedRequired = '1';
+          }
+        }
       }
 
       var remaining = activeFiles(form);
@@ -287,16 +328,40 @@
         throw new Error('تأیید نهایی انجام نشد: فایل بزرگ هنوز در payload فرم باقی مانده است.');
       }
     })().then(function () {
-      status.textContent = 'آپلود مستقیم کامل شد؛ در حال ذخیرهٔ اطلاعات…';
+      var remaining = activeFiles(form);
+      if (remaining.total > DIRECT_THRESHOLD
+          || remaining.entries.some(function(entry){ return entry.file.size > DIRECT_THRESHOLD; })) {
+        throw new Error('بررسی نهایی نشان داد که فایل بزرگ هنوز در فرم باقی است؛ برای جلوگیری از خطای 413 ارسال نشد.');
+      }
+      setSubmitControlsDisabled(submitControls, false);
       form.dataset.jhdDirectReady = '1';
       form.dataset.jhdDirectBusy = '0';
-      if (submitter && typeof form.requestSubmit === 'function') form.requestSubmit(submitter);
-      else if (typeof form.requestSubmit === 'function') form.requestSubmit();
-      else form.submit();
+
+      // Native requestSubmit() obeys browser validation. Report invalid fields
+      // explicitly; otherwise a cleared required file input looks like a dead button.
+      if (!form.checkValidity()) {
+        setStatus(status, 'آپلود فایل‌ها کامل شد، اما یکی از فیلدهای اجباری فرم تکمیل نیست. فیلد مشخص‌شده را بررسی کنید.', true);
+        if (typeof form.reportValidity === 'function') form.reportValidity();
+        form.dataset.jhdDirectReady = '0';
+        return;
+      }
+
+      setStatus(status, 'آپلود کامل شد؛ در حال ذخیرهٔ مطلب…', false);
+      try {
+        if (typeof form.requestSubmit === 'function') {
+          if (submitter && submitter.form === form && !submitter.disabled) form.requestSubmit(submitter);
+          else form.requestSubmit();
+        } else {
+          form.submit();
+        }
+      } catch (submitError) {
+        form.dataset.jhdDirectReady = '0';
+        setStatus(status, 'فایل‌ها آپلود شدند، اما ارسال فرم انجام نشد: ' + (submitError && submitError.message ? submitError.message : 'خطای مرورگر'), true);
+      }
     }).catch(function (err) {
       form.dataset.jhdDirectBusy = '0';
-      status.className = 'alert alert-danger py-2 mt-3';
-      status.textContent = err && err.message ? err.message : 'آپلود مستقیم ناموفق بود؛ فرم ارسال نشد.';
+      setSubmitControlsDisabled(submitControls, false);
+      setStatus(status, err && err.message ? err.message : 'آپلود مستقیم ناموفق بود؛ فرم ارسال نشد.', true);
     });
   }
 
