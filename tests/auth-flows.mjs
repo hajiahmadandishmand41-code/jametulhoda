@@ -143,6 +143,27 @@ const owner = await newClient();
     check('E malformed settings input is handled safely', malformedSettings.status() === 200 && !/(Warning|Fatal error|TypeError):/.test(malformedHtml), String(malformedSettings.status()));
     const noCsrf = await owner.post('/admin/settings', { form: { about_short: 'must not save' } });
     check('E settings changes require CSRF', noCsrf.status() === 403, String(noCsrf.status()));
+
+    // The homepage panel and the site settings are one form, but they are two
+    // independent configurations. A save that does not carry the homepage
+    // panel (an older client, a script, a bookmarklet) must NOT silently
+    // empty the homepage configuration.
+    const homepageBefore = await owner.get('/');
+    const homepageBeforeHtml = await homepageBefore.text();
+    const partialSave = await owner.post('/admin/settings', { form: {
+        csrf_token: (await csrfFrom(owner, '/admin/settings')).csrf,
+        site_name: 'جامعة‌الهدی', site_slogan: 'مرکز علمی و پژوهشی', about_short: safeAbout,
+        address: 'کابل، افغانستان', phone: '0798228441', email: `settings-${stamp}@example.test`,
+        social_telegram: `https://t.me/jhd_qa_${stamp}`, social_youtube: '', social_instagram: '',
+    }});
+    check('E partial settings save succeeds', partialSave.status() === 303, String(partialSave.status()));
+    const homepageAfter = await owner.get('/');
+    const homepageAfterHtml = await homepageAfter.text();
+    check('E a settings save without the homepage panel keeps the homepage layout',
+        homepageAfter.status() === 200
+        && homepageBeforeHtml.includes('id="home-lead-heading"') === homepageAfterHtml.includes('id="home-lead-heading"')
+        && homepageBeforeHtml.includes('id="home-media-heading"') === homepageAfterHtml.includes('id="home-media-heading"'),
+        String(homepageAfter.status()));
 }
 
 // ─── F/G: wrong password / unknown identifier never authenticate ──────────

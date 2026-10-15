@@ -715,13 +715,23 @@ function renderMediaCard(array $media, array $opts = []): string {
     $kind = (string)($media['kind'] ?? 'video');
     $id = (int)($media['id'] ?? 0);
     $title = (string)($media['title'] ?? ($media['post_title'] ?? ($kind === 'audio' ? 'صوت' : 'ویدیو')));
+    // A media file can hang from a post, from a lesson or from nothing at all.
+    // The link must follow the owner: a lesson that was filed as "audio" has
+    // no post route, so linking it to /post/<slug> produced a 404.
+    $target = (string)($media['target'] ?? '');
+    $slug = (string)($media['slug'] ?? $media['post_slug'] ?? '');
     $href = $opts['url'] ?? (
-        !empty($media['post_slug'])
-            ? postUrl([
-                'slug' => (string)$media['post_slug'],
+        $target === 'lesson' ? lessonUrl($slug)
+            : ($target === 'post' ? postUrl([
+                'slug' => $slug,
                 'post_type' => (string)($media['post_type'] ?? ''),
             ])
-            : mediaUrl($kind, $id)
+            : (!empty($media['post_slug'])
+                ? postUrl([
+                    'slug' => (string)$media['post_slug'],
+                    'post_type' => (string)($media['post_type'] ?? ''),
+                ])
+                : mediaUrl($kind, $id)))
     );
     $parent = trim((string)($media['post_title'] ?? $media['parent_title'] ?? ''));
     $meta = [];

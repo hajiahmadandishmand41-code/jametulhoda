@@ -1266,9 +1266,10 @@ function getLatestMediaItems(int $limit = 6): array {
     $sql = "SELECT m.id AS media_id, m.file_path AS path, m.kind AS media_kind, m.title AS media_title,
                    COALESCE(NULLIF(m.title,''), p.title, l.title, 'رسانه') AS title,
                    COALESCE(p.slug, l.slug, '') AS slug,
-                   COALESCE(p.post_type, 'media') AS post_type,
+                   COALESCE(p.post_type, '') AS post_type,
                    p.featured_image AS featured_image,
-                   COALESCE(p.published_at, l.created_at, m.created_at) AS published_at
+                   COALESCE(p.published_at, l.created_at, m.created_at) AS published_at,
+                   CASE WHEN p.id IS NOT NULL THEN 'post' WHEN l.id IS NOT NULL THEN 'lesson' ELSE 'media' END AS target
             FROM media_files m
             LEFT JOIN posts p   ON p.id = m.ref_id   AND m.ref_type = 'post'   AND p.status = 'published'
             LEFT JOIN lessons l ON l.id = m.ref_id   AND m.ref_type = 'lesson' AND l.status = 'published'

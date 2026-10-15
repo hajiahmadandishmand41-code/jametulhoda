@@ -318,25 +318,19 @@ require_once __DIR__ . '/includes/header.php';
             <?php if ($hub['kind'] === 'books'): ?>
             <div class="row g-3 jhd-home-card-grid">
                 <?php foreach ($hub['rows'] as $book): ?>
-                <div class="col-12 col-sm-6 col-lg-3">
-                    <?= renderBookCard($book) ?>
-                </div>
+                <?= renderBookCard($book, ['col' => 'col-12 col-sm-6 col-lg-3']) ?>
                 <?php endforeach; ?>
             </div>
             <?php elseif ($hub['kind'] === 'lessons'): ?>
             <div class="row g-3 jhd-home-card-grid">
                 <?php foreach ($hub['rows'] as $lesson): ?>
-                <div class="col-12 col-sm-6 col-lg-3">
-                    <?= renderLessonCard($lesson) ?>
-                </div>
+                <?= renderLessonCard($lesson, ['col' => 'col-12 col-sm-6 col-lg-3']) ?>
                 <?php endforeach; ?>
             </div>
             <?php else: ?>
             <div class="row g-3 jhd-home-card-grid">
                 <?php foreach ($hub['rows'] as $row): ?>
-                <div class="col-12 col-sm-6 col-lg-4">
-                    <?= renderPostCard($row) ?>
-                </div>
+                <?= renderPostCard($row, ['col' => 'col-12 col-sm-6 col-lg-4']) ?>
                 <?php endforeach; ?>
             </div>
             <?php endif; ?>
@@ -357,17 +351,16 @@ require_once __DIR__ . '/includes/header.php';
             ]) ?>
             <div class="row g-3 jhd-home-card-grid">
                 <?php foreach ($homeMedia as $item): ?>
-                <div class="col-12 col-sm-6 col-lg-3">
-                    <?= renderMediaCard([
-                        'kind'         => (string)($item['media_kind'] ?? 'video'),
-                        'id'           => (int)($item['media_id'] ?? 0),
-                        'title'        => (string)($item['title'] ?? ''),
-                        'post_slug'    => (string)($item['slug'] ?? ''),
-                        'post_type'    => (string)($item['post_type'] ?? ''),
-                        'published_at' => (string)($item['published_at'] ?? ''),
-                        'thumbnail'    => (string)($item['featured_image'] ?? ''),
-                    ]) ?>
-                </div>
+                <?= renderMediaCard([
+                    'kind'         => (string)($item['media_kind'] ?? 'video'),
+                    'id'           => (int)($item['media_id'] ?? 0),
+                    'title'        => (string)($item['title'] ?? ''),
+                    'slug'         => (string)($item['slug'] ?? ''),
+                    'target'       => (string)($item['target'] ?? ''),
+                    'post_type'    => (string)($item['post_type'] ?? ''),
+                    'published_at' => (string)($item['published_at'] ?? ''),
+                    'thumbnail'    => (string)($item['featured_image'] ?? ''),
+                ], ['col' => 'col-12 col-sm-6 col-lg-3']) ?>
                 <?php endforeach; ?>
             </div>
         </div>

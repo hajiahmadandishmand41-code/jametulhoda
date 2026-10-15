@@ -136,9 +136,14 @@ if (process.env.TEST_BASE_URL) {
 
   // 4) Homepage sections + unified news + footer Telegram button with text
   const homeHtml = await (await fetch(base + '/')).text();
-  for (const headingId of ['home-news-heading', 'home-articles-heading', 'home-reports-heading', 'home-books-heading', 'home-lessons-heading', 'home-events-heading']) {
+  // The homepage was rebuilt as an editorial front page: a lead-story block
+  // followed by the writing, books, lessons and media hubs. The section
+  // headings are the anchors this check protects.
+  for (const headingId of ['home-lead-heading', 'home-writing-heading', 'home-books-heading', 'home-lessons-heading', 'home-media-heading']) {
     assert.ok(homeHtml.includes(`id="${headingId}"`), `Homepage includes ${headingId}`);
   }
+  assert.ok(homeHtml.includes('class="jhd-lead"'), 'Homepage renders the lead story');
+  assert.ok(homeHtml.includes('class="jhd-about"'), 'Homepage renders the «معرفی مدرسه» band');
   assert.ok(homeHtml.includes('همهٔ اخبار'), 'Homepage includes همهٔ اخبار CTA');
   assert.ok(homeHtml.includes('social-link--telegram') && homeHtml.includes('<span>کانال تلگرام</span>'), 'Footer includes labeled Telegram button');
   assert.ok(afghanMonthsRe.test(homeHtml), 'Homepage renders Afghan Solar Hijri month names');

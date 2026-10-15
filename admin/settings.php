@@ -124,20 +124,36 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             }
         }
 
-        $postedSections = $_POST['homepage_sections'] ?? [];
-        if (!is_array($postedSections)) $postedSections = [];
-        foreach ($homepageSectionLabels as $sectionKey => $_label) {
-            $homepageEnabled[$sectionKey] = in_array($sectionKey, $postedSections, true);
-        }
-        $homepageHeroId = max(0, (int)($_POST['homepage_hero_post_id'] ?? 0));
-        if ($homepageHeroId > 0) {
-            $heroExists = false;
-            foreach ($homepagePosts as $hp) {
-                if ((int)$hp['id'] === $homepageHeroId) { $heroExists = true; break; }
+        /*
+         * چیدمان صفحهٔ اصلی فقط وقتی بازنویسی می‌شود که فرم واقعاً این بخش را
+         * هم فرستاده باشد. یک فرم HTML، تیک‌های خالی را اصلاً نمی‌فرستد، پس
+         * «بدون کلید» می‌تواند یا یعنی کاربر همه را برداشته، یا یعنی درخواست
+         * از جای دیگری آمده است (مثلاً یک اسکریپت قدیمی که فقط نام سایت را
+         * می‌فرستد). نشانگر پنهانِ فرم این دو را از هم جدا می‌کند: بدون آن،
+         * چیدمانِ ذخیره‌شده دست‌نخورده می‌ماند و با یک درخواست ناقص به‌طور
+         * تصادفی خالی نمی‌شود.
+         */
+        $homepagePanelPosted = !empty($_POST['homepage_sections_present']);
+        if ($homepagePanelPosted) {
+            $postedSections = $_POST['homepage_sections'] ?? [];
+            if (!is_array($postedSections)) $postedSections = [];
+            $postedSections = array_values(array_filter(array_map(
+                static fn($value) => is_string($value) ? $value : '',
+                $postedSections
+            )));
+            foreach ($homepageSectionLabels as $sectionKey => $_label) {
+                $homepageEnabled[$sectionKey] = in_array($sectionKey, $postedSections, true);
             }
-            if (!$heroExists) {
-                $homepageHeroId = 0;
-                $error = 'مطلب شاخص صفحه اصلی معتبر نیست؛ یک مطلب منتشرشده انتخاب کنید.';
+            $homepageHeroId = max(0, (int)($_POST['homepage_hero_post_id'] ?? 0));
+            if ($homepageHeroId > 0) {
+                $heroExists = false;
+                foreach ($homepagePosts as $hp) {
+                    if ((int)$hp['id'] === $homepageHeroId) { $heroExists = true; break; }
+                }
+                if (!$heroExists) {
+                    $homepageHeroId = 0;
+                    $error = 'مطلب شاخص صفحه اصلی معتبر نیست؛ یک مطلب منتشرشده انتخاب کنید.';
+                }
             }
         }
         $homepageConfigValue = json_encode([
@@ -238,6 +254,8 @@ $sets = array_merge($sets, $formValues);
                     <p class="admin-settings-help">هر تیک، یکی از بخش‌های صفحهٔ اصلی را روشن یا خاموش می‌کند و نتیجه <strong>بلافاصله</strong> در صفحهٔ نخست دیده می‌شود. خاموش کردن یک بخش، آن را از سایت حذف نمی‌کند: آرشیو، ناوبری «بیشتر»، فوتر و نقشهٔ سایت همیشه پابرجا می‌مانند.</p>
                     <div class="mb-4">
                         <label class="form-label fw-bold">بخش‌های قابل نمایش در صفحهٔ اصلی</label>
+                        <?php /* نشانگر پنهان: بدون آن، «تیکِ خالی» با «درخواستِ ناقص» فرقی ندارد. */ ?>
+                        <input type="hidden" name="homepage_sections_present" value="1">
                         <div class="row g-2">
                             <?php foreach ($homepageSectionLabels as $sectionKey => $sectionLabel): ?>
                             <div class="col-12 col-sm-6">
