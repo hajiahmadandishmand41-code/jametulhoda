@@ -2,6 +2,7 @@
 (function () {
   'use strict';
 
+  // Leave enough room for the multipart boundary and ordinary form fields on Vercel.
   var DIRECT_THRESHOLD = 3.5 * 1024 * 1024;
   var CHUNK_SIZE = 6 * 1024 * 1024;
   var csrfSelector = 'input[type="hidden"][name="csrf_token"], input[type="hidden"][name="_token"]';
@@ -29,15 +30,28 @@
     return 'pdf';
   }
 
-  function absolutePath(path) {
-    return path.replace(/^\/+/, '');
+  function activeFiles(form) {
+    var entries = [];
+    var total = 0;
+    form.querySelectorAll('input[type="file"]').forEach(function (input) {
+      Array.prototype.forEach.call(input.files || [], function (file) {
+        if (!file || !file.name || file.size < 1) return;
+        entries.push({ input: input, file: file });
+        total += file.size;
+      });
+    });
+    return { entries: entries, total: total };
   }
 
-  async function sign(file, kind) {
+  function absolutePath(path) {
+    return String(path || '').replace(/^\/+/, '');
+  }
+
+  async function sign(file, kind, csrf) {
     var body = new URLSearchParams();
     body.set('action', 'sign');
-    var csrf = csrfValue();
-    if (csrf) body.set('csrf_token', csrf);
+    var token = csrf || csrfValue();
+    if (token) body.set('csrf_token', token);
     body.set('name', file.name);
     body.set('size', String(file.size));
     body.set('mime', file.type || 'application/octet-stream');
@@ -50,6 +64,9 @@
     });
     var data = await r.json().catch(function(){ return {}; });
     if (!r.ok || !data.ok) throw new Error(data.error || 'دریافت مجوز آپلود مستقیم ناموفق بود.');
+    if (!data.tus_endpoint || !data.token || !data.path || !data.bucket) {
+      throw new Error('مجوز Storage ناقص است؛ فایل ارسال نشد.');
+    }
     return data;
   }
 
@@ -57,7 +74,7 @@
     return btoa(unescape(encodeURIComponent(s)));
   }
 
-  async function tusUpload(file, grant) {
+  async function tusUpload(file, grant, status) {
     var meta = [
       'bucketName ' + b64(grant.bucket),
       'objectName ' + b64(absolutePath(grant.path)),
@@ -79,8 +96,10 @@
     }
     var location = create.headers.get('Location');
     if (!location) throw new Error('Storage نشانی ادامهٔ آپلود را برنگرداند.');
+    location = new URL(location, grant.tus_endpoint).toString();
 
     var offset = 0;
+    var retries = 0;
     while (offset < file.size) {
       var end = Math.min(offset + CHUNK_SIZE, file.size);
       var chunk = file.slice(offset, end);
@@ -95,42 +114,49 @@
       });
 
       if (!patch.ok) {
-        // Re-read the server offset so a transient network failure can resume
-        // without retransmitting the already accepted bytes.
+        // Ask the TUS server how many bytes it accepted before retrying.
         var head = await fetch(location, {
           method: 'HEAD',
           headers: {'Tus-Resumable': '1.0.0'}
         }).catch(function(){ return null; });
         if (head && head.ok) {
           var serverOffset = parseInt(head.headers.get('Upload-Offset') || '', 10);
-          if (Number.isFinite(serverOffset) && serverOffset >= offset && serverOffset <= file.size) {
+          if (Number.isFinite(serverOffset) && serverOffset > offset && serverOffset <= file.size) {
             offset = serverOffset;
+            retries = 0;
+            continue;
+          }
+          if (serverOffset === offset && retries < 3) {
+            retries++;
+            await new Promise(function(resolve){ setTimeout(resolve, retries * 500); });
             continue;
           }
         }
         throw new Error('ادامهٔ آپلود فایل در Storage ناموفق بود.');
       }
       var next = parseInt(patch.headers.get('Upload-Offset') || '', 10);
-      if (!Number.isFinite(next) || next <= offset) throw new Error('Storage آفست معتبر برنگرداند.');
+      if (!Number.isFinite(next) || next <= offset || next > file.size) {
+        throw new Error('Storage آفست معتبر برنگرداند.');
+      }
       offset = next;
+      retries = 0;
       if (status) {
         var percent = file.size > 0 ? Math.min(100, Math.round((offset / file.size) * 100)) : 100;
         status.textContent = 'در حال آپلود مستقیم «' + file.name + '» — ' + percent + '%';
       }
     }
+    if (offset !== file.size) throw new Error('آپلود فایل در Storage کامل نشد.');
   }
 
-  async function uploadFile(file, kind, status) {
-    status.textContent = 'در حال آپلود مستقیم «' + file.name + '»…';
-    var grant = await sign(file, kind);
-    await tusUpload(file, grant);
+  async function finalizeUpload(grant, fileSize, csrf, useNativeFetch) {
     var verifyBody = new URLSearchParams();
     verifyBody.set('action', 'finalize');
-    var csrf = csrfValue();
-    if (csrf) verifyBody.set('csrf_token', csrf);
+    var token = csrf || csrfValue();
+    if (token) verifyBody.set('csrf_token', token);
     verifyBody.set('path', grant.path);
-    verifyBody.set('size', String(file.size));
-    var verify = await fetch('/admin/storage/direct', {
+    verifyBody.set('size', String(fileSize));
+    var send = useNativeFetch || window.fetch;
+    var verify = await send('/admin/storage/direct', {
       method: 'POST',
       credentials: 'same-origin',
       headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'},
@@ -138,6 +164,7 @@
     });
     var result = await verify.json().catch(function(){ return {}; });
     if (!verify.ok || !result.ok) throw new Error(result.error || 'تأیید فایل مستقیم ناموفق بود.');
+    if (Number(result.size) !== fileSize) throw new Error('حجم تأییدشدهٔ Storage با فایل اصلی برابر نیست.');
     return grant.path;
   }
 
@@ -149,43 +176,73 @@
     form.appendChild(input);
   }
 
-  async function prepareForm(form, submitter, status) {
-    var inputs = Array.prototype.slice.call(form.querySelectorAll('input[type="file"]'));
-    for (var i = 0; i < inputs.length; i++) {
-      var input = inputs[i];
-      var files = Array.prototype.slice.call(input.files || []);
-      for (var j = 0; j < files.length; j++) {
-        var file = files[j];
-        if (file.size <= DIRECT_THRESHOLD) continue;
-        var kind = kindForInput(input, file);
-        var path = await uploadFile(file, kind, status);
-        addHidden(form, input.name.replace(/\[\]$/, ''), path);
+  function replaceSelectedFiles(input, keep, original) {
+    if (keep.length === original.length) return;
+    var assigned = false;
+    try {
+      if (typeof DataTransfer === 'function') {
+        var dt = new DataTransfer();
+        keep.forEach(function (file) { dt.items.add(file); });
+        input.files = dt.files;
+        var actual = Array.prototype.slice.call(input.files || []);
+        assigned = actual.length === keep.length && actual.every(function (file, index) {
+          return file === keep[index];
+        });
       }
-      // Keep small files for the original PHP multipart path; remove only
-      // files already copied directly to Supabase.
-      var keep = files.filter(function (f) { return f.size <= DIRECT_THRESHOLD; });
-      if (keep.length !== files.length) {
-        try {
-          var dt = new DataTransfer();
-          keep.forEach(function (f) { dt.items.add(f); });
-          input.files = dt.files;
-        } catch (_) {
-          input.value = '';
-        }
+    } catch (_) {
+      assigned = false;
+    }
+
+    if (!assigned) {
+      // Older mobile browsers may not permit replacing FileList. Clearing is
+      // safe for large-file privacy, but do not silently drop selected small files.
+      input.value = '';
+      var afterClear = Array.prototype.slice.call(input.files || []);
+      if (afterClear.some(function (file) { return file.size > DIRECT_THRESHOLD; })) {
+        throw new Error('مرورگر نتوانست فایل بزرگ را از فرم جدا کند؛ فرم ارسال نشد.');
+      }
+      if (keep.length > 0) {
+        throw new Error('آپلود مستقیم انجام شد، اما مرورگر قدیمی اجازهٔ نگه‌داشتن فایل‌های کوچک را نداد. فایل‌های کوچک را جداگانه دوباره انتخاب کنید.');
+      }
+    }
+
+    var remaining = Array.prototype.slice.call(input.files || []);
+    if (remaining.some(function (file) { return file.size > DIRECT_THRESHOLD; })) {
+      input.value = '';
+      remaining = Array.prototype.slice.call(input.files || []);
+      if (remaining.some(function (file) { return file.size > DIRECT_THRESHOLD; })) {
+        throw new Error('فایل اصلی هنوز به فرم متصل است؛ برای جلوگیری از خطای 413 ارسال متوقف شد.');
+      }
+      if (keep.length > 0) {
+        throw new Error('مرورگر نتوانست فایل‌های کوچک را نگه دارد؛ آن‌ها را جداگانه دوباره انتخاب کنید.');
+      }
+    }
+    if (assigned) {
+      var finalFiles = Array.prototype.slice.call(input.files || []);
+      if (finalFiles.length !== keep.length || !finalFiles.every(function(file,index){return file === keep[index];})) {
+        input.value = '';
+        throw new Error('فهرست فایل‌های فرم پس از آپلود مستقیم قابل تأیید نیست؛ ارسال متوقف شد.');
       }
     }
   }
 
   function formHandler(event) {
-    var form = event.target.closest ? event.target.closest('form[enctype="multipart/form-data"]') : null;
-    if (!form || form.dataset.jhdDirectBusy === '1' || form.dataset.jhdDirectReady === '1') return;
-    var hasLarge = false;
-    form.querySelectorAll('input[type="file"]').forEach(function (input) {
-      Array.prototype.forEach.call(input.files || [], function (file) {
-        if (file.size > DIRECT_THRESHOLD) hasLarge = true;
-      });
-    });
-    if (!hasLarge) return;
+    var target = event.target;
+    var form = target && target.closest ? target.closest('form') : null;
+    if (!form) return;
+
+    // A second submit while TUS is still uploading must never fall through to
+    // the browser's native multipart request.
+    if (form.dataset.jhdDirectBusy === '1') {
+      event.preventDefault();
+      return;
+    }
+    if (form.dataset.jhdDirectReady === '1') return;
+
+    var selected = activeFiles(form);
+    // Moving the complete selection when its combined size crosses the safe
+    // threshold also protects multi-file forms from aggregate 413 responses.
+    if (selected.total <= DIRECT_THRESHOLD) return;
 
     event.preventDefault();
     form.dataset.jhdDirectBusy = '1';
@@ -200,33 +257,63 @@
       form.appendChild(status);
     }
 
-    prepareForm(form, submitter, status).then(function () {
+    (async function () {
+      // Snapshot every File before touching FileList; when the aggregate is
+      // above threshold all named files are moved, not merely the largest one.
+      var directAll = selected.total > DIRECT_THRESHOLD;
+      var inputs = Array.prototype.slice.call(form.querySelectorAll('input[type="file"]'));
+      for (var i = 0; i < inputs.length; i++) {
+        var input = inputs[i];
+        var files = Array.prototype.slice.call(input.files || []);
+        var directFiles = files.filter(function(file) {
+          return file && file.name && file.size > 0 && (directAll || file.size > DIRECT_THRESHOLD);
+        });
+        for (var j = 0; j < directFiles.length; j++) {
+          var file = directFiles[j];
+          var kind = kindForInput(input, file);
+          status.textContent = 'در حال آپلود مستقیم «' + file.name + '»…';
+          var grant = await sign(file, kind);
+          await tusUpload(file, grant, status);
+          var path = await finalizeUpload(grant, file.size, csrfValue(), false);
+          addHidden(form, input.name.replace(/\[\]$/, ''), path);
+        }
+        var keep = files.filter(function(file) { return directFiles.indexOf(file) === -1; });
+        if (keep.length !== files.length) replaceSelectedFiles(input, keep, files);
+      }
+
+      var remaining = activeFiles(form);
+      if (remaining.total > DIRECT_THRESHOLD
+          || remaining.entries.some(function(entry){ return entry.file.size > DIRECT_THRESHOLD; })) {
+        throw new Error('تأیید نهایی انجام نشد: فایل بزرگ هنوز در payload فرم باقی مانده است.');
+      }
+    })().then(function () {
       status.textContent = 'آپلود مستقیم کامل شد؛ در حال ذخیرهٔ اطلاعات…';
       form.dataset.jhdDirectReady = '1';
       form.dataset.jhdDirectBusy = '0';
       if (submitter && typeof form.requestSubmit === 'function') form.requestSubmit(submitter);
+      else if (typeof form.requestSubmit === 'function') form.requestSubmit();
       else form.submit();
     }).catch(function (err) {
       form.dataset.jhdDirectBusy = '0';
       status.className = 'alert alert-danger py-2 mt-3';
-      status.textContent = err && err.message ? err.message : 'آپلود مستقیم ناموفق بود.';
+      status.textContent = err && err.message ? err.message : 'آپلود مستقیم ناموفق بود؛ فرم ارسال نشد.';
     });
   }
 
-  // AJAX endpoints that send FormData (gallery/media management): lift large
-  // File objects out of the request body and replace them with jhd_direct keys.
+  // AJAX endpoints (gallery/media management): move the selected batch to TUS
+  // when its combined size exceeds the same safe threshold.
   var nativeFetch = window.fetch.bind(window);
   window.fetch = async function (input, init) {
     var body = init && init.body;
     if (!(body instanceof FormData)) return nativeFetch(input, init);
 
     var originalEntries = [];
-    var hasLarge = false;
+    var fileBytes = 0;
     body.forEach(function (value, key) {
       originalEntries.push([key, value]);
-      if (value instanceof File && value.size > DIRECT_THRESHOLD) hasLarge = true;
+      if (value instanceof File && value.name && value.size > 0) fileBytes += value.size;
     });
-    if (!hasLarge) return nativeFetch(input, init);
+    if (fileBytes <= DIRECT_THRESHOLD) return nativeFetch(input, init);
 
     var csrf = csrfValue(body);
     var formData = new FormData();
@@ -242,7 +329,7 @@
 
     for (var i = 0; i < originalEntries.length; i++) {
       var key = originalEntries[i][0], value = originalEntries[i][1];
-      if (!(value instanceof File) || value.size <= DIRECT_THRESHOLD) {
+      if (!(value instanceof File) || !value.name || value.size < 1) {
         formData.append(key, value);
         continue;
       }
@@ -250,19 +337,20 @@
         : (value.type || '').indexOf('audio/') === 0 ? 'audio'
         : (value.type || '').indexOf('video/') === 0 ? 'video'
         : /\.(doc|docx)$/i.test(value.name) ? 'word' : 'pdf';
-      var grant = await signWithCsrf(value, kind, csrf);
       status.textContent = 'در حال آپلود مستقیم «' + value.name + '»…';
-      await tusUpload(value, grant);
-      var verifyBody = new URLSearchParams();
-      verifyBody.set('action', 'finalize'); verifyBody.set('path', grant.path); verifyBody.set('size', String(value.size));
-      var verify = await nativeFetch('/admin/storage/direct', {
-        method:'POST', credentials:'same-origin',
-        headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'},
-        body: verifyBody.toString()
-      });
-      var verified = await verify.json().catch(function(){ return {}; });
-      if (!verify.ok || !verified.ok) throw new Error(verified.error || 'تأیید فایل مستقیم ناموفق بود.');
-      formData.append('jhd_direct[' + key.replace(/\[\]$/, '') + '][]', grant.path);
+      var grant = await signWithCsrf(value, kind, csrf);
+      await tusUpload(value, grant, status);
+      await finalizeUpload(grant, value.size, csrf, nativeFetch);
+      var field = key.replace(/\[(?:\d*)\]$/, '');
+      formData.append('jhd_direct[' + field + '][]', grant.path);
+    }
+
+    var remainingBytes = 0;
+    formData.forEach(function(value) {
+      if (value instanceof File && value.name && value.size > 0) remainingBytes += value.size;
+    });
+    if (remainingBytes > DIRECT_THRESHOLD) {
+      throw new Error('یک فایل بزرگ در درخواست AJAX باقی مانده است؛ ارسال متوقف شد.');
     }
 
     var nextInit = Object.assign({}, init, {body: formData});
@@ -276,12 +364,23 @@
 
   async function signWithCsrf(file, kind, csrf) {
     var body = new URLSearchParams();
-    body.set('action','sign'); body.set('name',file.name); body.set('size',String(file.size));
-    body.set('mime',file.type || 'application/octet-stream'); body.set('kind',kind);
+    body.set('action', 'sign');
+    body.set('name', file.name);
+    body.set('size', String(file.size));
+    body.set('mime', file.type || 'application/octet-stream');
+    body.set('kind', kind);
     if (csrf) body.set('csrf_token', csrf);
-    var r = await nativeFetch('/admin/storage/direct', {method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'},body:body.toString()});
+    var r = await nativeFetch('/admin/storage/direct', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'},
+      body: body.toString()
+    });
     var data = await r.json().catch(function(){ return {}; });
     if (!r.ok || !data.ok) throw new Error(data.error || 'مجوز آپلود مستقیم صادر نشد.');
+    if (!data.tus_endpoint || !data.token || !data.path || !data.bucket) {
+      throw new Error('مجوز Storage ناقص است؛ فایل ارسال نشد.');
+    }
     return data;
   }
 

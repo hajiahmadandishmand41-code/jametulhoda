@@ -191,7 +191,14 @@
   document.addEventListener('submit', function (event) {
     if (busy) return;
     var form = event.target;
-    if (!form || form.tagName !== 'FORM' || form.dataset.uploadOptimized === 'done') return;
+    if (!form || form.tagName !== 'FORM') return;
+    // The direct/resumable bridge owns this submit. Running image optimisation
+    // in parallel would schedule requestSubmit() while TUS is still uploading.
+    if (form.dataset.jhdDirectBusy === '1') {
+      event.preventDefault();
+      return;
+    }
+    if (form.dataset.uploadOptimized === 'done') return;
     var inputs = form.querySelectorAll('input[type="file"]');
     var hasFiles = Array.prototype.some.call(inputs, function (input) { return input.files && input.files.length; });
     if (!hasFiles) return; // Text-only edits must submit normally, without an upload detour.

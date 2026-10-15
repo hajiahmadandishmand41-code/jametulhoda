@@ -52,6 +52,16 @@ jobs:
       - name: Install the headless browser
         run: npx playwright install --with-deps chromium
 
+      - name: Check upload scripts and E2E syntax
+        run: |
+          node --check assets/js/supabase-direct-upload.js
+          node --check assets/js/upload-optimize.js
+          node --check tests/direct-upload-regression.mjs
+          node --check tests/production-e2e.mjs
+
+      - name: Verify large-file direct/resumable submit invariant
+        run: npm run test:direct-upload
+
       - name: Probe the live deployment
         id: probe
         continue-on-error: true

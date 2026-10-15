@@ -6,6 +6,7 @@
     "test:http": "node tests/http.mjs",
     "test:routes": "node tests/route-smoke.mjs",
     "test:browser": "node tests/browser.mjs",
+    "test:direct-upload": "node tests/direct-upload-regression.mjs",
     "build:hero": "node tools/build-hero.mjs",
     "test:links": "node tests/links.mjs"
   },
