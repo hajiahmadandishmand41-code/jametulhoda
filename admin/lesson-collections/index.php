@@ -2,7 +2,7 @@
 /**
  * admin/lesson-collections/index.php — مدیریت مجموعه‌ها و جلدها (ساختار درس: مجموعه → جلد → درس)
  */
-$adminTitle='مجموعه‌های درسی';
+$adminTitle='پوشه‌بندی درس‌ها';
 require_once __DIR__ . '/../includes/header.php';
 
 $db=getDB();
@@ -103,9 +103,21 @@ if(isset($_POST['save_volume'])){
         else{
             $slug=uniqueSlug('lesson_volumes',$title,$editId);
             // Ensure slug unique within collection — our uniqueSlug checks globally, adjust if need
-            if($editId){ $db->prepare("UPDATE lesson_volumes SET title=?, slug=?, description=?, sort_order=?, updated_at=NOW() WHERE id=?")->execute([$title,$slug,$desc,$sort,$editId]); }
-            else{ $db->prepare("INSERT INTO lesson_volumes (collection_id,title,slug,description,sort_order) VALUES (?,?,?,?,?)")->execute([$colId,$title,$slug,$desc,$sort]); }
-            $_SESSION['flash_msg']='جلد ذخیره شد.'; $_SESSION['flash_type']='success'; redirect(siteUrl('admin/lesson-collections/'));
+            if($editId){
+                $db->beginTransaction();
+                try {
+                    $db->prepare("UPDATE lesson_volumes SET collection_id=?, title=?, slug=?, description=?, sort_order=?, updated_at=NOW() WHERE id=?")->execute([$colId,$title,$slug,$desc,$sort,$editId]);
+                    $db->prepare("UPDATE lessons SET collection_id=?, updated_at=NOW() WHERE volume_id=?")->execute([$colId,$editId]);
+                    $db->commit();
+                } catch(Throwable $e) {
+                    if($db->inTransaction()) $db->rollBack();
+                    error_log('lesson folder move failed: '.get_class($e));
+                    $error='تغییر پوشهٔ فرعی ذخیره نشد؛ دوباره تلاش کنید.';
+                }
+            } else {
+                $db->prepare("INSERT INTO lesson_volumes (collection_id,title,slug,description,sort_order) VALUES (?,?,?,?,?)")->execute([$colId,$title,$slug,$desc,$sort]);
+            }
+            if(!$error){ $_SESSION['flash_msg']='پوشهٔ فرعی ذخیره شد.'; $_SESSION['flash_type']='success'; redirect(siteUrl('admin/lesson-collections/')); }
         }
     }
 }
@@ -115,21 +127,22 @@ $editVol=null; if(!empty($_GET['edit_volume'])){ $s=$db->prepare("SELECT * FROM 
 $collections=getLessonCollections(['active'=>null]); // all
 ?>
 <div class="d-flex justify-content-between align-items-center mb-4">
-<h5 class="mb-0"><i class="bi bi-collection ms-2"></i> مجموعه‌های درسی</h5>
-<span class="text-muted small"><?= count($collections) ?> مجموعه</span>
+<h5 class="mb-0"><i class="bi bi-collection ms-2"></i> پوشه‌بندی درس‌ها</h5>
+<span class="text-muted small"><?= count($collections) ?> پوشهٔ اصلی</span>
 </div>
+<p class="text-muted small mb-3">ابتدا پوشهٔ اصلی را بسازید؛ مثلاً «صرف». سپس در بخش پوشهٔ فرعی، «صرف اول» را زیر همان پوشه ایجاد کنید. هنگام ساخت درس، پوشهٔ اصلی و فرعی آن را انتخاب کنید تا درس در جای درست قرار بگیرد.</p>
 <?php if($error): ?><div class="alert alert-danger"><?= sanitize($error) ?></div><?php endif; ?>
 
 <div class="row g-4">
 <div class="col-lg-4">
 <div class="admin-card">
-<div class="admin-card-header"><?= $editCol?'<i class="bi bi-pencil ms-2"></i> ویرایش مجموعه':'<i class="bi bi-plus-circle ms-2"></i> مجموعه جدید' ?></div>
+<div class="admin-card-header"><?= $editCol?'<i class="bi bi-pencil ms-2"></i> ویرایش پوشهٔ اصلی':'<i class="bi bi-plus-circle ms-2"></i> پوشهٔ اصلی جدید' ?></div>
 <div class="admin-card-body">
 <form method="post" enctype="multipart/form-data" class="admin-form">
 <?= csrfField() ?>
 <input type="hidden" name="save_collection" value="1">
 <?php if($editCol): ?><input type="hidden" name="edit_id" value="<?= (int)$editCol['id'] ?>"><?php endif; ?>
-<div class="mb-3"><label class="form-label">عنوان مجموعه <span class="text-danger">*</span></label><input type="text" name="title" class="form-control" value="<?= sanitize($editCol['title'] ?? '') ?>" required placeholder="مثلاً: لمعه دمشقیه"></div>
+<div class="mb-3"><label class="form-label">عنوان پوشهٔ اصلی <span class="text-danger">*</span></label><input type="text" name="title" class="form-control" value="<?= sanitize($editCol['title'] ?? '') ?>" required placeholder="مثلاً: صرف"></div>
 <div class="mb-3"><label class="form-label">توضیح</label><textarea name="description" class="form-control" rows="3"><?= sanitize($editCol['description'] ?? '') ?></textarea></div>
 <div class="mb-3"><label class="form-label">کاور</label><input type="file" name="cover_image" class="form-control" accept="image/*"><?php if($editCol && $editCol['cover_image']): ?><img src="<?= imgUrl($editCol['cover_image']) ?>" style="max-width:120px;border-radius:8px;margin-top:8px"><?php endif; ?></div>
 <div class="row g-2 mb-3"><div class="col-6"><label class="form-label">ترتیب</label><input type="number" name="sort_order" class="form-control" value="<?= $editCol['sort_order'] ?? 0 ?>"></div><div class="col-6 d-flex flex-column justify-content-end gap-2"><label class="form-check"><input type="checkbox" name="is_active" class="form-check-input" <?= ($editCol['is_active']??1)?'checked':'' ?>> فعال</label><label class="form-check"><input type="checkbox" name="is_featured" class="form-check-input" <?= ($editCol['is_featured']??0)?'checked':'' ?>> ویژه</label></div></div>
@@ -140,22 +153,22 @@ $collections=getLessonCollections(['active'=>null]); // all
 
 <!-- فرم جلد -->
 <div class="admin-card mt-4">
-<div class="admin-card-header"><?= $editVol?'<i class="bi bi-pencil ms-2"></i> ویرایش جلد':'<i class="bi bi-plus-square ms-2"></i> جلد / بخش جدید' ?></div>
+<div class="admin-card-header"><?= $editVol?'<i class="bi bi-pencil ms-2"></i> ویرایش پوشهٔ فرعی':'<i class="bi bi-plus-square ms-2"></i> پوشهٔ فرعی جدید' ?></div>
 <div class="admin-card-body">
 <form method="post" class="admin-form">
 <?= csrfField() ?>
 <input type="hidden" name="save_volume" value="1">
 <?php if($editVol): ?><input type="hidden" name="volume_edit_id" value="<?= (int)$editVol['id'] ?>"><?php endif; ?>
-<div class="mb-3"><label class="form-label">مجموعه</label>
+<div class="mb-3"><label class="form-label">پوشهٔ اصلی</label>
 <select name="collection_id" class="form-select" required>
-<option value="">انتخاب مجموعه...</option>
+<option value="">انتخاب پوشهٔ اصلی...</option>
 <?php foreach($collections as $c): ?><option value="<?= $c['id'] ?>" <?= ($editVol && $editVol['collection_id']==$c['id'])?'selected':'' ?>><?= sanitize($c['title']) ?></option><?php endforeach; ?>
 </select>
 </div>
-<div class="mb-3"><label class="form-label">عنوان جلد/بخش <span class="text-danger">*</span></label><input type="text" name="volume_title" class="form-control" value="<?= sanitize($editVol['title'] ?? '') ?>" required placeholder="مثلاً: جلد اول"></div>
+<div class="mb-3"><label class="form-label">عنوان پوشهٔ فرعی <span class="text-danger">*</span></label><input type="text" name="volume_title" class="form-control" value="<?= sanitize($editVol['title'] ?? '') ?>" required placeholder="مثلاً: صرف اول"></div>
 <div class="mb-3"><label class="form-label">توضیح</label><textarea name="volume_description" class="form-control" rows="2"><?= sanitize($editVol['description'] ?? '') ?></textarea></div>
 <div class="mb-3"><label class="form-label">ترتیب</label><input type="number" name="volume_sort" class="form-control" value="<?= $editVol['sort_order'] ?? 0 ?>"></div>
-<div class="d-flex gap-2 admin-form-bar"><button class="btn btn-primary flex-grow-1" type="submit"><i class="bi bi-<?= $editVol?'save':'plus-square' ?> ms-1"></i> <?= $editVol?'ذخیره':'ایجاد جلد' ?></button><?php if($editVol): ?><a href="<?= siteUrl('admin/lesson-collections/') ?>" class="btn btn-outline-secondary">انصراف</a><?php endif; ?></div>
+<div class="d-flex gap-2 admin-form-bar"><button class="btn btn-primary flex-grow-1" type="submit"><i class="bi bi-<?= $editVol?'save':'plus-square' ?> ms-1"></i> <?= $editVol?'ذخیره':'ایجاد پوشهٔ فرعی' ?></button><?php if($editVol): ?><a href="<?= siteUrl('admin/lesson-collections/') ?>" class="btn btn-outline-secondary">انصراف</a><?php endif; ?></div>
 </form>
 </div>
 </div>
@@ -175,10 +188,10 @@ $collections=getLessonCollections(['active'=>null]); // all
 </div>
 <div class="admin-card-body">
 <?php if($col['description']): ?><p class="text-muted small"><?= sanitize($col['description']) ?></p><?php endif; ?>
-<?php if(empty($vols)): ?><div class="text-muted small">جلدی ثبت نشده — از فرم کنار جلد اضافه کنید.</div>
+<?php if(empty($vols)): ?><div class="text-muted small">پوشهٔ فرعی ثبت نشده — از فرم کنار جلد اضافه کنید.</div>
 <?php else: ?>
 <div class="table-responsive"><table class="table admin-table mb-0">
-<thead><tr><th>عنوان جلد</th><th>ترتیب</th><th>درس‌ها</th><th>عملیات</th></tr></thead>
+<thead><tr><th>پوشهٔ فرعی</th><th>ترتیب</th><th>درس‌ها</th><th>عملیات</th></tr></thead>
 <tbody>
 <?php foreach($vols as $v): $cnt=count(getLessonsByCollection((int)$col['id'], (int)$v['id'])); ?>
 <tr>

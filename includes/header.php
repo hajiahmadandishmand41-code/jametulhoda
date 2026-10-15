@@ -393,7 +393,7 @@ if (!$noindexSeo) {
             </a>
             <?php endif; ?>
             </div>
-            <a class="jhd-icon-btn d-md-none" href="<?= $isMemberLoggedIn ? accountUrl() : loginUrl() ?>" aria-label="حساب کاربری"><i class="bi bi-person-circle"></i></a>
+            <a class="jhd-icon-btn d-md-none" href="<?= $isMemberLoggedIn ? accountUrl() : registerUrl() ?>" aria-label="ثبت‌نام و حساب کاربری"><i class="bi bi-person-circle"></i></a>
             <?php endif; ?>
 
             <button type="button" id="menuToggle" class="jhd-icon-btn d-lg-none" aria-label="باز کردن منو" aria-expanded="false" aria-controls="siteDrawer"><i class="bi bi-list"></i></button>

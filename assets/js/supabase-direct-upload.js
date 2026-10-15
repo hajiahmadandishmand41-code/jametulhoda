@@ -220,7 +220,7 @@
       // Only a protocol/endpoint level failure justifies the fallback; a
       // rejected file (wrong type, quota, existing object) must not be
       // uploaded a second time.
-      var resumableBroken = /Invalid Compact JWS|نتوانست|ناموفق|بازگرداند|آفست/i.test(message);
+      var resumableBroken = /Invalid Compact JWS|not found|HTTP\s*404|HTTP\s*405|404\b|405\b|failed to fetch|load failed|networkerror|net::err|نتوانست|ناموفق|بازگرداند|آفست/i.test(message);
       if (!resumableBroken || !grant.signed_url) throw error;
       if (status) status.textContent = 'آپلود resumable در دسترس نبود؛ آپلود امضاشدهٔ مستقیم…';
       await signedPutUpload(file, grant, status);

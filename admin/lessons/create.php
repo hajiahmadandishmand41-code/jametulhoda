@@ -64,7 +64,38 @@ $allTopics=getTopics();
 <?php if($error):?><div class="alert alert-danger"><?=sanitize($error)?></div><?php endif;?>
 <form method="post" enctype="multipart/form-data" class="admin-form"><?=csrfField()?><div class="row g-4"><div class="col-lg-8">
 <section class="admin-card mb-4"><div class="admin-card-header">محتوای درس</div><div class="admin-card-body"><div class="mb-3"><label class="form-label">عنوان <span class="text-danger">*</span></label><input class="form-control" name="title" required value="<?=sanitize((string)$values['title'])?>"></div><div class="row g-3"><div class="col-md-6"><label class="form-label">موضوع درسی</label><input class="form-control" name="subject" value="<?=sanitize((string)$values['subject'])?>"></div><div class="col-md-6"><label class="form-label">مدرس</label><input class="form-control" name="teacher" value="<?=sanitize((string)$values['teacher'])?>"></div></div><div class="mt-3"><label class="form-label">خلاصه</label><textarea rows="3" class="form-control" name="summary"><?=sanitize((string)$values['summary'])?></textarea></div><div class="mt-3"><label class="form-label">متن کامل</label><textarea rows="10" class="form-control" name="content"><?=htmlspecialchars((string)$values['content'],ENT_QUOTES,'UTF-8')?></textarea></div><div class="mt-3"><label class="form-label">منابع</label><textarea rows="4" class="form-control" name="sources"><?=sanitize((string)$values['sources'])?></textarea></div></div></section>
-<section class="admin-card mb-4"><div class="admin-card-header">مسیر آموزشی</div><div class="admin-card-body"><div class="row g-3"><div class="col-md-5"><label class="form-label">دوره / مجموعه</label><select class="form-select" name="collection_id"><option value="">بدون دوره</option><?php foreach($collections as $collection):?><option value="<?= (int)$collection['id']?>" <?= (int)$values['collection_id']===(int)$collection['id']?'selected':''?>><?=sanitize($collection['title'])?></option><?php endforeach;?></select></div><div class="col-md-5"><label class="form-label">جلد / بخش</label><select class="form-select" name="volume_id"><option value="">بدون جلد</option><?php foreach($volumes as $entry):?><option value="<?= (int)$entry['volume']['id']?>" <?= (int)$values['volume_id']===(int)$entry['volume']['id']?'selected':''?>><?=sanitize($entry['collection']['title'].' — '.$entry['volume']['title'])?></option><?php endforeach;?></select></div><div class="col-md-2"><label class="form-label">شماره</label><input type="number" min="1" class="form-control" name="lesson_number" value="<?= (int)$values['lesson_number']?>"></div></div></div></section>
+<section class="admin-card mb-4"><div class="admin-card-header">جایگاه درس در پوشه‌ها</div><div class="admin-card-body"><div class="row g-3"><div class="col-md-5"><label class="form-label">پوشهٔ اصلی</label><select class="form-select" id="lessonCollectionSelect" name="collection_id"><option value="">بدون پوشهٔ اصلی</option><?php foreach($collections as $collection):?><option value="<?= (int)$collection['id']?>" <?= (int)$values['collection_id']===(int)$collection['id']?'selected':''?>><?=sanitize($collection['title'])?></option><?php endforeach;?></select></div><div class="col-md-5"><label class="form-label">پوشهٔ فرعی</label><select class="form-select" id="lessonVolumeSelect" name="volume_id"><option value="">بدون پوشهٔ فرعی</option><?php foreach($volumes as $entry):?><option data-collection-id="<?= (int)$entry['collection']['id']?>" value="<?= (int)$entry['volume']['id']?>" <?= (int)$values['volume_id']===(int)$entry['volume']['id']?'selected':''?>><?=sanitize($entry['collection']['title'].' — '.$entry['volume']['title'])?></option><?php endforeach;?></select></div><div class="col-md-2"><label class="form-label">شماره</label><input type="number" min="1" class="form-control" name="lesson_number" value="<?= (int)$values['lesson_number']?>"></div></div></div></section>
 <section class="admin-card"><div class="admin-card-header">رسانه و فایل‌ها</div><div class="admin-card-body"><div class="row g-3"><div class="col-md-3"><label class="form-label">تصویر</label><input class="form-control" type="file" name="featured_image" accept="image/jpeg,image/png,image/gif,image/webp"></div><div class="col-md-3"><label class="form-label">صوت</label><input class="form-control" type="file" name="audio_file" accept="audio/*,.mp3,.ogg,.wav,.m4a"></div><div class="col-md-3"><label class="form-label">ویدیو</label><input class="form-control" type="file" name="video_file" accept="video/*,.mp4,.webm,.mov,.mkv"></div><div class="col-md-3"><label class="form-label">PDF</label><input class="form-control" type="file" name="pdf_file" accept="application/pdf,.pdf"></div></div><div class="row g-3 mt-2"><div class="col-md-6"><label class="form-label">صوت‌های تکمیلی</label><input class="form-control" type="file" multiple name="audio_files[]" accept="audio/*"></div><div class="col-md-6"><label class="form-label">ویدیوهای تکمیلی</label><input class="form-control" type="file" multiple name="video_files[]" accept="video/*"></div></div><div class="mt-3"><label class="form-label">فایل‌های تکمیلی</label><input class="form-control" multiple type="file" name="attachment_files[]" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"></div></div></section>
 </div><aside class="col-lg-4"><section class="admin-card"><div class="admin-card-header">انتشار</div><div class="admin-card-body"><label class="form-label">وضعیت</label><select class="form-select mb-3" name="status"><option value="draft" <?=$values['status']==='draft'?'selected':''?>>پیش‌نویس</option><option value="published" <?=$values['status']==='published'?'selected':''?>>منتشرشده</option></select><label class="form-label">سطح</label><select class="form-select mb-3" name="level"><option value="beginner" <?=$values['level']==='beginner'?'selected':''?>>مبتدی</option><option value="intermediate" <?=$values['level']==='intermediate'?'selected':''?>>متوسط</option><option value="advanced" <?=$values['level']==='advanced'?'selected':''?>>پیشرفته</option></select><label class="form-label">ترتیب</label><input class="form-control mb-3" type="number" name="sort_order" value="<?= (int)$values['sort_order']?>"><button class="btn btn-success w-100">ایجاد درس</button></div></section></aside></div></form>
+<script>
+(function () {
+  var parent = document.getElementById('lessonCollectionSelect');
+  var child = document.getElementById('lessonVolumeSelect');
+  if (!parent || !child) return;
+  var options = Array.prototype.slice.call(child.options).filter(function (option) { return option.value !== ''; });
+  function filterChildren() {
+    var parentId = parent.value;
+    options.forEach(function (option) {
+      var visible = !parentId || option.dataset.collectionId === parentId;
+      option.hidden = !visible;
+      option.disabled = !visible;
+    });
+    var selected = child.selectedOptions[0];
+    if (selected && selected.value && selected.disabled) child.value = '';
+  }
+  var initiallySelected = child.selectedOptions[0];
+  if (initiallySelected && initiallySelected.dataset.collectionId && parent.value !== initiallySelected.dataset.collectionId) {
+    parent.value = initiallySelected.dataset.collectionId;
+  }
+  parent.addEventListener('change', filterChildren);
+  child.addEventListener('change', function () {
+    var selected = child.selectedOptions[0];
+    if (selected && selected.dataset.collectionId && parent.value !== selected.dataset.collectionId) {
+      parent.value = selected.dataset.collectionId;
+      filterChildren();
+    }
+  });
+  filterChildren();
+})();
+</script>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
