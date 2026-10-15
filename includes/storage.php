@@ -237,6 +237,34 @@ function supabaseStoragePath(string $key): string {
     return rawurlencode(supabaseStorageBucket()) . '/' . implode('/', array_map('rawurlencode', explode('/', $safe)));
 }
 
+/**
+ * Convert the relative upload URL returned by the Storage REST API into an
+ * absolute URL that the browser can call directly. A relative signed URL must
+ * be rooted at /storage/v1, not at the application/Vercel origin.
+ */
+function supabaseResolveSignedUploadUrl(string $signedUrl): string {
+    $signedUrl = trim($signedUrl);
+    if ($signedUrl === '') return '';
+
+    $scheme = strtolower((string)(parse_url($signedUrl, PHP_URL_SCHEME) ?? ''));
+    if ($scheme !== '') {
+        if (!in_array($scheme, ['http', 'https'], true) || !filter_var($signedUrl, FILTER_VALIDATE_URL)) return '';
+        return $signedUrl;
+    }
+
+    $projectBase = rtrim(trim(env_value('SUPABASE_URL')), '/');
+    $apiBase = supabaseStorageApiBase();
+    if ($projectBase === '' || $apiBase === '' || str_starts_with($signedUrl, '//')) return '';
+
+    if (str_starts_with($signedUrl, '/storage/v1/')) {
+        return $projectBase . $signedUrl;
+    }
+    if (str_starts_with($signedUrl, 'storage/v1/')) {
+        return $projectBase . '/' . $signedUrl;
+    }
+    return rtrim($apiBase, '/') . '/' . ltrim($signedUrl, '/');
+}
+
 function supabaseCreateSignedUpload(string $key): array {
     $safe = storageKey($key);
     if ($safe === '' || !str_starts_with($safe, 'staging/')) return ['ok'=>false,'error'=>'Invalid staging key.'];
@@ -257,7 +285,11 @@ function supabaseCreateSignedUpload(string $key): array {
         return ['ok'=>false,'error'=>'Supabase signed upload failed (HTTP '.$status.').'.($error!==''?' '.$error:'').$hint];
     }
     $data = json_decode($body, true);
-    $signed = is_array($data) ? (string)($data['signedURL'] ?? $data['signedUrl'] ?? $data['signed_url'] ?? $data['url'] ?? '') : '';
+    $rawSigned = is_array($data) ? (string)($data['signedURL'] ?? $data['signedUrl'] ?? $data['signed_url'] ?? $data['url'] ?? '') : '';
+    $signed = supabaseResolveSignedUploadUrl($rawSigned);
+    if ($rawSigned !== '' && $signed === '') {
+        return ['ok'=>false,'error'=>'Supabase returned a signed upload URL that could not be resolved safely.'];
+    }
     $token = is_array($data) ? (string)($data['token'] ?? '') : '';
     if ($token === '' && $signed !== '') {
         // The raw Storage REST answer carries the token inside the signed URL's
