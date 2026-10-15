@@ -52,6 +52,9 @@ jobs:
       - name: Install the headless browser
         run: npx playwright install --with-deps chromium
 
+      - name: Verify large-file direct/resumable submit invariant
+        run: npm run test:direct-upload
+
       - name: Probe the live deployment
         id: probe
         continue-on-error: true
