@@ -90,56 +90,154 @@ if ($__p !== '') {
     exit;
 }
 
-// صفحهٔ اصلی فقط اخبار و مقاله‌ها را نمایش می‌دهد؛ سایر آرشیوها از مسیرهای اصلی خود باقی‌اند.
+/*
+ * ─── صفحهٔ نخست تحریریه ───────────────────────────────────────────────────
+ *
+ * چیدمان این صفحه کاملاً از تنظیمات ذخیره‌شدهٔ پنل مدیریت پیروی می‌کند
+ * (jhd_homepage_settings()). هر تیک در «تنظیمات › چیدمان صفحهٔ اصلی» یک
+ * بخش را روشن یا خاموش می‌کند و «مطلب شاخص» تعیین می‌کند کدام خبر در
+ * بالای صفحه، بزرگ و با تصویر نمایش داده شود. اگر تنظیمی وجود نداشته
+ * باشد، همهٔ بخش‌ها روشن‌اند.
+ */
 $jhdPublicDbReady = jhd_db_ready();
 $db = jhd_db();
 $GLOBALS['JHD_PUBLIC_DB_READY'] = $jhdPublicDbReady;
 
-$homeSections = [];
+$homeSettings = jhd_homepage_settings();
+$homeSections = $homeSettings['sections'];
+$homeSectionOn = static fn(string $key): bool => !empty($homeSections[$key]);
+
+$homeLead = null;
+$homeSecondary = [];
+$homeHubs = [];
+$homeMedia = [];
+$homeCounts = ['news' => 0, 'writing' => 0, 'books' => 0, 'lessons' => 0, 'media' => 0];
+
 if ($jhdPublicDbReady) {
     startPublicSession();
-    // هر فهرست تنها وقتی محتوای منتشرشده دارد، در صفحهٔ نخست ظاهر می‌شود.
-    $homeFeeds = [
-        ['key' => 'news', 'title' => 'اخبار و اطلاعیه‌ها', 'eyebrow' => 'تازه‌های مدرسه', 'icon' => 'bi-newspaper', 'url' => 'news', 'link' => 'همهٔ اخبار', 'source' => 'posts', 'types' => ['news', 'announcement']],
-        ['key' => 'articles', 'title' => 'مقالات و پژوهش‌ها', 'eyebrow' => 'مطالعه و اندیشه', 'icon' => 'bi-journal-text', 'url' => 'articles', 'link' => 'همهٔ مقاله‌ها', 'source' => 'posts', 'types' => ['article', 'research']],
-        ['key' => 'reports', 'title' => 'گزارش‌ها', 'eyebrow' => 'گزارش فعالیت‌ها', 'icon' => 'bi-card-text', 'url' => 'reports', 'link' => 'همهٔ گزارش‌ها', 'source' => 'posts', 'types' => ['report']],
-        ['key' => 'books', 'title' => 'کتاب‌ها', 'eyebrow' => 'کتابخانه دیجیتال', 'icon' => 'bi-book', 'url' => 'books', 'link' => 'همهٔ کتاب‌ها', 'source' => 'books'],
-        ['key' => 'lessons', 'title' => 'درس‌ها', 'eyebrow' => 'دوره‌ها و دروس', 'icon' => 'bi-mortarboard', 'url' => 'lessons', 'link' => 'همهٔ درس‌ها', 'source' => 'lessons'],
-        ['key' => 'events', 'title' => 'رویدادها', 'eyebrow' => 'برنامه‌ها و مناسبت‌ها', 'icon' => 'bi-calendar-event', 'url' => 'events', 'link' => 'همهٔ رویدادها', 'source' => 'posts', 'types' => ['event', 'program', 'religious']],
-    ];
     try {
-        foreach ($homeFeeds as $feed) {
-            if ($feed['source'] === 'books') {
-                $rows = array_map(static fn(array $b): array => [
-                    'title' => (string)($b['title'] ?? ''),
-                    'url' => bookUrl($b),
-                    'post_type' => 'book',
-                    'published_at' => (string)($b['created_at'] ?? ''),
-                    'cat_name' => trim((string)($b['author'] ?? '')),
-                ], getBooks(['limit' => 4]));
-            } elseif ($feed['source'] === 'lessons') {
-                $rows = array_map(static fn(array $l): array => [
-                    'title' => (string)($l['title'] ?? ''),
-                    'url' => lessonUrl($l),
-                    'post_type' => 'lesson',
-                    'published_at' => (string)($l['created_at'] ?? ''),
-                    'cat_name' => trim((string)($l['teacher'] ?? $l['collection_title'] ?? $l['subject'] ?? '')),
-                ], getLessons(['limit' => 4]));
-            } else {
-                $rows = getPosts(['types' => $feed['types'], 'limit' => 4, 'sort' => 'newest']);
+        /*
+         * خبر اصلی: ابتدا «مطلب شاخص» انتخاب‌شده در پنل مدیریت، سپس
+         * برگزیدهٔ سردبیر، و در پایان تازه‌ترین خبر منتشرشده.
+         */
+        $heroId = (int)($homeSettings['hero_post_id'] ?? 0);
+        if ($heroId > 0) {
+            $homeLead = getPublishedPostById($heroId);
+        }
+        if ($homeLead === null) {
+            $featured = getPosts(['featured' => true, 'limit' => 1, 'sort' => 'newest']);
+            if (!$featured) $featured = getPosts(['limit' => 1, 'sort' => 'newest']);
+            $homeLead = $featured[0] ?? null;
+        }
+        if ($homeLead !== null) {
+            $homeLead['url'] = postUrl($homeLead, (string)($homeLead['post_type'] ?? 'news'));
+            $leadId = (int)($homeLead['id'] ?? 0);
+            $homeSecondary = array_values(array_filter(
+                getPosts(['limit' => 6, 'sort' => 'newest']),
+                static fn(array $row): bool => (int)($row['id'] ?? 0) !== $leadId
+            ));
+            array_splice($homeSecondary, 3);
+        }
+
+        // شمارش برای «ریل هاب» و آمار معرفی مدرسه
+        $homeCounts['news']    = countPosts(['types' => ['news', 'announcement']]);
+        $homeCounts['writing'] = countPosts(['types' => ['article', 'research', 'report']]);
+        $homeCounts['books']   = (int)(getDB()->query("SELECT COUNT(*) FROM books WHERE status='published'")->fetchColumn() ?: 0);
+        $homeCounts['lessons'] = (int)(getDB()->query("SELECT COUNT(*) FROM lessons WHERE status='published'")->fetchColumn() ?: 0);
+        $homeCounts['media']   = (int)(getDB()->query("SELECT COUNT(*) FROM media_files WHERE kind IN ('audio','video')")->fetchColumn() ?: 0);
+
+        /* هاب نوشتارها — مقاله، پژوهش و گزارش در یک شبکهٔ یکدست */
+        if ($homeSectionOn('writing')) {
+            $rows = getPosts(['types' => ['article', 'research', 'report'], 'limit' => 3, 'sort' => 'newest']);
+            if ($rows) {
+                $homeHubs['writing'] = [
+                    'title' => 'نوشتارها و پژوهش‌ها',
+                    'eyebrow' => 'اندیشه و مطالعه',
+                    'icon' => 'bi-journal-richtext',
+                    'url' => url('articles'),
+                    'link' => 'آرشیو نوشتارها',
+                    'rows' => $rows,
+                    'kind' => 'posts',
+                ];
             }
-            if ($rows) $homeSections[] = $feed + ['rows' => $rows];
+        }
+
+        /* هاب کتابخانهٔ دیجیتال */
+        if ($homeSectionOn('books')) {
+            $books = getBooks(['limit' => 4]);
+            if ($books) {
+                $homeHubs['books'] = [
+                    'title' => 'کتابخانهٔ دیجیتال',
+                    'eyebrow' => 'خواندن و مطالعه',
+                    'icon' => 'bi-book',
+                    'url' => url('books'),
+                    'link' => 'همهٔ کتاب‌ها',
+                    'rows' => $books,
+                    'kind' => 'books',
+                ];
+            }
+        }
+
+        /* هاب دروس و دوره‌ها */
+        if ($homeSectionOn('lessons')) {
+            $lessons = getLessons(['limit' => 4]);
+            if ($lessons) {
+                $homeHubs['lessons'] = [
+                    'title' => 'دروس و دوره‌ها',
+                    'eyebrow' => 'آموزش حوزوی',
+                    'icon' => 'bi-mortarboard',
+                    'url' => url('lessons'),
+                    'link' => 'همهٔ درس‌ها',
+                    'rows' => $lessons,
+                    'kind' => 'lessons',
+                ];
+            }
+        }
+
+        /* هاب صوت و تصویر */
+        if ($homeSectionOn('media')) {
+            $homeMedia = getLatestMediaItems(4);
         }
     } catch (Throwable $e) {
         error_log('Homepage feeds unavailable: ' . $e->getMessage());
-        $homeSections = [];
+        $homeLead = null;
+        $homeSecondary = [];
+        $homeHubs = [];
+        $homeMedia = [];
     }
 }
-$homeHasAnyContent = !empty($homeSections);
+$homeHasAnyContent = $homeLead !== null || $homeSecondary !== [] || $homeHubs !== [] || $homeMedia !== [];
+
+/* ریل پنج هاب — کوتاه‌ترین مسیر از خانه به هر بخش */
+$homeHubRail = [];
+if ($homeSectionOn('hero')) {
+    $hubCount = static function(int $count): string {
+        return $count > 0 ? jhd_persian_digits($count) . ' مورد' : '';
+    };
+    $homeHubRail = array_values(array_filter([
+        $homeSectionOn('feature') ? ['href' => url('news'), 'title' => 'اخبار مدرسه', 'meta' => trim('تازه‌ترین خبرها و اطلاعیه‌ها · ' . $hubCount($homeCounts['news'])), 'icon' => 'bi-newspaper'] : null,
+        $homeSectionOn('writing')  ? ['href' => url('articles'), 'title' => 'نوشتارها', 'meta' => trim('مقاله، پژوهش و گزارش · ' . $hubCount($homeCounts['writing'])), 'icon' => 'bi-journal-richtext'] : null,
+        $homeSectionOn('books')    ? ['href' => url('books'), 'title' => 'کتابخانه', 'meta' => trim('کتاب‌های دیجیتال · ' . $hubCount($homeCounts['books'])), 'icon' => 'bi-book'] : null,
+        $homeSectionOn('lessons')  ? ['href' => url('lessons'), 'title' => 'دروس', 'meta' => trim('دوره‌های حوزوی · ' . $hubCount($homeCounts['lessons'])), 'icon' => 'bi-mortarboard'] : null,
+        $homeSectionOn('media')    ? ['href' => url('media'), 'title' => 'رسانه‌ها', 'meta' => trim('صوت‌ها و ویدیوها · ' . $hubCount($homeCounts['media'])), 'icon' => 'bi-play-circle'] : null,
+    ], static fn($row) => is_array($row)));
+}
+
+/* متن معرفی مدرسه — از تنظیمات مدیر، وگرنه متن پیش‌فرضِ کد */
+$homeAboutText = trim((string)getSetting('about_short', ''));
+$homeAboutStats = array_values(array_filter([
+    ['label' => 'سال‌های فعالیت', 'value' => 'از ۱۳۹۳'],
+    ['label' => 'طلاب و دانش‌پژوهان', 'value' => 'صنف‌های علمی'],
+    ['label' => 'برنامه‌های آموزشی', 'value' => 'دوره‌های حوزوی'],
+    ['label' => 'انتشارات', 'value' => 'کتابخانهٔ دیجیتال'],
+], static fn($row) => is_array($row)));
+
 require_once __DIR__ . '/includes/header.php';
 ?>
 
 <div class="jhd-homepage jhd-homepage--editorial">
+
+    <?php if ($homeSectionOn('hero')): ?>
     <section class="jhd-hero" aria-labelledby="home-brand-title">
         <div class="container">
             <div class="jhd-home-intro">
@@ -149,10 +247,37 @@ require_once __DIR__ . '/includes/header.php';
                     <?php if (trim((string)$siteSlogan) !== ''): ?>
                     <p class="jhd-hero-slogan"><?= sanitize($siteSlogan) ?></p>
                     <?php endif; ?>
+                    <div class="jhd-hero-actions">
+                        <a class="btn btn-primary" href="<?= url('about') ?>">دربارهٔ مدرسه</a>
+                        <a class="btn btn-outline-primary" href="<?= url('contact') ?>">تماس با ما</a>
+                        <a class="btn btn-outline-secondary" href="<?= url('search') ?>"><i class="bi bi-search" aria-hidden="true"></i> جست‌وجو</a>
+                    </div>
                 </div>
             </div>
+
+            <?php if ($homeHubRail !== []): ?>
+            <nav class="jhd-hub-rail" aria-label="محورهای اصلی پایگاه">
+                <div class="jhd-hub-rail--grid">
+                    <?php foreach ($homeHubRail as $hub): ?>
+                    <?= jhd_hub_tile($hub['href'], $hub['title'], $hub['meta'], $hub['icon']) ?>
+                    <?php endforeach; ?>
+                </div>
+            </nav>
+            <?php endif; ?>
         </div>
     </section>
+    <?php endif; ?>
+
+    <?php if ($homeSectionOn('hero')): ?>
+    <?= jhd_about_band([
+        'eyebrow' => 'معرفی مدرسه',
+        'title' => SITE_FOUNDER !== '' ? 'مدرسهٔ جامعه‌الهدی به رهبری ' . SITE_FOUNDER : (string)$siteName,
+        'text' => $homeAboutText,
+        'stats' => $homeAboutStats,
+        'cta' => 'دربارهٔ جامعه‌الهدی بیشتر بخوانید',
+        'cta_url' => url('about'),
+    ]) ?>
+    <?php endif; ?>
 
     <?php if (!$homeHasAnyContent): ?>
     <section class="jhd-section jhd-home-empty"><div class="container">
@@ -160,24 +285,95 @@ require_once __DIR__ . '/includes/header.php';
     </div></section>
     <?php endif; ?>
 
-    <?php foreach ($homeSections as $section): ?>
-    <section class="jhd-section jhd-home-editorial-section" aria-labelledby="home-<?= sanitize($section['key']) ?>-heading">
+    <?php if ($homeSectionOn('feature') && ($homeLead !== null || $homeSecondary !== [])): ?>
+    <section class="jhd-section jhd-home-editorial-section" aria-labelledby="home-lead-heading">
         <div class="container jhd-home-editorial-container">
             <?= jhd_section_head([
-                'eyebrow' => $section['eyebrow'],
-                'title' => $section['title'],
-                'title_id' => 'home-' . $section['key'] . '-heading',
-                'icon' => $section['icon'],
-                'url' => url($section['url']),
-                'link' => $section['link'],
+                'eyebrow' => 'تازه‌ترین',
+                'title' => 'خبرهای مدرسه',
+                'title_id' => 'home-lead-heading',
+                'icon' => 'bi-newspaper',
+                'url' => url('news'),
+                'link' => 'همهٔ اخبار',
             ]) ?>
-            <?= jhd_news_list($section['rows'], ['hide_type' => true]) ?>
-            <?php if ($section['key'] === 'news'): ?>
-            <a class="jhd-home-all-news" href="<?= url('news') ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i> همهٔ اخبار</a>
+            <?php if ($homeLead !== null): ?>
+            <?= jhd_lead_story($homeLead) ?>
+            <?php endif; ?>
+            <?= jhd_secondary_stories($homeSecondary) ?>
+        </div>
+    </section>
+    <?php endif; ?>
+
+    <?php foreach ($homeHubs as $hubKey => $hub): ?>
+    <section class="jhd-section jhd-home-editorial-section" aria-labelledby="home-<?= sanitize($hubKey) ?>-heading">
+        <div class="container jhd-home-editorial-container">
+            <?= jhd_section_head([
+                'eyebrow' => $hub['eyebrow'],
+                'title' => $hub['title'],
+                'title_id' => 'home-' . $hubKey . '-heading',
+                'icon' => $hub['icon'],
+                'url' => $hub['url'],
+                'link' => $hub['link'],
+            ]) ?>
+            <?php if ($hub['kind'] === 'books'): ?>
+            <div class="row g-3 jhd-home-card-grid">
+                <?php foreach ($hub['rows'] as $book): ?>
+                <div class="col-12 col-sm-6 col-lg-3">
+                    <?= renderBookCard($book) ?>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php elseif ($hub['kind'] === 'lessons'): ?>
+            <div class="row g-3 jhd-home-card-grid">
+                <?php foreach ($hub['rows'] as $lesson): ?>
+                <div class="col-12 col-sm-6 col-lg-3">
+                    <?= renderLessonCard($lesson) ?>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php else: ?>
+            <div class="row g-3 jhd-home-card-grid">
+                <?php foreach ($hub['rows'] as $row): ?>
+                <div class="col-12 col-sm-6 col-lg-4">
+                    <?= renderPostCard($row) ?>
+                </div>
+                <?php endforeach; ?>
+            </div>
             <?php endif; ?>
         </div>
     </section>
     <?php endforeach; ?>
+
+    <?php if ($homeSectionOn('media') && $homeMedia !== []): ?>
+    <section class="jhd-section jhd-home-editorial-section" aria-labelledby="home-media-heading">
+        <div class="container jhd-home-editorial-container">
+            <?= jhd_section_head([
+                'eyebrow' => 'نگارخانه',
+                'title' => 'صوت و تصویر',
+                'title_id' => 'home-media-heading',
+                'icon' => 'bi-play-circle',
+                'url' => url('media'),
+                'link' => 'همهٔ رسانه‌ها',
+            ]) ?>
+            <div class="row g-3 jhd-home-card-grid">
+                <?php foreach ($homeMedia as $item): ?>
+                <div class="col-12 col-sm-6 col-lg-3">
+                    <?= renderMediaCard([
+                        'kind'         => (string)($item['media_kind'] ?? 'video'),
+                        'id'           => (int)($item['media_id'] ?? 0),
+                        'title'        => (string)($item['title'] ?? ''),
+                        'post_slug'    => (string)($item['slug'] ?? ''),
+                        'post_type'    => (string)($item['post_type'] ?? ''),
+                        'published_at' => (string)($item['published_at'] ?? ''),
+                        'thumbnail'    => (string)($item['featured_image'] ?? ''),
+                    ]) ?>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </section>
+    <?php endif; ?>
+
 </div><!-- /.jhd-homepage -->
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
