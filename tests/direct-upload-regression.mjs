@@ -11,10 +11,11 @@ const fixtureVideo = fs.readFileSync(new URL('./fixtures/video.mp4', import.meta
 const limit = 4.5 * 1024 * 1024;
 const largeVideo = Buffer.concat([fixtureVideo, Buffer.alloc(Math.max(0, 13 * 1024 * 1024 - fixtureVideo.length), 0x41)]);
 const smallVideo = Buffer.from(fixtureVideo);
-const expectedFileCount = 2;
+const smallAudio = Buffer.from([0x49, 0x44, 0x33, 0x04, 0x00, 0x00]);
+const expectedFileCount = 3;
 const appOrigin = 'http://jhd-upload.test';
 const storageOrigin = 'https://test-project.storage.supabase.co';
-const endpoint = storageOrigin + '/storage/v1/upload/resumable';
+const endpoint = storageOrigin + '/storage/v1/upload/resumable/sign';
 let grantSequence = 0;
 let uploadSequence = 0;
 const grants = new Map();
@@ -54,7 +55,7 @@ try {
       return route.fulfill({ status: 204, headers: corsHeaders, body: '' });
     }
 
-    if (url.pathname === '/storage/v1/upload/resumable' && req.method() === 'POST') {
+    if (url.pathname === '/storage/v1/upload/resumable/sign' && req.method() === 'POST') {
       const metadata = {};
       for (const item of (headers['upload-metadata'] || '').split(',')) {
         const parts = item.split(' ');
@@ -75,7 +76,7 @@ try {
       });
     }
 
-    const uploadMatch = url.pathname.match(/\/storage\/v1\/upload\/resumable\/(\d+)$/);
+    const uploadMatch = url.pathname.match(/\/storage\/v1\/upload\/resumable\/(?:sign\/)?(\d+)$/);
     if (uploadMatch && req.method() === 'PATCH') {
       const upload = uploads.get(uploadMatch[1]);
       const offset = Number(headers['upload-offset']);
@@ -123,6 +124,7 @@ try {
         '<form action="/admin/save" method="post" enctype="multipart/form-data">' +
         '<input type="hidden" name="csrf_token" value="test-csrf-token-with-more-than-twenty-characters">' +
         '<label>ویدیوها <input type="file" name="video_files[]" accept="video/*" multiple required></label>' +
+        '<label>صوت‌ها <input type="file" name="audio_files[]" accept="audio/*" multiple></label>' +
         '<button type="submit">ذخیره</button></form></body></html>';
       return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: html });
     }
@@ -168,7 +170,8 @@ try {
         bytes: body.length,
         containsLargeName: bodyText.includes('filename="large-video.mp4"'),
         containsSmallName: bodyText.includes('filename="small-video.mp4"'),
-        directPathCount: (bodyText.match(/jhd_direct\[video_files\]\[\]/g) || []).length,
+        directPathCount: (bodyText.match(/jhd_direct\[[^\]]+\]\[\]/g) || []).length,
+        containsAudioName: bodyText.includes('filename="lecture.mp3"'),
       });
       if (storedObjects.size !== expectedFileCount) prematureSaves.push({ bytes: body.length, finalized: storedObjects.size });
       if (body.length > limit) {
@@ -195,9 +198,12 @@ try {
 
   await page.goto(appOrigin + '/admin/test');
   const wasMultipleInput = (await page.locator('input[type="file"]').getAttribute('multiple')) !== null;
-  await page.locator('input[type="file"]').setInputFiles([
+  await page.locator('input[name="video_files[]"]').setInputFiles([
     { name: 'large-video.mp4', mimeType: 'video/mp4', buffer: largeVideo },
     { name: 'small-video.mp4', mimeType: 'video/mp4', buffer: smallVideo },
+  ]);
+  await page.locator('input[name="audio_files[]"]').setInputFiles([
+    { name: 'lecture.mp3', mimeType: 'audio/mpeg', buffer: smallAudio },
   ]);
   check('mobile browser test uses a video larger than Vercel body cap', largeVideo.length > limit, String(largeVideo.length) + ' bytes');
   await page.locator('button[type="submit"]').click();
@@ -205,10 +211,11 @@ try {
 
   check('all selected files were uploaded directly and finalized', storedObjects.size === expectedFileCount, storedObjects.size + '/' + expectedFileCount);
   check('13 MiB video was stored in fake Supabase object store', storedObjects.get('staging/direct-1.mp4')?.size === largeVideo.length, String(largeVideo.length) + ' bytes');
-  check('the small second selection also avoided Vercel multipart', storedObjects.get('staging/direct-2.mp4')?.size === smallVideo.length, String(smallVideo.length) + ' bytes');
+  check('the small second video also avoided Vercel multipart', storedObjects.get('staging/direct-2.mp4')?.size === smallVideo.length, String(smallVideo.length) + ' bytes');
+  check('audio file was uploaded and finalized through direct Storage', storedObjects.get('staging/direct-3.mp3')?.size === smallAudio.length && storedObjects.get('staging/direct-3.mp3')?.kind === 'audio', String(storedObjects.get('staging/direct-3.mp3')?.size || 0) + ' bytes');
   check('no application request crossed the 4.5 MiB cap', pendingLargePosts.length === 0, String(pendingLargePosts.length) + ' oversized app POST(s)');
   check('final form payload stayed below 4.5 MiB', appPosts.length === 1 && appPosts[0].bytes < limit, String(appPosts[0] ? appPosts[0].bytes : 0) + ' bytes');
-  check('final form contains both staging paths but neither original file', appPosts.length === 1 && appPosts[0].directPathCount === expectedFileCount && !appPosts[0].containsLargeName && !appPosts[0].containsSmallName, JSON.stringify(appPosts[0] || {}));
+  check('final form contains both staging paths but neither original file', appPosts.length === 1 && appPosts[0].directPathCount === expectedFileCount && !appPosts[0].containsLargeName && !appPosts[0].containsSmallName && !appPosts[0].containsAudioName, JSON.stringify(appPosts[0] || {}));
   check('save was not submitted while TUS upload was incomplete', prematureSaves.length === 0, String(prematureSaves.length) + ' early submit(s)');
   check('TUS actually transferred the full file lengths by chunks', Array.from(uploads.values()).every((item) => item.offset === item.size && item.bytes === item.size && item.patches.length > 0), JSON.stringify(Array.from(uploads.values()).map((u) => ({ path: u.path, size: u.size, chunks: u.patches }))));
   check('test covers multi-file input on a mobile viewport', wasMultipleInput && page.viewportSize()?.width === 390, 'multiple + 390px viewport');
