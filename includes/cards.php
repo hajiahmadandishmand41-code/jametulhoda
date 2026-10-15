@@ -95,8 +95,8 @@ function jhd_preload_post_topics(array $posts): void {
 
 /**
  * پیش‌بارگذاری تصاویر گالری مطالب با یک Query مشترک.
- * کارت‌های عمومی در صورت داشتن چند تصویر، یک پیش‌نمایش چندتصویری شبیه فید
- * شبکه‌های اجتماعی می‌گیرند؛ خود تصاویر در لایت‌باکس داخلی باز می‌شوند.
+ * تصاویر فقط برای یافتن تصویر شاخصِ جایگزین در نبود featured_image خوانده می‌شوند.
+ * کارت‌ها همواره تک‌تصویری‌اند؛ گالری فقط داخل صفحهٔ خود مطلب باقی می‌ماند.
  */
 function jhd_preload_post_images(array $posts): void {
     static $loaded = [];
@@ -337,17 +337,8 @@ function jhd_card_media(array $card, array $opts = []): string {
     if ($ratio !== '') $classes[] = 'jhd-card-media--' . $ratio;
     if ($fit === 'contain') $classes[] = 'jhd-card-media--contain';
 
-    /*
-     * Multi-image public preview: use a social-feed style mosaic instead of
-     * forcing every image into a single cropped cover. Compact side cards stay
-     * single-image for density.
-     */
-    if (count($gallery) > 1 && (($opts['variant'] ?? '') !== 'compact') && empty($opts['no_gallery'])) {
-        $galleryHtml = jhd_card_gallery($gallery, $title, $badge, $eager);
-        if ($galleryHtml !== '') {
-            return $galleryHtml;
-        }
-    }
+    // Archive cards navigate to the content; galleries belong only inside it.
+    if ($image === '' && !empty($gallery[0]['path'])) $image = (string)$gallery[0]['path'];
 
     $src = $image !== '' ? imgUrl($image) : '';
     $inner = '';
@@ -525,7 +516,7 @@ function renderPostCard(array $post, array $opts = []): string {
         'has_video'   => !empty($post['featured_video']) || !empty($post['has_video']) || !empty($opts['has_video']),
         'has_audio'   => !empty($post['has_audio']) || !empty($opts['has_audio']),
         'has_pdf'     => !empty($post['pdf_file']) || !empty($opts['has_pdf']),
-        'gallery'     => jhd_card_image_set($post),
+        'gallery'     => empty($post['featured_image']) ? jhd_card_image_set($post) : [],
     ];
     if (isset($opts['index'])) $card['index'] = (int)$opts['index'];
 
@@ -1078,6 +1069,7 @@ function jhd_lead_story(array $post, array $opts = []): string {
     $meta .= '</div>';
 
     $body = '<div class="jhd-lead__body">';
+    $body .= '<span class="jhd-chip">' . sanitize(postTypeLabel($type)) . '</span>';
     if ($eyebrow !== '') $body .= '<span class="jhd-eyebrow">' . sanitize($eyebrow) . '</span>';
     $body .= '<h2 class="jhd-lead__title"><a href="' . sanitize($href) . '">' . sanitize($title) . '</a></h2>';
     if ($summary !== '') $body .= '<p class="jhd-lead__summary">' . sanitize(excerpt($summary, 260)) . '</p>';
@@ -1352,12 +1344,11 @@ function jhd_nav_sections(): array {
         'primary' => [
             ['route' => 'lessons',  'label' => 'دروس',          'icon' => 'bi-mortarboard',   'types' => [],                  'extra_active' => ['lesson']],
             ['route' => 'books',    'label' => 'کتابخانه',      'icon' => 'bi-book',          'types' => [],                  'extra_active' => ['book']],
-            ['route' => 'articles', 'label' => 'نوشتارها',      'icon' => 'bi-pencil-square', 'types' => ['article','research'], 'extra_active' => ['research', 'reports', 'qa', 'post', 'article']],
+            ['route' => 'articles', 'label' => 'مقالات',      'icon' => 'bi-pencil-square', 'types' => ['article','research'], 'extra_active' => ['research', 'reports', 'qa', 'post', 'article']],
             ['route' => 'media',    'label' => 'صوت و تصویر',   'icon' => 'bi-play-btn',      'types' => [],                  'extra_active' => ['videos', 'audios', 'speeches', 'video', 'audio']],
             ['route' => 'news',     'label' => 'اخبار',         'icon' => 'bi-newspaper',     'types' => ['news'],            'extra_active' => ['announcements', 'events', 'programs', 'religious-activities']],
         ],
         'more' => [
-            ['route' => 'research',              'label' => 'پژوهش‌ها',               'icon' => 'bi-journal-richtext', 'types' => ['research']],
             ['route' => 'speeches',              'label' => 'سخنرانی‌ها',             'icon' => 'bi-mic',              'types' => ['speech']],
             ['route' => 'events',                'label' => 'رویدادها و برنامه‌ها',    'icon' => 'bi-calendar-event',   'types' => ['event', 'program']],
             ['route' => 'religious-activities',  'label' => 'فعالیت‌های مذهبی',        'icon' => 'bi-moon-stars',       'types' => ['religious']],

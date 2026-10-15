@@ -161,7 +161,7 @@ const owner = await newClient();
     const homepageAfterHtml = await homepageAfter.text();
     check('E a settings save without the homepage panel keeps the homepage layout',
         homepageAfter.status() === 200
-        && homepageBeforeHtml.includes('id="home-lead-heading"') === homepageAfterHtml.includes('id="home-lead-heading"')
+        && homepageBeforeHtml.includes('id="home-feature-heading"') === homepageAfterHtml.includes('id="home-feature-heading"')
         && homepageBeforeHtml.includes('id="home-media-heading"') === homepageAfterHtml.includes('id="home-media-heading"'),
         String(homepageAfter.status()));
 }

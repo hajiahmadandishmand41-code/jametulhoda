@@ -63,11 +63,11 @@ if (!$post || ($normalizedExpected !== '' && ($post['post_type'] ?? '') !== $nor
 /*
  * شمارندهٔ بازدید.
  *
- * یک بازدید برای هر درخواستِ عمومیِ یک مطلب منتشرشده شمرده می‌شود. این
+ * حداکثر یک بازدید در روز برای هر نشانی شبکه و مطلب منتشرشده شمرده می‌شود. این
  * شمارنده پایهٔ ریل «پربازدیدترین‌ها» است و هرگز مسیر رندر را نمی‌شکند:
  * خطای احتمالی فقط ثبت می‌شود. بازدیدهای پنل مدیریت شمرده نمی‌شوند.
  */
-recordContentView((int)($post['id'] ?? 0));
+
 
 /*
  * One content item = one URL.
@@ -80,6 +80,7 @@ recordContentView((int)($post['id'] ?? 0));
  * so a speech reached here is redirected there as well.
  */
 jhd_redirect_to_canonical(postUrl($post), jhd_post_canonical_path($post));
+recordContentView((int)$post['id']);
 
 require_once __DIR__ . '/../includes/post-gallery.php';
 
@@ -124,18 +125,7 @@ $postDocuments = getMediaFor('post', (int)$post['id'], 'document');
 $postTopics = getTopicsForPost((int)$post['id']);
 $primaryTopic = $postTopics[0] ?? null;
 
-// Related content via shared topic or same type
-$related = [];
-if ($primaryTopic) {
-    $related = getPostsByTopic((int)$primaryTopic['id'], ['limit' => 4]);
-    $related = array_filter($related, fn($r) => $r['id'] != $post['id']);
-    $related = array_slice($related, 0, 3);
-}
-if (count($related) < 3) {
-    $more = getPosts(['type' => $post['post_type'], 'limit' => 6]);
-    $more = array_filter($more, fn($r) => $r['id'] != $post['id'] && !in_array($r['id'], array_column($related, 'id')));
-    $related = array_slice(array_merge($related, $more), 0, 3);
-}
+$related = getRelatedPosts($post);
 
 // Related books/lessons via same topic
 $relatedBooks = $primaryTopic ? getBooksByTopic((int)$primaryTopic['id'], 3) : [];
@@ -324,6 +314,11 @@ require_once __DIR__ . '/../includes/header.php';
     <?php endif; ?>
 
     <?= jhd_share_row($postCanonicalUrl, (string)$post['title']) ?>
+    <?php if ($related): ?>
+    <section class="mt-4" aria-labelledby="related-heading"><h2 class="h4" id="related-heading">مطالب مرتبط</h2>
+      <div class="row g-3"><?php foreach ($related as $item) echo renderPostCard($item, ['col' => 'col-12 col-md-6']); ?></div>
+    </section>
+    <?php endif; ?>
 
     <?php
     // ناوبری مطالب پیوسته (قبلی/بعدی در همان نوع محتوا)
@@ -354,14 +349,6 @@ require_once __DIR__ . '/../includes/header.php';
         ));
     }
     ?>
-
-    <?php if (!empty($related)): ?>
-    <?= jhd_rail_list($related, [
-        'title' => 'مطالب مرتبط',
-        'icon'  => 'bi-diagram-3',
-        'id'    => 'jhd-rail-related',
-    ]) ?>
-    <?php endif; ?>
 
     <?php if ($railLatest): ?>
     <?= jhd_rail_list($railLatest, [

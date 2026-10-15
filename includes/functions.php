@@ -2,7 +2,7 @@
 /**
  * functions.php — Jametulhoda Content-Centered helpers
  * Production-oriented: SEO, topics, lesson collections, books, search, sanitization
- * All Like/View systems removed completely per spec 17.
+ * Published content queries, persistent settings and deduplicated view counters.
  */
 
 require_once __DIR__ . '/../config/database.php';
@@ -318,6 +318,11 @@ function jhd_route_name_for_path(string $path): ?string {
  *
  * @return array{file:string,route:string,get:array,expected_type?:string,kind?:string}|null
  */
+function jhd_legacy_listing_target(string $name): ?string {
+    return ['school-news' => 'news', 'all-news' => 'news',
+        'scientific-articles' => 'articles', 'scientific-papers' => 'articles'][$name] ?? null;
+}
+
 function jhd_resolve_query(string $p, array $get): ?array {
     $p = trim($p, '/');
     $routes = jhd_routes();
@@ -1139,6 +1144,15 @@ function getPosts(array $opts = []): array {
         $s        = '%' . $opts['search'] . '%';
         $params   = array_merge($params, [$s, $s, $s]);
     }
+    if (isset($opts['min_views'])) {
+        $where[] = "p.view_count >= ?";
+        $params[] = max(50, (int)$opts['min_views']);
+    }
+    if (!empty($opts['exclude_ids'])) {
+        $ids = array_values(array_map('intval', $opts['exclude_ids']));
+        $where[] = "p.id NOT IN (" . implode(',', array_fill(0, count($ids), '?')) . ")";
+        $params = array_merge($params, $ids);
+    }
     if (!empty($opts['featured'])) {
         $where[]  = "p.is_featured = 1";
     }
@@ -1166,6 +1180,8 @@ function getPosts(array $opts = []): array {
     $sort = (string)($opts['sort'] ?? '');
     if ($sort === 'newest') {
         $orderBy = 'COALESCE(p.published_at, p.created_at) DESC, p.id DESC';
+    } elseif ($sort === 'oldest') {
+        $orderBy = 'COALESCE(p.published_at, p.created_at) ASC, p.id ASC';
     } elseif ($sort === 'popular') {
         $orderBy = 'p.view_count DESC, COALESCE(p.published_at, p.created_at) DESC, p.id DESC';
     } else {
@@ -1193,37 +1209,49 @@ function getPosts(array $opts = []): array {
  * otherwise dominate the ranking.
  */
 function recordContentView(int $postId): void {
-    if ($postId < 1) return;
+    if ($postId < 1 || ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') return;
     if (function_exists('isLoggedIn') && isLoggedIn()) return;
+    $ua = (string)($_SERVER['HTTP_USER_AGENT'] ?? '');
+    if ($ua === '' || preg_match('/bot|crawler|spider|preview|headless/i', $ua)) return;
+    if (!empty($_SERVER['HTTP_PURPOSE']) || !empty($_SERVER['HTTP_SEC_PURPOSE'])) return;
     $db = jhd_db();
     if ($db === null) return;
+    $secret = env_value('VIEW_HASH_KEY', '');
+    if ($secret === '' && APP_ENV === 'production') return; // fail closed, never invent counts
+    if ($secret === '') $secret = 'local-test-only';
+    // Trust only the connection address. Forwarded headers must be normalized by
+    // the trusted platform, not supplied by a visitor. No raw IP is stored.
+    $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+    // Vercel overwrites this platform header; never trust generic X-Forwarded-For.
+    if (env_value('VERCEL', '') !== '') {
+        $ip = trim(explode(',', (string)($_SERVER['HTTP_X_VERCEL_FORWARDED_FOR'] ?? $ip))[0]);
+    }
+    if (!filter_var($ip, FILTER_VALIDATE_IP)) return;
+    $day = gmdate('Y-m-d');
+    $key = hash_hmac('sha256', $day . '|' . $ip, $secret);
     try {
-        $db->prepare("UPDATE posts SET view_count = view_count + 1 WHERE id = ? AND status = 'published'")->execute([$postId]);
-    } catch (PDOException $e) {
-        error_log('view counter update failed: ' . $e->getMessage());
+        $db->beginTransaction();
+        $sql = "INSERT INTO content_view_receipts (post_id, visitor_hash, view_day) VALUES (?, ?, ?) ON CONFLICT DO NOTHING";
+        if (databaseDriver() === 'mysql') $sql = "INSERT IGNORE INTO content_view_receipts (post_id, visitor_hash, view_day) VALUES (?, ?, ?)";
+        $receipt = $db->prepare($sql);
+        $receipt->execute([$postId, $key, $day]);
+        if ($receipt->rowCount() === 1) {
+            $db->prepare("UPDATE posts SET view_count = view_count + 1 WHERE id = ? AND status = 'published'")->execute([$postId]);
+        }
+        $db->commit();
     } catch (Throwable $e) {
-        error_log('view counter update failed: ' . get_class($e));
+        if ($db->inTransaction()) $db->rollBack();
+        error_log('view counter unavailable: ' . $e->getMessage());
     }
 }
 
-/**
- * The most-read published posts.
- *
- * Falls back to the newest posts when no post has been read yet, so the rail
- * never shows an empty box on a fresh installation.
- */
-function getMostViewedPosts(int $limit = 5, array $types = []): array {
-    $limit = max(1, min(30, $limit));
-    $rows = getPosts(['types' => $types, 'limit' => $limit, 'sort' => 'popular']);
-    if ($rows) return $rows;
-    return getPosts(['types' => $types, 'limit' => $limit, 'sort' => 'newest']);
+/** Only genuinely eligible posts; never relabel fresh posts as popular. */
+function getMostViewedPosts(int $limit = 3, array $types = []): array {
+    return getPosts(['types' => $types, 'limit' => max(1, min(3, $limit)), 'sort' => 'popular', 'min_views' => 50]);
 }
 
-/**
- * The newest published posts, used by the "تازه‌ترین‌ها" rail.
- */
-function getLatestPosts(int $limit = 5, array $types = []): array {
-    return getPosts(['types' => $types, 'limit' => max(1, min(30, $limit)), 'sort' => 'newest']);
+function getLatestPosts(int $limit = 3, array $types = []): array {
+    return getPosts(['types' => $types, 'limit' => max(1, min(3, $limit)), 'sort' => 'newest']);
 }
 
 /**
@@ -1814,19 +1842,37 @@ function getAdjacentLesson(array $lesson): array {
  * مطلب قبلی/بعدی در همان نوع محتوا (بر اساس تاریخ انتشار).
  * برای ناوبری پایین صفحهٔ مطلب؛ هر دو طرف فقط مطالب منتشرشده را می‌بینند.
  */
+/** Related content must share taxonomy, never just a random/same-type fallback. */
+function getRelatedPosts(array $post, int $limit = 3): array {
+    $db = jhd_db();
+    if (!$db) return [];
+    $limit = max(1, min(3, $limit));
+    try {
+        $stmt = $db->prepare("SELECT p.* FROM posts p WHERE p.status='published' AND p.id<>? AND
+            ((p.category_id IS NOT NULL AND p.category_id=?) OR EXISTS
+              (SELECT 1 FROM post_topics a JOIN post_topics b ON a.topic_id=b.topic_id WHERE a.post_id=? AND b.post_id=p.id))
+            ORDER BY COALESCE(p.published_at,p.created_at) DESC,p.id DESC LIMIT $limit");
+        $stmt->execute([$post['id'], $post['category_id'] ?? null, $post['id']]);
+        return $stmt->fetchAll();
+    } catch (PDOException $e) {
+        error_log('Related posts unavailable: ' . $e->getMessage());
+        return [];
+    }
+}
+
 function getAdjacentPosts(int $postId): array {
     if ($postId < 1) return ['prev' => null, 'next' => null];
     try {
         $db = getDB();
-        $stmt = $db->prepare("SELECT post_type, published_at FROM posts WHERE id = ? LIMIT 1");
+        $stmt = $db->prepare("SELECT post_type, COALESCE(published_at, created_at) AS published_at FROM posts WHERE id = ? AND status='published' LIMIT 1");
         $stmt->execute([$postId]);
         $row = $stmt->fetch();
         if (!$row) return ['prev' => null, 'next' => null];
         $type = (string)$row['post_type'];
-        $prev = $db->prepare("SELECT * FROM posts WHERE post_type = ? AND status = 'published' AND published_at < ? ORDER BY published_at DESC LIMIT 1");
-        $next = $db->prepare("SELECT * FROM posts WHERE post_type = ? AND status = 'published' AND published_at > ? ORDER BY published_at ASC LIMIT 1");
-        $prev->execute([$type, $row['published_at']]);
-        $next->execute([$type, $row['published_at']]);
+        $prev = $db->prepare("SELECT * FROM posts WHERE post_type = ? AND status = 'published' AND (COALESCE(published_at, created_at) < ? OR (COALESCE(published_at, created_at) = ? AND id < ?)) ORDER BY COALESCE(published_at, created_at) DESC, id DESC LIMIT 1");
+        $next = $db->prepare("SELECT * FROM posts WHERE post_type = ? AND status = 'published' AND (COALESCE(published_at, created_at) > ? OR (COALESCE(published_at, created_at) = ? AND id > ?)) ORDER BY COALESCE(published_at, created_at) ASC, id ASC LIMIT 1");
+        $prev->execute([$type, $row['published_at'], $row['published_at'], $postId]);
+        $next->execute([$type, $row['published_at'], $row['published_at'], $postId]);
         return ['prev' => $prev->fetch() ?: null, 'next' => $next->fetch() ?: null];
     } catch (Throwable $e) {
         return ['prev' => null, 'next' => null];
@@ -1883,52 +1929,66 @@ function clearSettingCache(): void {
  * در MySQL و PostgreSQL هر دو قابل مدیریت باشد.
  */
 function jhd_homepage_settings(): array {
-    /*
-     * صفحهٔ اصلی روی پنج «هاب» بسته شده است: دروس، کتابخانه، نوشتارها، رسانه و
-     * اخبار/شاخص. فهرست‌های موضوعیِ پراکندهٔ پیشین (گزارش‌ها، رویدادها،
-     * پرسش‌وپاسخ، سخنرانی‌ها و …) از صفحهٔ اول حذف شدند؛ محتوایشان در همان
-     * آرشیوهای مستقل باقی است و از ناوبری و فوتر قابل دسترسی است.
-     *
-     * کلیدهای قدیمی `homepage_config` در دیتابیسِ نصب‌های موجود مانده‌اند؛
-     * JHD_HOME_LEGACY_KEYS آن‌ها را به ساختار تازه نگاشت می‌کند تا پس از این
-     * بازچینی، تنظیمات هیچ مدیری بی‌صدا خراب نشود.
-     */
-    $defaults = [
-        'sections' => [
-            'hero'    => true,
-            'feature' => true,
-            'lessons' => true,
-            'books'   => true,
-            'writing' => true,
-            'media'   => true,
-            'topics'  => true,
-        ],
-        'hero_post_id' => 0,
-    ];
-    $raw = trim(getSetting('homepage_config', ''));
-    if ($raw === '') return $defaults;
-    $cfg = json_decode($raw, true);
-    if (!is_array($cfg)) return $defaults;
+    $cfg = json_decode((string)getSetting('homepage_config', ''), true);
+    return jhd_normalize_home_config(is_array($cfg) ? $cfg : []);
+}
 
+/** Validated, backward-compatible JSON in the existing persistent settings table. */
+function jhd_normalize_home_config(array $cfg): array {
+    $labels = jhd_home_section_labels();
     $stored = is_array($cfg['sections'] ?? null) ? $cfg['sections'] : [];
-    $legacy = jhd_homepage_legacy_keys();
-    foreach ($defaults['sections'] as $key => $enabled) {
-        if (array_key_exists($key, $stored)) {
-            $defaults['sections'][$key] = (bool)$stored[$key];
-            continue;
+    $out = $cfg; // retain unrecognized historical keys, never destroy old configuration
+    $out['sections'] = $stored;
+    $out['layout'] = [];
+    foreach ($labels as $key => $label) {
+        $out['sections'][$key] = array_key_exists($key, $stored) ? (bool)$stored[$key] : true;
+        if (!array_key_exists($key, $stored)) {
+            $legacyValues = [];
+            foreach (jhd_homepage_legacy_keys()[$key] ?? [] as $oldKey) {
+                if (array_key_exists($oldKey, $stored)) $legacyValues[] = (bool)$stored[$oldKey];
+            }
+            if ($legacyValues) $out['sections'][$key] = in_array(true, $legacyValues, true);
         }
-        // سازگاری عقب‌رو: اگر فقط کلید قدیمی هست، با OR معنایشان نگاشت می‌شود
-        $mapped = false;
-        $anyLegacy = false;
-        foreach ($legacy[$key] as $legacyKey) {
-            if (!array_key_exists($legacyKey, $stored)) continue;
-            $anyLegacy = true;
-            $mapped = $mapped || !empty($stored[$legacyKey]);
-        }
-        if ($anyLegacy) $defaults['sections'][$key] = $mapped;
+        $item = is_array($cfg['layout'][$key] ?? null) ? $cfg['layout'][$key] : [];
+        $out['layout'][$key] = [
+            'title' => mb_substr(trim(is_string($item['title'] ?? null) ? $item['title'] : $label), 0, 100) ?: $label,
+            'order' => max(0, min(99, (int)($item['order'] ?? array_search($key, array_keys($labels))))),
+            'limit' => max(1, min(in_array($key, ['popular', 'latest'], true) ? 3 : 12, (int)($item['limit'] ?? 3))),
+            'category' => max(0, (int)($item['category'] ?? 0)),
+        ];
     }
-    $defaults['hero_post_id'] = max(0, (int)($cfg['hero_post_id'] ?? 0));
-    return $defaults;
+    $out['hero_post_id'] = max(0, (int)($cfg['hero_post_id'] ?? 0));
+    $mode = is_string($cfg['hero_mode'] ?? null) ? $cfg['hero_mode'] : ($out['hero_post_id'] ? 'manual' : 'auto');
+    $out['hero_mode'] = in_array($mode, ['auto', 'manual', 'off'], true) ? $mode : 'auto';
+    $kind = is_string($cfg['hero_kind'] ?? null) ? $cfg['hero_kind'] : 'post';
+    $out['hero_kind'] = in_array($kind, ['post', 'book', 'lesson'], true) ? $kind : 'post';
+    return $out;
+}
+
+function jhd_home_section_labels(): array {
+    return ['feature' => 'مطلب شاخص', 'popular' => 'پربازدیدترین‌ها', 'latest' => 'تازه‌ترین‌ها',
+        'news' => 'اخبار', 'writing' => 'مقالات', 'research' => 'پژوهش‌ها',
+        'books' => 'کتاب‌ها', 'lessons' => 'آموزش‌ها', 'media' => 'رسانه‌ها'];
+}
+
+function jhd_home_feature(array $cfg): ?array {
+    if ($cfg['hero_mode'] === 'off') return null;
+    if ($cfg['hero_mode'] === 'auto') return getPosts(['limit' => 1, 'sort' => 'newest'])[0] ?? null;
+    $id = $cfg['hero_post_id'];
+    if ($cfg['hero_kind'] === 'post') return getPublishedPostById($id);
+    $db = jhd_db();
+    if (!$db || !$id) return null;
+    $table = $cfg['hero_kind'] === 'book' ? 'books' : 'lessons';
+    $stmt = $db->prepare("SELECT * FROM $table WHERE id=? AND status='published'");
+    $stmt->execute([$id]);
+    $row = $stmt->fetch();
+    if (!$row) return null;
+    $book = $cfg['hero_kind'] === 'book';
+    $row['post_type'] = $book ? 'book' : 'lesson';
+    $row['featured_image'] = $row['cover_image'] ?? $row['featured_image'] ?? '';
+    $row['summary'] = $row['description'] ?? $row['summary'] ?? '';
+    $row['url'] = $book ? bookUrl($row) : lessonUrl($row);
+    return $row;
 }
 
 /** نگاشت کلیدهای قدیمی چیدمان صفحهٔ اصلی به پنج هاب تازه. */

@@ -36,7 +36,7 @@ const corsHeaders = {
   'cache-control': 'no-store',
 };
 
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({ headless: true, executablePath: process.env.BROWSER_EXECUTABLE || undefined, args: ['--no-sandbox'] });
 try {
   const context = await browser.newContext({
     isMobile: true,

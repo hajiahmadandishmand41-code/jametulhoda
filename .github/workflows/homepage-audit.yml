@@ -5,8 +5,8 @@ name: Homepage and link audit
 # the front page ignored them completely. This workflow therefore proves,
 # against a real HTTP instance, that:
 #
-#   • the editorial homepage renders the lead story, the «معرفی مدرسه» band,
-#     the hub rail and the content hubs;
+#   • the editorial homepage renders the lead story, no introduction band,
+#     configurable content sections;
 #   • a content page shows the «مطالب مرتبط»، «تازه‌ترین‌ها» and
 #     «پربازدیدترین‌ها» rails, with the thumbnail on the right in RTL;
 #   • switching a section off in the admin panel really removes it from the
@@ -22,7 +22,7 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   homepage:
@@ -81,12 +81,45 @@ jobs:
           set -o pipefail
           node tests/homepage-settings.mjs 2>&1 | tee homepage-report.txt
 
+      - name: Editorial browser regression
+        env:
+          TEST_BASE_URL: http://127.0.0.1:8080
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          node tests/editorial-browser.mjs
+
       - name: Check the internal links
         env:
           TEST_BASE_URL: http://127.0.0.1:8080
         run: |
           set -o pipefail
           node tests/link-audit.mjs 2>&1 | tee links-report.txt
+
+      - name: Full HTTP content and upload regression (isolated database)
+        env:
+          TEST_BASE_URL: http://127.0.0.1:8080
+          TEST_ADMIN_USERNAME: admin
+          TEST_ADMIN_PASSWORD: TestAdmin123!@#
+        run: |
+          set -o pipefail
+          node tests/http.mjs 2>&1 | tee http-report.txt
+          node tests/user-registration-admin.mjs 2>&1 | tee -a http-report.txt
+
+      - name: Publish HTTP evidence
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -f http-report.txt ]; then
+            {
+              echo "## Isolated PHP CLI HTTP regression — $GITHUB_SHA"
+              echo '```text'
+              tail -n 120 http-report.txt
+              echo '```'
+            } > http-summary.md
+            gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/comments" -f body="$(cat http-summary.md)"
+          fi
 
       - name: Show the PHP server log on failure
         if: failure()
@@ -100,4 +133,5 @@ jobs:
           path: |
             homepage-report.txt
             links-report.txt
+            http-report.txt
           if-no-files-found: ignore

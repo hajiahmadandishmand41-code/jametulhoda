@@ -62,7 +62,7 @@ check('array-shaped public query rejected cleanly',malformedQuery.status()===400
   // The homepage is an editorial front page: a lead story followed by the
   // writing, books, lessons and media hubs. These anchors are what the check
   // protects.
-  check('homepage renders active content sections and all-news CTA',homePage.status()===200&&homePageHtml.includes('id="home-lead-heading"')&&homePageHtml.includes('id="home-writing-heading"')&&homePageHtml.includes('id="home-books-heading"')&&homePageHtml.includes('id="home-lessons-heading"')&&homePageHtml.includes('id="home-media-heading"')&&homePageHtml.includes('class="jhd-about"')&&homePageHtml.includes('همهٔ اخبار'),String(homePage.status()));
+  check('homepage renders active content sections and all-news CTA',homePage.status()===200&&homePageHtml.includes('id="home-feature-heading"')&&homePageHtml.includes('id="home-writing-heading"')&&homePageHtml.includes('id="home-books-heading"')&&homePageHtml.includes('id="home-lessons-heading"')&&homePageHtml.includes('id="home-media-heading"')&&!homePageHtml.includes('class="jhd-about"')&&homePageHtml.includes('همهٔ اخبار'),String(homePage.status()));
 
   const draftParams=new URLSearchParams({q:'پیش‌نویس منتشرنشده',type:'book'});
   const draftSearch=await api.get('/search?'+draftParams.toString());

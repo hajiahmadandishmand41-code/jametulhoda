@@ -182,7 +182,7 @@ if ($authNoindex) header('Cache-Control: private, no-store');
 // The page parameter alone is intentionally not a noindex signal: real
 // pagination pages can be indexed when they contain content. Search/filter
 // parameters are noindex.
-$seoFilterParams = ['q', 'search', 'topic', 'type', 'section', 'sort', 'year', 'author'];
+$seoFilterParams = ['q', 'search', 'topic', 'type', 'section', 'sort', 'cat', 'year', 'author'];
 $hasSeoFilter = false;
 foreach ($seoFilterParams as $filterKey) {
     if (array_key_exists($filterKey, $_GET) && is_scalar($_GET[$filterKey]) && trim((string)$_GET[$filterKey]) !== '') {

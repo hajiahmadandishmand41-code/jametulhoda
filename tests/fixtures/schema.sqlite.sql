@@ -378,3 +378,11 @@ CREATE TABLE IF NOT EXISTS content_likes (
   PRIMARY KEY (user_id, ref_type, ref_id)
 );
 CREATE INDEX IF NOT EXISTS content_likes_ref ON content_likes(ref_type, ref_id);
+
+-- Additive view deduplication. No existing counter is reset or reinterpreted.
+CREATE TABLE IF NOT EXISTS content_view_receipts (
+    post_id INTEGER NOT NULL,
+    visitor_hash VARCHAR(64) NOT NULL,
+    view_day DATE NOT NULL,
+    PRIMARY KEY (post_id, visitor_hash, view_day)
+);

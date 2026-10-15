@@ -8,12 +8,15 @@
     "test:browser": "node tests/browser.mjs",
     "test:direct-upload": "node tests/direct-upload-regression.mjs",
     "build:hero": "node tools/build-hero.mjs",
-    "test:links": "node tests/links.mjs"
+    "test:links": "node tests/links.mjs",
+    "test:editorial": "php tests/editorial.php",
+    "test:homepage": "node tests/homepage-settings.mjs",
+    "test:editorial-browser": "node tests/editorial-browser.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
     "php-parser": "^3.2.1",
-    "sharp": "^0.33.5"
+    "sharp": "^0.35.5"
   },
   "dependencies": {
     "@platformatic/php-node": "^1.4.0"

@@ -801,17 +801,40 @@ function jhd_update_profile(int $userId, array $data): array {
 }
 
 /** فهرست کاربران با فیلتر نقش (برای پنل مدیریت). */
-function jhd_list_users(?string $role = null, int $limit = 200): array {
+function jhd_list_users(?string $role = null, int $limit = 200, int $offset = 0, string $search = ''): array {
     jhd_ensure_identity_schema_once();
     $limit = max(1, min(500, $limit));
     $db = getDB();
-    $sql = 'SELECT ' . JHD_USER_PUBLIC_FIELDS . ' FROM users';
-    $params = [];
-    if ($role !== null) { $sql .= ' WHERE role = ?'; $params[] = jhd_normalize_role($role); }
-    $sql .= ' ORDER BY id DESC LIMIT ' . $limit;
+    [$where, $params] = jhd_user_list_filter($role, $search);
+    $sql = 'SELECT ' . JHD_USER_PUBLIC_FIELDS . ' FROM users' . $where;
+    $sql .= ' ORDER BY id DESC LIMIT ' . $limit . ' OFFSET ' . max(0, $offset);
     $stmt = $db->prepare($sql);
     $stmt->execute($params);
     return array_map('jhd_user_public', $stmt->fetchAll());
+}
+
+/** Prepared search shared by listing and its pagination count. */
+function jhd_user_list_filter(?string $role, string $search): array {
+    $where = []; $params = [];
+    if ($role !== null) { $where[] = 'role = ?'; $params[] = jhd_normalize_role($role); }
+    $search = trim($search);
+    if ($search !== '') {
+        $parts = [];
+        foreach (['full_name', 'username', 'email', 'phone', 'phone_normalized', 'country'] as $column) {
+            $parts[] = "COALESCE($column,'') ILIKE ?";
+            $params[] = '%' . $search . '%';
+        }
+        $where[] = '(' . implode(' OR ', $parts) . ')';
+    }
+    return [$where ? ' WHERE ' . implode(' AND ', $where) : '', $params];
+}
+
+function jhd_count_filtered_users(?string $role = null, string $search = ''): int {
+    jhd_ensure_identity_schema_once();
+    [$where, $params] = jhd_user_list_filter($role, $search);
+    $stmt = getDB()->prepare('SELECT COUNT(*) FROM users' . $where);
+    $stmt->execute($params);
+    return (int)$stmt->fetchColumn();
 }
 
 /** شمارش کاربران بر اساس نقش (برای داشبورد). */
