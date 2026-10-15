@@ -197,7 +197,7 @@ try {
   });
 
   await page.goto(appOrigin + '/admin/test');
-  const wasMultipleInput = (await page.locator('input[type="file"]').getAttribute('multiple')) !== null;
+  const wasMultipleInput = (await page.locator('input[name="video_files[]"]').getAttribute('multiple')) !== null;
   await page.locator('input[name="video_files[]"]').setInputFiles([
     { name: 'large-video.mp4', mimeType: 'video/mp4', buffer: largeVideo },
     { name: 'small-video.mp4', mimeType: 'video/mp4', buffer: smallVideo },
