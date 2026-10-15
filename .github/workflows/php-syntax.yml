@@ -30,6 +30,8 @@ jobs:
             echo "::endgroup::"
           done < <(find . -type f -name '*.php' -not -path './vendor/*' -print0)
           exit "$status"
+      - name: Deployment probe workflow contract
+        run: node tests/workflow-probe-contract.mjs
       - name: Rich text and sitemap regression checks (in-memory only)
         run: |
           php tests/editorial.php
