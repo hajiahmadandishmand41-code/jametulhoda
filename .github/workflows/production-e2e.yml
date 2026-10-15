@@ -109,7 +109,7 @@ jobs:
             echo "- probe conclusion: ${{ steps.probe.outcome }}"
             echo
             echo '```text'
-            tail -n 120 probe-report.txt
+            if [ -f probe-report.txt ]; then tail -n 120 probe-report.txt; else echo 'The probe did not start; inspect earlier workflow steps for the failure.'; fi
             echo '```'
           } > probe-comment.md
           gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$(cat probe-comment.md)" >/dev/null
