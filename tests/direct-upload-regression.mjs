@@ -57,7 +57,7 @@ try {
 
     // Exercise the signed-PUT fallback with a real request shape. This fake
     // Storage server records the complete file body without involving Vercel.
-    const signedPutMatch = url.pathname.match(/\\/storage\\/v1\\/object\\/upload\\/sign\\/site-media\\/(.+)$/);
+    const signedPutMatch = url.pathname.match(/\/storage\/v1\/object\/upload\/sign\/site-media\/(.+)$/);
     if (req.method() === 'PUT' && signedPutMatch) {
       const path = decodeURIComponent(signedPutMatch[1]);
       const grant = grants.get(path);
