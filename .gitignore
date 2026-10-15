@@ -9,5 +9,12 @@
 /node_modules/
 /test-results/
 
+# Composer dependencies are installed by CI, never committed
+/vendor/
+
 # Uploaded media is never committed (only the folder placeholders are)
 /uploads/*/
+
+# Audit artefacts produced by the local probes (screenshots and timing runs)
+/docs/visual-audit/
+/perf-report-run.md

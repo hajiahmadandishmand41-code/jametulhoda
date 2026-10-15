@@ -18,7 +18,11 @@ header('Cache-Control: public, max-age=300');
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'HEAD') return;
 echo "User-agent: *\n";
 if (!in_array(APP_ENV, ['production', 'local'], true)) {
+    // A development or staging instance must not be crawled at all, but the
+    // sitemap line still belongs in the file: the crawler policy is per
+    // environment, the declaration of the sitemap is not.
     echo "Disallow: /\n";
+    echo "Sitemap: {$sitemapUrl}\n";
     return;
 }
 $base = rtrim(BASE_PATH, '/');

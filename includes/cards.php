@@ -715,13 +715,23 @@ function renderMediaCard(array $media, array $opts = []): string {
     $kind = (string)($media['kind'] ?? 'video');
     $id = (int)($media['id'] ?? 0);
     $title = (string)($media['title'] ?? ($media['post_title'] ?? ($kind === 'audio' ? 'صوت' : 'ویدیو')));
+    // A media file can hang from a post, from a lesson or from nothing at all.
+    // The link must follow the owner: a lesson that was filed as "audio" has
+    // no post route, so linking it to /post/<slug> produced a 404.
+    $target = (string)($media['target'] ?? '');
+    $slug = (string)($media['slug'] ?? $media['post_slug'] ?? '');
     $href = $opts['url'] ?? (
-        !empty($media['post_slug'])
-            ? postUrl([
-                'slug' => (string)$media['post_slug'],
+        $target === 'lesson' ? lessonUrl($slug)
+            : ($target === 'post' ? postUrl([
+                'slug' => $slug,
                 'post_type' => (string)($media['post_type'] ?? ''),
             ])
-            : mediaUrl($kind, $id)
+            : (!empty($media['post_slug'])
+                ? postUrl([
+                    'slug' => (string)$media['post_slug'],
+                    'post_type' => (string)($media['post_type'] ?? ''),
+                ])
+                : mediaUrl($kind, $id)))
     );
     $parent = trim((string)($media['post_title'] ?? $media['parent_title'] ?? ''));
     $meta = [];
@@ -1013,6 +1023,263 @@ function jhd_news_list(array $items, array $opts = []): string
         $html .= '</article>';
     }
     return $html . '</div>';
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * صفحهٔ نخست تحریریه — اجزای اختصاصی
+ *
+ * چیدمان «خبر اصلی در یک طرف، تیتر و خلاصه در طرف دیگر» با الهام از
+ * چیدمان روزنامه‌های بزرگ — بدون بازتولید مستقیم هیک طرحی. همهٔ اجزا
+ * راست‌چین‌اند، تصویر کوچک در سمت راست (ابتدای خط در RTL) می‌نشیند و
+ * رنگ‌ها از توکن‌های سبز/طلایی طرح می‌آیند.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * خبر اصلی صفحهٔ نخست.
+ *
+ * تصویر در یک ستون و تیتر، خلاصه، فراداده و دکمهٔ ادامه در ستون دیگر.
+ * روی موبایل دو ستون روی هم می‌افتند و تصویر بالای متن می‌ماند.
+ */
+function jhd_lead_story(array $post, array $opts = []): string {
+    $href    = (string)($post['url'] ?? postUrl($post, (string)($post['post_type'] ?? 'news')));
+    $title   = trim((string)($post['title'] ?? ''));
+    if ($title === '') return '';
+    $type    = (string)($post['post_type'] ?? 'news');
+    $image   = trim((string)($post['featured_image'] ?? ''));
+    $imageUrl = $image !== '' ? imgUrl($image) : '';
+    $summary = trim((string)($post['summary'] ?? ''));
+    if ($summary === '') $summary = excerpt((string)($post['content'] ?? ''), 220);
+    $date    = trim((string)($post['published_at'] ?? $post['created_at'] ?? ''));
+    $parts   = $date !== '' ? persianDateParts($date) : null;
+    $author  = trim((string)($post['author_name'] ?? $post['speaker'] ?? ''));
+    $cat     = trim((string)($post['cat_name'] ?? ''));
+    $eyebrow = trim((string)($opts['eyebrow'] ?? 'مطلب شاخص'));
+
+    $media = '';
+    if ($imageUrl !== '') {
+        $media = '<a class="jhd-lead__media" href="' . sanitize($href) . '" tabindex="-1" aria-hidden="true">'
+            . '<img src="' . sanitize($imageUrl) . '" alt="" loading="eager" fetchpriority="high"'
+            . ' decoding="async" width="880" height="550">'
+            . '<span class="jhd-lead__tag">' . sanitize(postTypeLabel($type)) . '</span>'
+            . '</a>';
+    }
+
+    $meta = '<div class="jhd-lead__meta">';
+    if ($parts) {
+        $meta .= '<time datetime="' . sanitize($date) . '"><i class="bi bi-calendar3" aria-hidden="true"></i>'
+            . sanitize(jhd_persian_digits((int)$parts['day']) . ' ' . (string)$parts['month']) . '</time>';
+    }
+    if ($author !== '') {
+        $meta .= '<span><i class="bi bi-person" aria-hidden="true"></i>' . sanitize($author) . '</span>';
+    }
+    if ($cat !== '') {
+        $meta .= '<span class="jhd-lead__cat"><i class="bi bi-folder2-open" aria-hidden="true"></i>' . sanitize($cat) . '</span>';
+    }
+    $meta .= '</div>';
+
+    $body = '<div class="jhd-lead__body">';
+    if ($eyebrow !== '') $body .= '<span class="jhd-eyebrow">' . sanitize($eyebrow) . '</span>';
+    $body .= '<h2 class="jhd-lead__title"><a href="' . sanitize($href) . '">' . sanitize($title) . '</a></h2>';
+    if ($summary !== '') $body .= '<p class="jhd-lead__summary">' . sanitize(excerpt($summary, 260)) . '</p>';
+    $body .= $meta;
+    $body .= '<a class="btn btn-primary jhd-lead__cta" href="' . sanitize($href) . '">ادامه مطلب'
+        . ' <i class="bi bi-arrow-left" aria-hidden="true"></i></a>';
+    $body .= '</div>';
+
+    $classes = 'jhd-lead' . (!empty($opts['class']) ? ' ' . (string)$opts['class'] : '');
+    return '<article class="' . sanitize($classes) . '">' . $media . $body . '</article>';
+}
+
+/**
+ * مطالب فرعی: شبکه‌ای از خبرهای کوتاه با تصویر کوچک.
+ */
+function jhd_secondary_stories(array $items, array $opts = []): string {
+    if (!$items) return '';
+    $html = '<div class="jhd-secondary">';
+    foreach ($items as $item) {
+        $href  = (string)($item['url'] ?? postUrl($item, (string)($item['post_type'] ?? 'news')));
+        $title = trim((string)($item['title'] ?? ''));
+        if ($title === '') continue;
+        $type  = (string)($item['post_type'] ?? 'news');
+        $image = trim((string)($item['featured_image'] ?? ''));
+        $imageUrl = $image !== '' ? imgUrl($image) : '';
+        $date  = trim((string)($item['published_at'] ?? $item['created_at'] ?? ''));
+        $parts = $date !== '' ? persianDateParts($date) : null;
+
+        $media = $imageUrl !== ''
+            ? '<a class="jhd-secondary__media" href="' . sanitize($href) . '" tabindex="-1" aria-hidden="true">'
+                . '<img src="' . sanitize($imageUrl) . '" alt="" loading="lazy" decoding="async" width="320" height="200">'
+                . '</a>'
+            : '<span class="jhd-secondary__media jhd-secondary__media--empty" aria-hidden="true">'
+                . '<i class="bi ' . sanitize(jhd_type_icon($type)) . '"></i></span>';
+
+        $meta = $parts
+            ? '<time datetime="' . sanitize($date) . '">' . sanitize(jhd_persian_digits((int)$parts['day']) . ' ' . (string)$parts['month']) . '</time>'
+            : '';
+
+        $html .= '<article class="jhd-secondary__item">'
+            . $media
+            . '<div class="jhd-secondary__body">'
+            . '<h3 class="jhd-secondary__title"><a href="' . sanitize($href) . '">' . sanitize($title) . '</a></h3>'
+            . $meta
+            . '</div>'
+            . '</article>';
+    }
+    return $html === '<div class="jhd-secondary">' ? '' : $html . '</div>';
+}
+
+/**
+ * فهرست ستونی با تصویر کوچک در سمت راست (ابتدای خط در راست‌چین).
+ *
+ * برای «تازه‌ترین‌ها» و «پربازدیدترین‌ها» در صفحه‌های محتوا استفاده می‌شود.
+ */
+function jhd_rail_list(array $items, array $opts = []): string {
+    if (!$items) return '';
+    $title = trim((string)($opts['title'] ?? ''));
+    $icon  = trim((string)($opts['icon'] ?? ''));
+    $more  = trim((string)($opts['more'] ?? ''));
+    $moreUrl = trim((string)($opts['more_url'] ?? ''));
+    $counter = trim((string)($opts['counter'] ?? ''));
+
+    $html = '<section class="jhd-rail" aria-labelledby="' . sanitize((string)($opts['id'] ?? 'jhd-rail-' . substr(md5($title . ($counter !== '' ? $counter : '')), 0, 8))) . '">';
+    if ($title !== '') {
+        $html .= '<h2 class="jhd-rail__title" id="'
+            . sanitize((string)($opts['id'] ?? 'jhd-rail-' . substr(md5($title . ($counter !== '' ? $counter : '')), 0, 8)))
+            . '">'
+            . ($icon !== '' ? '<i class="bi ' . sanitize($icon) . '" aria-hidden="true"></i>' : '')
+            . sanitize($title)
+            . ($counter !== '' ? '<span class="jhd-rail__count">' . sanitize($counter) . '</span>' : '')
+            . '</h2>';
+    }
+    $html .= '<ul class="jhd-rail__list">';
+    foreach ($items as $item) {
+        $href  = (string)($item['url'] ?? postUrl($item, (string)($item['post_type'] ?? 'news')));
+        $title = trim((string)($item['title'] ?? ''));
+        if ($title === '') continue;
+        $type  = (string)($item['post_type'] ?? 'news');
+        $image = trim((string)($item['featured_image'] ?? ''));
+        $imageUrl = $image !== '' ? imgUrl($image) : '';
+        $views = isset($item['view_count']) ? (int)$item['view_count'] : 0;
+        $date  = trim((string)($item['published_at'] ?? $item['created_at'] ?? ''));
+        $parts = $date !== '' ? persianDateParts($date) : null;
+
+        $media = $imageUrl !== ''
+            ? '<a class="jhd-rail__media" href="' . sanitize($href) . '" tabindex="-1" aria-hidden="true">'
+                . '<img src="' . sanitize($imageUrl) . '" alt="" loading="lazy" decoding="async" width="96" height="72">'
+                . '</a>'
+            : '<span class="jhd-rail__media jhd-rail__media--empty" aria-hidden="true">'
+                . '<i class="bi ' . sanitize(jhd_type_icon($type)) . '"></i></span>';
+
+        $meta = [];
+        if ($parts) $meta[] = sanitize(jhd_persian_digits((int)$parts['day']) . ' ' . (string)$parts['month']);
+        if ($views > 0) $meta[] = '<i class="bi bi-eye" aria-hidden="true"></i>' . sanitize(jhd_persian_digits($views));
+
+        $html .= '<li class="jhd-rail__item">' . $media
+            . '<div class="jhd-rail__body">'
+            . '<a class="jhd-rail__link" href="' . sanitize($href) . '">' . sanitize($title) . '</a>'
+            . ($meta ? '<span class="jhd-rail__meta">' . implode(' · ', $meta) . '</span>' : '')
+            . '</div></li>';
+    }
+    $html .= '</ul>';
+    if ($more !== '' && $moreUrl !== '') {
+        $html .= '<a class="jhd-rail__more" href="' . sanitize($moreUrl) . '">' . sanitize($more)
+            . ' <i class="bi bi-arrow-left" aria-hidden="true"></i></a>';
+    }
+    return $html . '</section>';
+}
+
+/**
+ * نوار معرفی برجستهٔ جامعه‌الهدی.
+ *
+ * متن معرفی از تنظیمات سایت خوانده می‌شود؛ اگر مدیر چیزی ننوشته باشد،
+ * معرفی پیش‌فرضِ کد استفاده می‌شود تا این بخش هرگز خالی و ناکارآمد دیده نشود.
+ */
+function jhd_about_band(array $opts = []): string {
+    $title = trim((string)($opts['title'] ?? 'مدرسه جامعه‌الهدی'));
+    $text  = trim((string)($opts['text'] ?? ''));
+    if ($text === '') {
+        $text = 'مدرسه علمیه جامعه‌الهدی، مرکزی علمی، آموزشی و پژوهشی در کابل است که '
+            . 'با تکیه بر قرآن کریم و اهل‌بیت (ع)، طلاب و دانش‌پژوهان را در مسیر فهم و '
+            . 'عمل دانش دینی یاری می‌رساند.';
+    }
+    $image  = trim((string)($opts['image'] ?? ''));
+    $imageUrl = $image !== '' ? imgUrl($image) : '';
+    $stats  = array_values(array_filter((array)($opts['stats'] ?? []), static fn($s) => is_array($s) && trim((string)($s['label'] ?? '')) !== ''));
+
+    $html = '<section class="jhd-about" aria-labelledby="jhd-about-title"><div class="container">'
+        . '<div class="jhd-about__grid">';
+
+    if ($imageUrl !== '') {
+        $html .= '<div class="jhd-about__media">'
+            . '<img src="' . sanitize($imageUrl) . '" alt="' . sanitize((string)($opts['image_alt'] ?? $title)) . '"'
+            . ' loading="lazy" decoding="async" width="360" height="360">'
+            . '</div>';
+    }
+
+    $html .= '<div class="jhd-about__body">'
+        . '<span class="jhd-eyebrow">' . sanitize((string)($opts['eyebrow'] ?? 'دربارهٔ ما')) . '</span>'
+        . '<h2 class="jhd-about__title" id="jhd-about-title">' . sanitize($title) . '</h2>'
+        . '<p class="jhd-about__text">' . sanitize($text) . '</p>';
+
+    if ($stats !== []) {
+        $html .= '<dl class="jhd-about__stats">';
+        foreach ($stats as $stat) {
+            $html .= '<div class="jhd-about__stat">'
+                . '<dt>' . sanitize((string)($stat['label'] ?? '')) . '</dt>'
+                . '<dd>' . sanitize((string)($stat['value'] ?? '')) . '</dd>'
+                . '</div>';
+        }
+        $html .= '</dl>';
+    }
+
+    $cta = trim((string)($opts['cta'] ?? ''));
+    $ctaUrl = trim((string)($opts['cta_url'] ?? ''));
+    if ($cta !== '' && $ctaUrl !== '') {
+        $html .= '<a class="btn btn-outline-primary jhd-about__cta" href="' . sanitize($ctaUrl) . '">' . sanitize($cta)
+            . ' <i class="bi bi-arrow-left" aria-hidden="true"></i></a>';
+    }
+
+    $html .= '</div></div></div></section>';
+    return $html;
+}
+
+/**
+ * نوار کشف — «تازه‌ترین‌ها» و «پربازدیدترین‌ها» در کنار هم.
+ *
+ * روی صفحه‌های فهرست استفاده می‌شود تا خواننده هم مسیر تازه‌ها را ببیند و
+ * هم محتوای پربازدید را. هر دو ریل تصویر کوچک در سمت راست دارند.
+ */
+function jhd_discovery_band(array $opts = []): string {
+    $latest  = (array)($opts['latest'] ?? []);
+    $popular = (array)($opts['popular'] ?? []);
+    if (!$latest && !$popular) return '';
+
+    $columns = '';
+    if ($latest) {
+        $columns .= '<div class="col-12 col-lg-6">'
+            . jhd_rail_list($latest, [
+                'title' => (string)($opts['latest_title'] ?? 'تازه‌ترین‌ها'),
+                'icon'  => (string)($opts['latest_icon'] ?? 'bi-clock-history'),
+                'id'    => (string)($opts['latest_id'] ?? 'jhd-rail-latest'),
+                'more'  => (string)($opts['latest_more'] ?? ''),
+                'more_url' => (string)($opts['latest_more_url'] ?? ''),
+            ]) . '</div>';
+    }
+    if ($popular) {
+        $columns .= '<div class="col-12 col-lg-6">'
+            . jhd_rail_list($popular, [
+                'title' => (string)($opts['popular_title'] ?? 'پربازدیدترین‌ها'),
+                'icon'  => 'bi-eye',
+                'id'    => (string)($opts['popular_id'] ?? 'jhd-rail-popular'),
+                'more'  => (string)($opts['popular_more'] ?? ''),
+                'more_url' => (string)($opts['popular_more_url'] ?? ''),
+            ]) . '</div>';
+    }
+    if ($columns === '') return '';
+
+    return '<section class="jhd-section jhd-section--tight jhd-discovery" aria-label="مطالب پیشنهادی">'
+        . '<div class="container"><div class="row g-3">' . $columns . '</div></div>'
+        . '</section>';
 }
 
 /**

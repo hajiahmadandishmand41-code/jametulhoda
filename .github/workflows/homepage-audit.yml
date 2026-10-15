@@ -1,0 +1,103 @@
+name: Homepage and link audit
+
+# The homepage configuration used to be decorative: the panel in
+# /admin/settings stored the section toggles and the manual lead story, and
+# the front page ignored them completely. This workflow therefore proves,
+# against a real HTTP instance, that:
+#
+#   • the editorial homepage renders the lead story, the «معرفی مدرسه» band,
+#     the hub rail and the content hubs;
+#   • a content page shows the «مطالب مرتبط»، «تازه‌ترین‌ها» and
+#     «پربازدیدترین‌ها» rails, with the thumbnail on the right in RTL;
+#   • switching a section off in the admin panel really removes it from the
+#     homepage, and switching it on again really brings it back;
+#   • no published page links to a missing internal URL.
+#
+# Everything runs against a throwaway SQLite instance seeded with every
+# content type and served through router.php, exactly like production.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  homepage:
+    name: Seeded local instance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: gd, curl, zip, mbstring, dom, fileinfo, pdo_sqlite, sqlite3
+          coverage: none
+
+      - name: Build the throwaway SQLite database and its upload fixtures
+        env:
+          APP_ENV: development
+          DB_DRIVER: sqlite
+          SQLITE_PATH: /tmp/jametulhoda-home.sqlite
+          SESSION_DRIVER: files
+          UPLOAD_STORAGE: local
+        run: |
+          rm -f /tmp/jametulhoda-home.sqlite
+          php bin/dev-db.php
+          php tests/fixtures/attach-demo-media.php /tmp/jametulhoda-home.sqlite
+          php tests/fixtures/materialise-uploads.php
+
+      - name: Serve the site through router.php
+        env:
+          # `local` keeps robots.txt permissive and matches the SEO workflow.
+          APP_ENV: local
+          DB_DRIVER: sqlite
+          SQLITE_PATH: /tmp/jametulhoda-home.sqlite
+          SESSION_DRIVER: files
+          UPLOAD_STORAGE: local
+          JHD_PRETTY_URLS: 'true'
+          SITE_URL: http://127.0.0.1:8080
+        run: |
+          php -S 0.0.0.0:8080 router.php > /tmp/php-server.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null http://127.0.0.1:8080/; then echo "server up"; break; fi
+            sleep 1
+          done
+
+      - name: Check the homepage structure and the admin settings
+        env:
+          TEST_BASE_URL: http://127.0.0.1:8080
+          ADMIN_USER: admin
+          ADMIN_PASSWORD: TestAdmin123!@#
+        run: |
+          set -o pipefail
+          node tests/homepage-settings.mjs 2>&1 | tee homepage-report.txt
+
+      - name: Check the internal links
+        env:
+          TEST_BASE_URL: http://127.0.0.1:8080
+        run: |
+          set -o pipefail
+          node tests/link-audit.mjs 2>&1 | tee links-report.txt
+
+      - name: Show the PHP server log on failure
+        if: failure()
+        run: tail -n 60 /tmp/php-server.log || true
+
+      - name: Upload the reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: homepage-audit-reports
+          path: |
+            homepage-report.txt
+            links-report.txt
+          if-no-files-found: ignore

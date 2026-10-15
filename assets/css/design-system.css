@@ -4496,3 +4496,349 @@ h1,h2,h3,h4,h5,h6,.jhd-section-head h2,.jhd-auth-card h1 {
 .main-footer .footer-social .social-link{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;min-width:46px;min-height:46px;padding:.65rem;border:1px solid var(--jhd-border);border-radius:12px;text-decoration:none}
 .main-footer .footer-social .social-link--telegram{min-width:150px;padding-inline:1rem;font-weight:750}
 .main-footer .footer-social .social-link i{font-size:1.15rem}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ۱۸. صفحهٔ نخست تحریریه — خبر اصلی، مطالب فرعی، معرفی مدرسه و ریل‌ها
+   ─────────────────────────────────────────────────────────────────────────
+   چیدمان «خبر اصلی با تصویر در یک طرف و تیتر و خلاصه در طرف دیگر» با
+   الهام از چیدمان روزنامه‌های بزرگ — بدون بازتولید مستقیم هیک طرحی.
+   همهٔ فاصله‌ها و رنگ‌ها از توکن‌های طرح می‌آیند و همهٔ خواصِ جهت‌پذیر
+   با ویژگی‌های منطقی (inline-start/end) نوشته شده‌اند تا راست‌چینی واقعی
+   بماند.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── خبر اصلی ──────────────────────────────────────────────────────────── */
+.jhd-lead {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr);
+  align-items: stretch;
+  gap: clamp(1rem, .5rem + 2vw, 2.1rem);
+  margin-bottom: clamp(1rem, .8rem + 1vw, 1.6rem);
+}
+.jhd-lead__media {
+  position: relative;
+  display: block;
+  margin: 0;
+  isolation: isolate;
+  aspect-ratio: 16 / 10;
+  border: 1px solid var(--jhd-border-strong);
+  border-radius: var(--jhd-radius-lg);
+  background: linear-gradient(140deg, #0c1f17, #1c3b2c 60%, #24483a);
+  box-shadow: var(--jhd-shadow-3);
+  overflow: hidden;
+}
+.jhd-lead__media img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform var(--jhd-dur-slow) var(--jhd-ease);
+}
+.jhd-lead__media:hover img,
+.jhd-lead__media:focus-visible img { transform: scale(1.035); }
+.jhd-lead__tag {
+  position: absolute;
+  inset-block-start: .8rem;
+  inset-inline-start: .8rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  padding: .22rem .6rem;
+  border-radius: var(--jhd-radius-pill);
+  background: rgba(9, 24, 17, .66);
+  border: 1px solid rgba(255, 255, 255, .26);
+  color: #f4efe1;
+  font-size: var(--jhd-text-2xs);
+  font-weight: 750;
+  backdrop-filter: blur(6px);
+}
+.jhd-lead__body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: .5rem;
+  min-width: 0;
+  padding-block: .15rem;
+}
+.jhd-lead__title {
+  margin: 0;
+  font-size: clamp(1.3rem, 1.05rem + 1.25vw, 2.05rem);
+  font-weight: 800;
+  line-height: 1.45;
+  letter-spacing: var(--jhd-tracking-tight);
+}
+.jhd-lead__title a { color: var(--jhd-ink); }
+.jhd-lead__title a:hover { color: var(--jhd-green); }
+.jhd-lead__summary {
+  margin: 0;
+  color: var(--jhd-muted);
+  font-size: var(--jhd-text-md);
+  line-height: 1.95;
+  max-width: 52ch;
+}
+.jhd-lead__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .35rem .9rem;
+  color: var(--jhd-muted);
+  font-size: var(--jhd-text-sm);
+}
+.jhd-lead__meta > * { display: inline-flex; align-items: center; gap: .3rem; }
+.jhd-lead__meta i { color: var(--jhd-green); }
+.jhd-lead__cta { margin-top: .35rem; }
+.jhd-lead__cta i { transition: transform var(--jhd-dur) var(--jhd-ease); }
+.jhd-lead__cta:hover i { transform: translateX(-3px); }
+
+/* ─── مطالب فرعی ────────────────────────────────────────────────────────── */
+.jhd-secondary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
+  gap: var(--jhd-gap-card);
+}
+.jhd-secondary__item {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  min-width: 0;
+  padding: .6rem;
+  border: 1px solid var(--jhd-border);
+  border-radius: var(--jhd-radius);
+  background: var(--jhd-surface);
+  box-shadow: var(--jhd-shadow-1);
+  transition: border-color var(--jhd-dur) var(--jhd-ease), box-shadow var(--jhd-dur) var(--jhd-ease), transform var(--jhd-dur) var(--jhd-ease);
+}
+.jhd-secondary__item:hover,
+.jhd-secondary__item:focus-within {
+  border-color: var(--jhd-border-strong);
+  box-shadow: var(--jhd-shadow-2);
+  transform: translateY(-2px);
+}
+.jhd-secondary__media {
+  flex: 0 0 5.4rem;
+  width: 5.4rem;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--jhd-radius-sm);
+  overflow: hidden;
+  background: var(--jhd-green-soft);
+  display: block;
+}
+.jhd-secondary__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform var(--jhd-dur-slow) var(--jhd-ease);
+}
+.jhd-secondary__item:hover .jhd-secondary__media img { transform: scale(1.05); }
+.jhd-secondary__media--empty {
+  display: grid;
+  place-items: center;
+  color: var(--jhd-green);
+  font-size: 1.15rem;
+}
+.jhd-secondary__body { min-width: 0; display: flex; flex-direction: column; gap: .18rem; }
+.jhd-secondary__title {
+  margin: 0;
+  font-size: var(--jhd-text-md);
+  font-weight: 700;
+  line-height: 1.6;
+}
+.jhd-secondary__title a { color: var(--jhd-ink); }
+.jhd-secondary__title a:hover { color: var(--jhd-green); }
+.jhd-secondary__body time { color: var(--jhd-muted); font-size: var(--jhd-text-xs); }
+
+/* ─── نوار معرفی مدرسه ──────────────────────────────────────────────────── */
+.jhd-about {
+  padding-block: clamp(1.6rem, 1.2rem + 1.8vw, 2.6rem);
+  background: var(--jhd-green-dark);
+  background: linear-gradient(135deg, var(--jhd-green-dark) 0%, #14422f 58%, #0f3a29 100%);
+  color: #e7efe9;
+  border-block: 1px solid color-mix(in srgb, var(--jhd-gold) 32%, transparent);
+}
+.jhd-about__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+  align-items: center;
+  gap: clamp(1.1rem, .7rem + 2vw, 2.4rem);
+}
+.jhd-about__media {
+  margin: 0;
+  border-radius: var(--jhd-radius-lg);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--jhd-gold) 40%, transparent);
+  box-shadow: var(--jhd-shadow-3);
+}
+.jhd-about__media img { display: block; width: 100%; height: auto; }
+.jhd-about__body { min-width: 0; }
+.jhd-about .jhd-eyebrow { color: var(--jhd-gold); }
+.jhd-about__title {
+  margin: .1rem 0 .5rem;
+  font-size: clamp(1.15rem, 1rem + .95vw, 1.7rem);
+  font-weight: 800;
+  line-height: 1.5;
+  color: #fff;
+}
+.jhd-about__text {
+  margin: 0;
+  max-width: 62ch;
+  color: color-mix(in srgb, #e7efe9 88%, transparent);
+  font-size: var(--jhd-text-md);
+  line-height: 2;
+}
+.jhd-about__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr));
+  gap: .7rem;
+  margin: 1.05rem 0 0;
+}
+.jhd-about__stat {
+  margin: 0;
+  padding: .6rem .7rem;
+  border: 1px solid color-mix(in srgb, var(--jhd-gold) 26%, transparent);
+  border-radius: var(--jhd-radius);
+  background: rgba(255, 255, 255, .05);
+}
+.jhd-about__stat dt {
+  font-size: var(--jhd-text-xs);
+  color: color-mix(in srgb, #e7efe9 72%, transparent);
+  margin-bottom: .1rem;
+}
+.jhd-about__stat dd {
+  margin: 0;
+  font-size: var(--jhd-text-md);
+  font-weight: 700;
+  color: var(--jhd-gold);
+}
+.jhd-about__cta { margin-top: 1.05rem; }
+.jhd-about__cta.btn-outline-primary {
+  color: #f1e7cf;
+  border-color: color-mix(in srgb, var(--jhd-gold) 55%, transparent);
+}
+.jhd-about__cta.btn-outline-primary:hover {
+  background: var(--jhd-gold);
+  border-color: var(--jhd-gold);
+  color: #14231b;
+}
+
+/* ─── ریل «تازه‌ترین‌ها» و «پربازدیدترین‌ها» ───────────────────────────── */
+.jhd-rail {
+  border: 1px solid var(--jhd-border);
+  border-radius: var(--jhd-radius-lg);
+  background: var(--jhd-surface);
+  box-shadow: var(--jhd-shadow-1);
+  padding: .95rem 1rem 1rem;
+}
+.jhd-rail__title {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  margin: 0 0 .7rem;
+  padding-bottom: .5rem;
+  border-bottom: 2px solid var(--jhd-gold-soft);
+  font-size: var(--jhd-text-md);
+  font-weight: 800;
+  line-height: 1.5;
+}
+.jhd-rail__title i { color: var(--jhd-green); }
+.jhd-rail__count {
+  margin-inline-start: auto;
+  padding: .1rem .5rem;
+  border-radius: var(--jhd-radius-pill);
+  background: var(--jhd-green-soft);
+  color: var(--jhd-green);
+  font-size: var(--jhd-text-2xs);
+  font-weight: 750;
+}
+.jhd-rail__list { list-style: none; margin: 0; padding: 0; }
+.jhd-rail__item {
+  display: flex;
+  align-items: flex-start;
+  gap: .6rem;
+  padding-block: .55rem;
+  border-bottom: 1px dashed var(--jhd-border);
+}
+.jhd-rail__item:last-child { border-bottom: 0; padding-bottom: 0; }
+.jhd-rail__media {
+  flex: 0 0 4.4rem;
+  width: 4.4rem;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--jhd-radius-sm);
+  overflow: hidden;
+  background: var(--jhd-green-soft);
+  display: block;
+}
+.jhd-rail__media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.jhd-rail__media--empty {
+  display: grid;
+  place-items: center;
+  color: var(--jhd-green);
+  font-size: .95rem;
+}
+.jhd-rail__body { min-width: 0; display: flex; flex-direction: column; gap: .12rem; }
+.jhd-rail__link {
+  color: var(--jhd-ink);
+  font-size: var(--jhd-text-sm);
+  font-weight: 650;
+  line-height: 1.65;
+  text-decoration: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.jhd-rail__link:hover { color: var(--jhd-green); }
+.jhd-rail__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  color: var(--jhd-muted);
+  font-size: var(--jhd-text-2xs);
+}
+.jhd-rail__meta i { color: var(--jhd-gold-text); }
+.jhd-rail__more {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  margin-top: .7rem;
+  color: var(--jhd-green);
+  font-size: var(--jhd-text-sm);
+  font-weight: 700;
+  text-decoration: none;
+}
+.jhd-rail__more:hover { color: var(--jhd-green-hover); }
+.jhd-rail__more i { transition: transform var(--jhd-dur) var(--jhd-ease); }
+.jhd-rail__more:hover i { transform: translateX(-3px); }
+
+/* ─── واکنش‌گرایی ───────────────────────────────────────────────────────── */
+@media (max-width: 991.98px) {
+  .jhd-lead { grid-template-columns: minmax(0, 1fr); }
+  .jhd-lead__media { aspect-ratio: 16 / 9; }
+  .jhd-about__grid { grid-template-columns: minmax(0, 1fr); }
+  .jhd-about__media { max-width: 22rem; }
+}
+@media (max-width: 575.98px) {
+  .jhd-lead__title { font-size: 1.2rem; }
+  .jhd-lead__summary { font-size: var(--jhd-text-base); line-height: 1.9; }
+  .jhd-secondary { grid-template-columns: minmax(0, 1fr); }
+  .jhd-secondary__media { flex-basis: 4.6rem; width: 4.6rem; }
+  .jhd-about { padding-block: 1.4rem; }
+  .jhd-about__text { font-size: var(--jhd-text-base); line-height: 1.95; }
+  .jhd-about__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .jhd-rail { padding: .8rem .85rem .9rem; }
+}
+
+/* ─── احترام به «کاهش حرکت» ───────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .jhd-lead__media img,
+  .jhd-secondary__media img,
+  .jhd-secondary__item,
+  .jhd-lead__cta i,
+  .jhd-rail__more i { transition: none !important; }
+  .jhd-secondary__item:hover,
+  .jhd-secondary__item:focus-within { transform: none; }
+  .jhd-lead__media:hover img,
+  .jhd-lead__media:focus-visible img { transform: none; }
+}

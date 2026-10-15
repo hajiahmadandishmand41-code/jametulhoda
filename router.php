@@ -13,9 +13,51 @@ require_once __DIR__ . '/config/config.php';
 // router resolve Query and Pretty URLs from one shared registry.
 require_once __DIR__ . '/includes/functions.php';
 
+/*
+ * Request-body guard.
+ *
+ * A Vercel serverless function accepts at most ~4.5 MB of request body. A
+ * multipart upload of a photo, a video or several files at once crosses that
+ * limit long before the application's own limits (20 MB image / 150 MB video)
+ * are reached, so the body is rejected here with a clear, actionable answer
+ * instead of an opaque platform error.
+ *
+ * Large files never travel through this function: the admin forms move them
+ * straight to Supabase Storage (resumable TUS, or a signed PUT as fallback)
+ * and submit only the resulting reference. The header below lets the client
+ * recognise this condition and switch to that path.
+ */
 if (env_value('VERCEL') && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 4 * 1024 * 1024) {
     http_response_code(413);
-    exit('حجم درخواست بیش از حد مجاز است.');
+    header('Content-Type: text/html; charset=utf-8');
+    header('Cache-Control: no-store');
+    header('X-Upload-Too-Large: 1');
+    header('Retry-After: 0');
+    $isJson = str_contains((string)($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json')
+        || str_contains((string)($_SERVER['HTTP_CONTENT_TYPE'] ?? ''), 'application/json');
+    if ($isJson) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'ok' => false,
+            'error' => 'حجم درخواست از سقف ۴ مگابایتِ درگاه Vercel بیشتر است. فایل باید مستقیماً و resumable به Storage فرستاده شود.',
+            'code' => 'payload_too_large',
+            'use_direct_upload' => true,
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    echo '<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8">'
+        . '<meta name="viewport" content="width=device-width">'
+        . '<title>۴۱۳ — حجم درخواست بیش از حد</title>'
+        . '<style>body{font-family:Tahoma,system-ui,sans-serif;background:#f4f7fb;color:#162033;margin:0}'
+        . 'main{max-width:640px;margin:12vh auto;padding:24px;background:#fff;border:1px solid #e1e7ef;border-radius:16px;line-height:2}'
+        . 'h1{font-size:1.3rem;margin-top:0}</style>'
+        . '<main><h1>حجم درخواست بیش از حد مجاز است</h1>'
+        . '<p>این درگاه حداکثر حدود ۴ مگابایت داده در یک درخواست می‌پذیرد. '
+        . 'فایل بزرگ باید مستقیماً و به‌صورت resumable به فضای ذخیره‌سازی فرستاده شود '
+        . 'و تنها نشانی آن همراه فرم ارسال گردد.</p>'
+        . '<p>اگر این پیام را می‌بینید، لطفاً صفحه را تازه کنید و دوباره تلاش کنید؛ '
+        . 'آپلود مستقیم به‌صورت خودکار انجام می‌شود.</p></main></html>';
+    exit;
 }
 foreach ($_GET as $value) {
     if (!is_string($value)) {

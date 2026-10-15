@@ -142,14 +142,62 @@ function supabaseStorageBucket(): string {
     return trim(env_value('SUPABASE_STORAGE_BUCKET', 'site-media'));
 }
 
+/**
+ * Normalise any resumable endpoint to Supabase's *signed* TUS route.
+ *
+ * Supabase Storage exposes two resumable (TUS) routes and they are NOT
+ * interchangeable:
+ *
+ *   /storage/v1/upload/resumable        → expects a USER jwt (a login token)
+ *   /storage/v1/upload/resumable/sign   → expects a scoped SIGNED upload token
+ *
+ * This application never gives the browser a user JWT — the browser only ever
+ * receives a short-lived, path-scoped signed token that the server issued. The
+ * plain route ignores the `x-signature` header and instead tries to parse that
+ * signed token as a user JWT, which fails with
+ *
+ *   403 Unauthorized — {"error":"Invalid Compact JWS"}
+ *
+ * That is exactly the error this endpoint used to produce. The signed route is
+ * therefore mandatory here, both for the built-in default and for an
+ * operator-supplied SUPABASE_TUS_ENDPOINT (an older value pointing at the plain
+ * route is upgraded in place, so no deployment breaks).
+ */
+function supabaseTusSignedEndpoint(string $endpoint): string {
+    $endpoint = rtrim(trim($endpoint), '/');
+    if ($endpoint === '') return '';
+    if (str_ends_with($endpoint, '/sign')) return $endpoint;
+    return $endpoint . '/sign';
+}
+
+/**
+ * Is the value a compact JWS (header.payload.signature, base64url)?
+ *
+ * The signed upload token is a JWT. If the Storage API ever answers with
+ * something else — an opaque token, an HTML error page, a truncated value — the
+ * browser would send it as `x-signature` and Storage would answer with the
+ * useless "Invalid Compact JWS". Validating the shape here turns that opaque
+ * 403 into an actionable server-side error.
+ */
+function supabaseTokenIsCompactJws(string $token): bool {
+    $token = trim($token);
+    if ($token === '') return false;
+    $parts = explode('.', $token);
+    if (count($parts) !== 3) return false;
+    foreach ($parts as $part) {
+        if ($part === '' || preg_match('/^[A-Za-z0-9_-]+$/', $part) !== 1) return false;
+    }
+    return true;
+}
+
 function supabaseTusEndpoint(): string {
     $configured = rtrim(trim(env_value('SUPABASE_TUS_ENDPOINT')), '/');
-    if ($configured !== '') return $configured;
+    if ($configured !== '') return supabaseTusSignedEndpoint($configured);
     $api = supabaseStorageApiBase();
     if ($api === '') return '';
     $host = (string)parse_url($api, PHP_URL_HOST);
     if (preg_match('/^([A-Za-z0-9-]+)\\.supabase\\.co$/i', $host, $m)) {
-        return 'https://' . $m[1] . '.storage.supabase.co/storage/v1/upload/resumable';
+        return supabaseTusSignedEndpoint('https://' . $m[1] . '.storage.supabase.co/storage/v1/upload/resumable');
     }
     throw new RuntimeException('برای این Supabase URL، SUPABASE_TUS_ENDPOINT باید تنظیم شود.');
 }
@@ -194,16 +242,34 @@ function supabaseCreateSignedUpload(string $key): array {
         ['Content-Type'=>'application/json'],
         json_encode(['upsert'=>false], JSON_UNESCAPED_SLASHES)
     );
-    if ($status < 200 || $status >= 300) return ['ok'=>false,'error'=>'Supabase signed upload failed (HTTP '.$status.').'.($error!==''?' '.$error:'')];
+    if ($status < 200 || $status >= 300) {
+        $hint = '';
+        // A malformed service key is the usual cause: the Storage API parses
+        // the bearer credential as a JWT and rejects it with "Invalid Compact
+        // JWS" before it ever looks at the request.
+        if (in_array($status, [400, 401, 403], true)) {
+            $hint = ' Possibly SUPABASE_SERVICE_ROLE_KEY is malformed or does not match the project.';
+        }
+        return ['ok'=>false,'error'=>'Supabase signed upload failed (HTTP '.$status.').'.($error!==''?' '.$error:'').$hint];
+    }
     $data = json_decode($body, true);
-    $signed = is_array($data) ? (string)($data['signedURL'] ?? $data['url'] ?? '') : '';
+    $signed = is_array($data) ? (string)($data['signedURL'] ?? $data['signedUrl'] ?? $data['signed_url'] ?? $data['url'] ?? '') : '';
     $token = is_array($data) ? (string)($data['token'] ?? '') : '';
-    if ($signed !== '' && $token === '') {
+    if ($token === '' && $signed !== '') {
+        // The raw Storage REST answer carries the token inside the signed URL's
+        // query string; the SDK normalises it into a separate `token` field.
         $query = (string)parse_url($signed, PHP_URL_QUERY);
         parse_str($query, $params);
         $token = (string)($params['token'] ?? '');
+        if ($token !== '') $token = rawurldecode($token);
     }
     if ($token === '') return ['ok'=>false,'error'=>'Supabase did not return a signed upload token.'];
+    // Handing a non-JWT to the browser would only reproduce the opaque
+    // "403 Invalid Compact JWS" on the Storage side. Refuse it here, where the
+    // cause is still known.
+    if (!supabaseTokenIsCompactJws($token)) {
+        return ['ok'=>false,'error'=>'Supabase returned a signed upload token in an unexpected format; the Storage API response could not be used for a resumable upload.'];
+    }
     return ['ok'=>true,'token'=>$token,'signed_url'=>$signed];
 }
 

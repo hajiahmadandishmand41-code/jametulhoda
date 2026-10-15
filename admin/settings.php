@@ -43,17 +43,19 @@ $defaults = [
     'social_instagram' => '',
 ];
 /*
- * چیدمان صفحهٔ اصلی = پنج هاب. برچسب‌ها همان کلیدهایی‌اند که
- * jhd_homepage_settings() می‌شناسد؛ کلیدهای قدیمی (گزارش‌ها، رویدادها،
- * پرسش‌وپاسخ و …) در همان تابع به این پنج نگاشت می‌شوند، پس تنظیماتِ ذخیره‌شدهٔ
- * نصب‌های پیشین بی‌صدا از دست نمی‌رود.
+ * چیدمان صفحهٔ اصلی. برچسب‌ها همان کلیدهایی‌اند که
+ * jhd_homepage_settings() می‌شناسد و صفحهٔ نخست (index.php) مستقیماً از
+ * آن‌ها می‌خواند؛ پس هر تیک اینجا بلافاصله در صفحهٔ نخست اثر می‌گذارد.
+ * کلیدهای قدیمی (گزارش‌ها، رویدادها، پرسش‌وپاسخ و …) در همان تابع به این
+ * شش نگاشت می‌شوند، پس تنظیماتِ ذخیره‌شدهٔ نصب‌های پیشین بی‌صدا از دست
+ * نمی‌رود.
  */
 $homepageSectionLabels = [
-    'hero'    => 'تابلوی اصلی: برند، تصویر و ریل پنج هاب',
-    'feature' => 'مطلب شاخص، برگزیدهٔ سردبیر و تازه‌های اخبار',
-    'lessons' => 'هاب دروس و دوره‌ها',
+    'hero'    => 'تابلوی اصلی: برند، معرفی مدرسه و ریل هاب‌ها',
+    'feature' => 'مطلب شاخص، مطالب فرعی و تازه‌ترین اخبار',
+    'writing' => 'هاب نوشتارها (مقاله، پژوهش و گزارش)',
     'books'   => 'هاب کتابخانهٔ دیجیتال',
-    'writing' => 'هاب نوشتارها (مقاله، پژوهش و پرسش‌وپاسخ)',
+    'lessons' => 'هاب دروس و دوره‌ها',
     'media'   => 'هاب صوت و تصویر',
 ];
 
@@ -122,20 +124,36 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             }
         }
 
-        $postedSections = $_POST['homepage_sections'] ?? [];
-        if (!is_array($postedSections)) $postedSections = [];
-        foreach ($homepageSectionLabels as $sectionKey => $_label) {
-            $homepageEnabled[$sectionKey] = in_array($sectionKey, $postedSections, true);
-        }
-        $homepageHeroId = max(0, (int)($_POST['homepage_hero_post_id'] ?? 0));
-        if ($homepageHeroId > 0) {
-            $heroExists = false;
-            foreach ($homepagePosts as $hp) {
-                if ((int)$hp['id'] === $homepageHeroId) { $heroExists = true; break; }
+        /*
+         * چیدمان صفحهٔ اصلی فقط وقتی بازنویسی می‌شود که فرم واقعاً این بخش را
+         * هم فرستاده باشد. یک فرم HTML، تیک‌های خالی را اصلاً نمی‌فرستد، پس
+         * «بدون کلید» می‌تواند یا یعنی کاربر همه را برداشته، یا یعنی درخواست
+         * از جای دیگری آمده است (مثلاً یک اسکریپت قدیمی که فقط نام سایت را
+         * می‌فرستد). نشانگر پنهانِ فرم این دو را از هم جدا می‌کند: بدون آن،
+         * چیدمانِ ذخیره‌شده دست‌نخورده می‌ماند و با یک درخواست ناقص به‌طور
+         * تصادفی خالی نمی‌شود.
+         */
+        $homepagePanelPosted = !empty($_POST['homepage_sections_present']);
+        if ($homepagePanelPosted) {
+            $postedSections = $_POST['homepage_sections'] ?? [];
+            if (!is_array($postedSections)) $postedSections = [];
+            $postedSections = array_values(array_filter(array_map(
+                static fn($value) => is_string($value) ? $value : '',
+                $postedSections
+            )));
+            foreach ($homepageSectionLabels as $sectionKey => $_label) {
+                $homepageEnabled[$sectionKey] = in_array($sectionKey, $postedSections, true);
             }
-            if (!$heroExists) {
-                $homepageHeroId = 0;
-                $error = 'مطلب شاخص صفحه اصلی معتبر نیست؛ یک مطلب منتشرشده انتخاب کنید.';
+            $homepageHeroId = max(0, (int)($_POST['homepage_hero_post_id'] ?? 0));
+            if ($homepageHeroId > 0) {
+                $heroExists = false;
+                foreach ($homepagePosts as $hp) {
+                    if ((int)$hp['id'] === $homepageHeroId) { $heroExists = true; break; }
+                }
+                if (!$heroExists) {
+                    $homepageHeroId = 0;
+                    $error = 'مطلب شاخص صفحه اصلی معتبر نیست؛ یک مطلب منتشرشده انتخاب کنید.';
+                }
             }
         }
         $homepageConfigValue = json_encode([
@@ -233,9 +251,11 @@ $sets = array_merge($sets, $formValues);
             <section class="admin-card mb-4" aria-labelledby="admin-homepage-heading">
                 <div class="admin-card-header" id="admin-homepage-heading">چیدمان صفحهٔ اصلی</div>
                 <div class="admin-card-body">
-                    <p class="admin-settings-help">صفحهٔ اصلی پنج هاب دارد؛ هر تیک، یکی از آن‌ها را روشن یا خاموش می‌کند. حذف یک هاب از صفحهٔ اصلی، آن بخش را از سایت حذف نمی‌کند: آرشیو، ناوبری «بیشتر»، فوتر و sitemap همیشه پابرجا می‌مانند.</p>
+                    <p class="admin-settings-help">هر تیک، یکی از بخش‌های صفحهٔ اصلی را روشن یا خاموش می‌کند و نتیجه <strong>بلافاصله</strong> در صفحهٔ نخست دیده می‌شود. خاموش کردن یک بخش، آن را از سایت حذف نمی‌کند: آرشیو، ناوبری «بیشتر»، فوتر و نقشهٔ سایت همیشه پابرجا می‌مانند.</p>
                     <div class="mb-4">
                         <label class="form-label fw-bold">بخش‌های قابل نمایش در صفحهٔ اصلی</label>
+                        <?php /* نشانگر پنهان: بدون آن، «تیکِ خالی» با «درخواستِ ناقص» فرقی ندارد. */ ?>
+                        <input type="hidden" name="homepage_sections_present" value="1">
                         <div class="row g-2">
                             <?php foreach ($homepageSectionLabels as $sectionKey => $sectionLabel): ?>
                             <div class="col-12 col-sm-6">
@@ -250,17 +270,17 @@ $sets = array_merge($sets, $formValues);
                     <div>
                         <label for="homepage-hero-post" class="form-label fw-bold">مطلب شاخص صفحهٔ اصلی</label>
                         <select id="homepage-hero-post" name="homepage_hero_post_id" class="form-select">
-                            <option value="0">بدون انتخاب دستی — استفاده از برگزیدهٔ منتشرشده</option>
+                            <option value="0">بدون انتخاب دستی — برگزیدهٔ سردبیر، وگرنه تازه‌ترین خبر</option>
                             <?php foreach ($homepagePosts as $hp): ?>
                             <option value="<?= (int)$hp['id'] ?>" <?= $homepageHeroId === (int)$hp['id'] ? 'selected' : '' ?>>
                                 <?= sanitize(postTypeLabel((string)$hp['post_type'])) ?> — <?= sanitize($hp['title']) ?>
                             </option>
                             <?php endforeach; ?>
                         </select>
-                        <div class="form-text">این انتخاب فقط مطلب شاخص بزرگ ابتدای صفحه را کنترل می‌کند.</div>
+                        <div class="form-text">این مطلب با تصویر بزرگ در یک طرف و تیتر و خلاصه در طرف دیگر، بالای صفحهٔ اصلی می‌نشیند.</div>
                     </div>
                     <div class="alert alert-light border mt-3 mb-0 small">
-                        برای <strong>برگزیدهٔ سردبیر</strong>، هنگام ایجاد یا ویرایش هر مطلب تیک «برگزیدهٔ سردبیر» را فعال کنید؛ این بخش می‌تواند مستقل از مطلب شاخص روشن/خاموش شود.
+                        تیک «برگزیدهٔ سردبیر» را هنگام ایجاد یا ویرایش هر مطلب فعال کنید تا در فهرست‌های دیگر هم بالا بیاید. اگر «مطلب شاخص» دستی انتخاب نشده باشد، خودِ برگزیدهٔ سردبیر و در نبود آن تازه‌ترین خبر، مطلب شاخص می‌شود.
                     </div>
                 </div>
             </section>

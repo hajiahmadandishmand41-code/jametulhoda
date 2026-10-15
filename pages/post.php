@@ -61,6 +61,15 @@ if (!$post || ($normalizedExpected !== '' && ($post['post_type'] ?? '') !== $nor
 }
 
 /*
+ * شمارندهٔ بازدید.
+ *
+ * یک بازدید برای هر درخواستِ عمومیِ یک مطلب منتشرشده شمرده می‌شود. این
+ * شمارنده پایهٔ ریل «پربازدیدترین‌ها» است و هرگز مسیر رندر را نمی‌شکند:
+ * خطای احتمالی فقط ثبت می‌شود. بازدیدهای پنل مدیریت شمرده نمی‌شوند.
+ */
+recordContentView((int)($post['id'] ?? 0));
+
+/*
  * One content item = one URL.
  *
  * The post resolved successfully, so the request may still have arrived
@@ -331,15 +340,47 @@ require_once __DIR__ . '/../includes/header.php';
 
 <div class="col-lg-4">
 <div class="d-grid gap-3">
+    <?php
+    /*
+     * ستون کناری: مطالب مرتبط، تازه‌ترین‌ها و پربازدیدترین‌ها — هر سه با
+     * تصویر کوچک در سمت راست (ابتدای خط در راست‌چین) و فهرست یکدست.
+     */
+    $railLatest = getLatestPosts(5);
+    $railPopular = getMostViewedPosts(5);
+    if ($railPopular) {
+        $railPopular = array_values(array_filter(
+            $railPopular,
+            static fn(array $row): bool => (int)($row['id'] ?? 0) !== (int)($post['id'] ?? 0)
+        ));
+    }
+    ?>
+
     <?php if (!empty($related)): ?>
-    <div class="jhd-side-card">
-        <h3><i class="bi bi-grid"></i> مطالب مرتبط</h3>
-        <ul class="jhd-side-list">
-        <?php foreach ($related as $r): ?>
-            <li><a href="<?= postUrl($r) ?>"><?= sanitize(mb_strimwidth($r['title'], 0, 55, '...')) ?></a><small><?= persianDate($r['published_at'] ?? $r['created_at']) ?></small></li>
-        <?php endforeach; ?>
-        </ul>
-    </div>
+    <?= jhd_rail_list($related, [
+        'title' => 'مطالب مرتبط',
+        'icon'  => 'bi-diagram-3',
+        'id'    => 'jhd-rail-related',
+    ]) ?>
+    <?php endif; ?>
+
+    <?php if ($railLatest): ?>
+    <?= jhd_rail_list($railLatest, [
+        'title' => 'تازه‌ترین‌ها',
+        'icon'  => 'bi-clock-history',
+        'id'    => 'jhd-rail-latest',
+        'more'  => 'همهٔ اخبار',
+        'more_url' => url('news'),
+    ]) ?>
+    <?php endif; ?>
+
+    <?php if ($railPopular): ?>
+    <?= jhd_rail_list($railPopular, [
+        'title' => 'پربازدیدترین‌ها',
+        'icon'  => 'bi-eye',
+        'id'    => 'jhd-rail-popular',
+        'more'  => 'همهٔ مطالب',
+        'more_url' => url('articles'),
+    ]) ?>
     <?php endif; ?>
 
     <?php if ($relatedBooks): ?>
@@ -359,27 +400,6 @@ require_once __DIR__ . '/../includes/header.php';
         </ul>
     </div>
     <?php endif; ?>
-
-    <div class="jhd-side-card">
-        <h3><i class="bi bi-newspaper"></i> تازه‌های مدرسه</h3>
-        <?php
-        $sidePool = array_merge(
-            getPosts(['type' => 'news', 'limit' => 3]),
-            getPosts(['type' => 'report', 'limit' => 3])
-        );
-        usort($sidePool, static fn(array $a, array $b): int => strcmp(
-            (string)($b['published_at'] ?? $b['created_at'] ?? ''),
-            (string)($a['published_at'] ?? $a['created_at'] ?? '')
-        ));
-        $sideAccepted = [];
-        $sideCombined = jhd_homepage_unique_posts($sidePool, $sideAccepted, 5);
-        ?>
-        <ul class="jhd-side-list">
-        <?php foreach (array_slice($sideCombined, 0, 5) as $sn): ?>
-            <li><a href="<?= postUrl($sn) ?>"><?= sanitize(mb_strimwidth($sn['title'], 0, 60, '...')) ?></a><small><?= persianDate($sn['published_at'] ?? $sn['created_at']) ?></small></li>
-        <?php endforeach; ?>
-        </ul>
-    </div>
 </div>
 </div>
 </div></div></div>
