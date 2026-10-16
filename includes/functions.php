@@ -1299,7 +1299,8 @@ function getLatestMediaItems(int $limit = 6): array {
                    COALESCE(p.post_type, '') AS post_type,
                    p.featured_image AS featured_image,
                    COALESCE(p.published_at, l.created_at, m.created_at) AS published_at,
-                   CASE WHEN p.id IS NOT NULL THEN 'post' WHEN l.id IS NOT NULL THEN 'lesson' ELSE 'media' END AS target
+                   CASE WHEN p.id IS NOT NULL THEN 'post' WHEN l.id IS NOT NULL THEN 'lesson' ELSE 'media' END AS target,
+                   p.id AS post_id, l.id AS lesson_id
             FROM media_files m
             LEFT JOIN posts p   ON p.id = m.ref_id   AND m.ref_type = 'post'   AND p.status = 'published'
             LEFT JOIN lessons l ON l.id = m.ref_id   AND m.ref_type = 'lesson' AND l.status = 'published'

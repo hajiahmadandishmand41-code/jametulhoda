@@ -111,12 +111,10 @@ require_once __DIR__ . '/../includes/header.php';
 
         <?php
         $newsList = $posts;
+        // مطلب نخست صفحه، همان «خبر اصلی» صفحهٔ نخست: عکس بزرگ و جزئیات در کنار آن.
         if (!$search && $page === 1 && $newsList) {
-            echo '<div class="mb-4">' . renderPostCard($newsList[0], [
-                'featured' => true,
-                'col' => 'col-12',
-                'cta' => 'ادامه مطلب',
-                'excerpt' => 130,
+            echo '<div class="mb-4">' . jhd_lead_story($newsList[0], [
+                'eyebrow' => jhd_listing_lead_eyebrow($sort, 'خبر'),
             ]) . '</div>';
             $newsList = array_slice($newsList, 1);
         }
@@ -131,9 +129,10 @@ require_once __DIR__ . '/../includes/header.php';
             endforeach; ?>
         <?= jhd_grid_close() ?>
 
+    <?php $rails = jhd_listing_rails($posts); ?>
     <?= jhd_discovery_band([
-        'latest'  => getLatestPosts(5),
-        'popular' => getMostViewedPosts(5),
+        'latest'  => $rails['latest'],
+        'popular' => $rails['popular'],
         'latest_title' => 'تازه‌ترین‌ها',
         'latest_more'  => 'همهٔ اخبار',
         'latest_more_url' => url('news'),

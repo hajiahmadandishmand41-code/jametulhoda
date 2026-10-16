@@ -94,6 +94,15 @@ foreach ($related as $row) {
     $shared->execute([$p['id'],$row['id']]);
     verify(($p['category_id'] && $row['category_id']==$p['category_id']) || (int)$shared->fetchColumn()>0, 'related has actual shared category/topic');
 }
+// فهرست‌های خبر/مقاله: مطلب بزرگ ابتدا، و ریل‌ها هیچ مطلبی را که همان صفحه نشان داده تکرار نمی‌کنند.
+verify(jhd_listing_lead_eyebrow('newest', 'خبر') === 'آخرین خبر' && jhd_listing_lead_eyebrow('oldest', 'مقاله') === 'قدیمی‌ترین مقاله' && jhd_listing_lead_eyebrow('popular', 'پژوهش') === 'پربازدیدترین پژوهش', 'listing lead labels follow sort');
+$pageNews = getPosts(['types'=>['news','announcement'],'sort'=>'newest','limit'=>6]);
+$railsForPage = jhd_listing_rails($pageNews);
+$railIds = array_merge(array_column($railsForPage['latest'],'id'), array_column($railsForPage['popular'],'id'));
+verify(!array_intersect($railIds, array_column($pageNews,'id')), 'listing rails never repeat items shown on the same page');
+$homeCfg = jhd_normalize_home_config(['hero_mode'=>'auto']);
+$lead = jhd_home_feature($homeCfg);
+verify($lead !== null && $lead['post_type'] !== '', 'auto lead resolves for homepage de-duplication');
 $storedConfig = json_encode(jhd_normalize_home_config(['layout'=>['news'=>['title'=>'پایدار']]]));
 $db->prepare("INSERT INTO settings(setting_key,value) VALUES ('homepage_config',?) ON CONFLICT(setting_key) DO UPDATE SET value=EXCLUDED.value")->execute([$storedConfig]);
 $independent = newDatabaseConnection();

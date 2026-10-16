@@ -89,14 +89,37 @@ $layout = $homeSettings['layout'];
 uasort($layout, static fn($a, $b) => $a['order'] <=> $b['order']);
 // آستانهٔ «پربازدید» از تنظیمات مدیریت می‌آید؛ هرگز عدد ساختگی نیست.
 $popularMinViews = jhd_popular_min_views();
-$popular = [];
-if (!empty($homeSettings['sections']['popular'])) {
-    $popularCfg = $homeSettings['layout']['popular'];
-    $popular = getPosts(['limit' => $popularCfg['limit'], 'sort' => 'popular', 'min_views' => $popularMinViews, 'cat' => $popularCfg['category']]);
-}
 // وقتی «اطلاعیه‌ها» بخش مستقل خودش را دارد، بخش اخبار فقط خبر می‌گیرد تا
 // یک مطلب دو بار در صفحهٔ اصلی تکرار نشود.
 $announcementsOn = !empty($homeSettings['sections']['announcements']);
+
+/*
+ * هر مطلب، کتاب، درس یا رسانه در کل صفحهٔ اصلی «فقط یک‌بار» دیده می‌شود.
+ * مطلب شاخص (دوار/بالای صفحه) اولین کسی است که ثبت می‌شود؛ بخش‌های بعدی
+ * آن را کنار می‌گذارند. کلید «نوع:شناسه» است تا شناسهٔ کتاب با شناسهٔ مطلب
+ * اشتباه گرفته نشود.
+ */
+$shownKeys = [];
+$homeKindOf = static fn(array $row): string => in_array((string)($row['post_type'] ?? ''), ['book', 'lesson'], true)
+    ? (string)$row['post_type'] : 'post';
+$markShown = static function (array $rows, string $kind) use (&$shownKeys): void {
+    foreach ($rows as $row) {
+        $id = (int)($row['id'] ?? 0);
+        if ($id > 0) $shownKeys[$kind . ':' . $id] = true;
+    }
+};
+$shownIds = static function (string $kind) use (&$shownKeys): array {
+    $ids = [];
+    foreach (array_keys($shownKeys) as $key) {
+        if (str_starts_with($key, $kind . ':')) $ids[] = (int)substr($key, strlen($kind) + 1);
+    }
+    return $ids;
+};
+$dropShown = static function (array $rows, string $kind) use (&$shownKeys): array {
+    return array_values(array_filter($rows, static fn($row): bool => !isset($shownKeys[$kind . ':' . (int)($row['id'] ?? 0)])));
+};
+$leadRow = !empty($homeSettings['sections']['feature']) ? jhd_home_feature($homeSettings) : null;
+if ($leadRow) $markShown([$leadRow], $homeKindOf($leadRow));
 require_once __DIR__ . '/includes/header.php';
 ?>
 <div class="jhd-homepage jhd-homepage--editorial" id="home-content" data-density="<?= sanitize($homeSettings['density']) ?>" data-thumb="<?= sanitize($homeSettings['thumb']) ?>">
@@ -109,24 +132,49 @@ foreach ($layout as $key => $section) {
     $rows = []; $lead = null;
     $opts = ['limit' => $section['limit'], 'sort' => 'newest'];
     if ($section['category']) $opts['cat'] = $section['category'];
+    // مطلب‌هایی که بخش‌های بالاتر نشان داده‌اند، در این بخش دیده نمی‌شوند.
+    $opts['exclude_ids'] = $shownIds('post');
+    $postKeys = ['popular', 'latest', 'news', 'announcements', 'writing', 'research'];
     switch ($key) {
-        case 'feature': $lead = jhd_home_feature($homeSettings); break;
+        case 'feature': $lead = $leadRow; break;
         case 'popular':
             // Popular is always ordered by the actual counter, regardless of editor input.
             $rows = getPosts(array_replace($opts, ['sort' => 'popular', 'min_views' => $popularMinViews])); break;
-        case 'latest': $rows = getPosts($opts + ['exclude_ids' => array_column($popular, 'id')]); break;
+        case 'latest': $rows = getPosts($opts); break;
         case 'news': $rows = getPosts($opts + ['types' => $announcementsOn ? ['news'] : ['news', 'announcement']]); break;
         case 'announcements': $rows = getPosts($opts + ['type' => 'announcement']); break;
         case 'writing': $rows = getPosts($opts + ['type' => 'article']); break;
         case 'research': $rows = getPosts($opts + ['type' => 'research']); break;
-        case 'books': $rows = getBooks(['limit' => $section['limit']]); break;
-        case 'lessons': $rows = getLessons(['limit' => $section['limit']]); break;
+        case 'books':
+            $rows = array_slice($dropShown(getBooks(['limit' => min(100, $section['limit'] + count($shownIds('book')))]), 'book'), 0, $section['limit']);
+            break;
+        case 'lessons':
+            $rows = array_slice($dropShown(getLessons(['limit' => min(100, $section['limit'] + count($shownIds('lesson')))]), 'lesson'), 0, $section['limit']);
+            break;
         case 'topics': $rows = jhd_home_topics($section['limit']); break;
-        case 'media': $rows = getLatestMediaItems($section['limit']); break;
+        case 'media':
+            // رسانهٔ متعلق به مطلب یا درسی که قبلاً نشان داده شده، تکرار نمی‌شود.
+            $mediaRows = [];
+            foreach (getLatestMediaItems(min(24, $section['limit'] * 3)) as $mediaRow) {
+                $ownerKey = !empty($mediaRow['post_id']) ? 'post:' . (int)$mediaRow['post_id']
+                    : (!empty($mediaRow['lesson_id']) ? 'lesson:' . (int)$mediaRow['lesson_id'] : '');
+                if ($ownerKey !== '' && isset($shownKeys[$ownerKey])) continue;
+                $mediaRows[] = $mediaRow;
+                if (count($mediaRows) >= $section['limit']) break;
+            }
+            $rows = $mediaRows;
+            break;
     }
     if (!$lead && !$rows) continue;
     $shown = true;
-    if (in_array($key, ['popular','latest','news','announcements','writing','research'], true)) jhd_preload_post_images($rows);
+    if (in_array($key, $postKeys, true)) {
+        jhd_preload_post_images($rows);
+        $markShown($rows, 'post');
+    } elseif ($key === 'books') {
+        $markShown($rows, 'book');
+    } elseif ($key === 'lessons') {
+        $markShown($rows, 'lesson');
+    }
     /*
      * حالت چیدمان هر بخش از پنل مدیریت می‌آید:
      *   auto → ردیف فشردهٔ افقی در موبایل، کاشی کوچک دوستونی از تبلت به بالا؛
