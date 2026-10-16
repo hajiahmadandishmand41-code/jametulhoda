@@ -287,7 +287,7 @@ $csrfToken        = generateCsrfToken();
                     <div>
                         <label for="post-content" class="form-label fw-bold">متن کامل مطلب</label>
                         <textarea id="post-content" name="content" aria-describedby="post-content-help" class="form-control" rows="12"><?= htmlspecialchars($post['content'] ?? '', ENT_QUOTES, 'UTF-8') ?></textarea>
-                        <p id="post-content-help" class="form-text mb-0">برای پاراگراف تازه یک خط خالی بگذارید؛ شکست خط و ساختار HTML امن (تیتر، فهرست و نقل‌قول) در نمایش عمومی حفظ می‌شود.</p>
+                        <p id="post-content-help" class="form-text mb-0">برای پاراگراف تازه یک خط خالی بگذارید؛ شکست خط و ساختار HTML امن (تیتر، فهرست و نقل‌قول) در نمایش عمومی حفظ می‌شود. در متن ساده هم می‌توانید ابتدای سطر <code>##</code> (تیتر تیره)، <code>###</code> (زیرتیتر) و دور متن مهم <code>**دو ستاره**</code> بگذارید.</p>
                     </div>
                     <?php if ($fixedPostType === 'speech'): ?>
                     <div class="mt-3">

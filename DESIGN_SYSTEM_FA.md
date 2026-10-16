@@ -20,7 +20,11 @@ echo jhd_grid_close();
 
 * ستون استاندارد: `JHD_CARD_COL` = `col-12 col-sm-6 col-lg-4`
   (موبایل یک‌ستونه، تبلت دوستونه، دسکتاپ سه‌ستونه).
-* گونه‌ها: `default`، `featured` (کارت بزرگ صدر صفحه)، `compact` (فهرست کناری).
+* گونه‌ها: `default`، `featured` (کارت بزرگ صدر صفحه)، `compact` (ردیف افقی
+  فشرده — بندانگشتی کوچک یک سو و عنوان سوی دیگر؛ پیش‌فرض بخش‌های صفحهٔ اصلی،
+  ریل‌های انتهای مطلب و فهرست‌های کناری). حالت چیدمان هر بخش صفحهٔ اصلی
+  (`auto`/`rows`/`grid`)، تراکم (`compact`/`cozy`) و اندازهٔ بندانگشتی
+  (`sm`/`md`) از `/admin/settings` کنترل می‌شود.
 * ساختار ثابت هر کارت:
   `.jhd-card` → `.jhd-card-media` → `.jhd-card-body` →
   `.jhd-card-meta` / `.jhd-card-title` / `.jhd-card-summary` / `.jhd-card-foot`.

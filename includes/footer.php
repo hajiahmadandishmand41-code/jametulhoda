@@ -55,15 +55,16 @@ $footerSections = array_merge(
 <footer class="main-footer" role="contentinfo">
     <div class="footer-top">
         <div class="container">
-            <div class="row g-4">
+            <div class="row g-3 g-md-4">
                 <!-- برند و معرفی -->
                 <div class="col-lg-5 col-md-6">
                     <div class="footer-brand">
                         <?php if ($siteLogo): ?><img src="<?= imgUrl($siteLogo) ?>" width="40" height="41" alt="نشان <?= sanitize($siteName) ?>"><?php endif; ?>
                         <h5><?= sanitize($siteName) ?></h5>
                     </div>
-                    <p class="footer-text"><?= sanitize($siteSlogan) ?></p>
-                    <p class="footer-text"><?= sanitize($aboutShort) ?></p>
+                    <p class="footer-text mb-1"><?= sanitize($siteSlogan) ?></p>
+                    <?php /* معرفی کامل فقط از اندازهٔ اسمارت به بالا — فوتر موبایل باریک می‌ماند. */ ?>
+                    <p class="footer-text d-none d-sm-block"><?= sanitize($aboutShort) ?></p>
                     <?php if ($socialTelegram || $socialYoutube || $socialInstagram): ?>
                     <div class="footer-social mt-3">
                         <?php if ($socialTelegram): ?><a href="<?= sanitize(safeExternalUrl($socialTelegram)) ?>" target="_blank" rel="noopener noreferrer" class="social-link social-link--telegram" title="تلگرام" aria-label="کانال تلگرام"><i class="bi bi-telegram" aria-hidden="true"></i><span>کانال تلگرام</span></a><?php endif; ?>

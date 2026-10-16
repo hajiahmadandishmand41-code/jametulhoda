@@ -87,15 +87,20 @@ if ($__p !== '') {
 $homeSettings = jhd_homepage_settings();
 $layout = $homeSettings['layout'];
 uasort($layout, static fn($a, $b) => $a['order'] <=> $b['order']);
+// آستانهٔ «پربازدید» از تنظیمات مدیریت می‌آید؛ هرگز عدد ساختگی نیست.
+$popularMinViews = jhd_popular_min_views();
 $popular = [];
 if (!empty($homeSettings['sections']['popular'])) {
     $popularCfg = $homeSettings['layout']['popular'];
-    $popular = getPosts(['limit' => $popularCfg['limit'], 'sort' => 'popular', 'min_views' => 50, 'cat' => $popularCfg['category']]);
+    $popular = getPosts(['limit' => $popularCfg['limit'], 'sort' => 'popular', 'min_views' => $popularMinViews, 'cat' => $popularCfg['category']]);
 }
+// وقتی «اطلاعیه‌ها» بخش مستقل خودش را دارد، بخش اخبار فقط خبر می‌گیرد تا
+// یک مطلب دو بار در صفحهٔ اصلی تکرار نشود.
+$announcementsOn = !empty($homeSettings['sections']['announcements']);
 require_once __DIR__ . '/includes/header.php';
 ?>
-<div class="jhd-homepage jhd-homepage--editorial" id="home-content">
-<div class="container pt-4"><h1 class="h3"><?= sanitize($siteName) ?>؛ پایگاه علمی و خبری</h1></div>
+<div class="jhd-homepage jhd-homepage--editorial" id="home-content" data-density="<?= sanitize($homeSettings['density']) ?>" data-thumb="<?= sanitize($homeSettings['thumb']) ?>">
+<div class="container jhd-home-titlebar"><h1 class="h3"><?= sanitize($siteName) ?>؛ پایگاه علمی و خبری</h1></div>
 <?php
 $shown = false;
 foreach ($layout as $key => $section) {
@@ -107,38 +112,56 @@ foreach ($layout as $key => $section) {
         case 'feature': $lead = jhd_home_feature($homeSettings); break;
         case 'popular':
             // Popular is always ordered by the actual counter, regardless of editor input.
-            $rows = getPosts(array_replace($opts, ['sort' => 'popular', 'min_views' => 50])); break;
+            $rows = getPosts(array_replace($opts, ['sort' => 'popular', 'min_views' => $popularMinViews])); break;
         case 'latest': $rows = getPosts($opts + ['exclude_ids' => array_column($popular, 'id')]); break;
-        case 'news': $rows = getPosts($opts + ['types' => ['news', 'announcement']]); break;
+        case 'news': $rows = getPosts($opts + ['types' => $announcementsOn ? ['news'] : ['news', 'announcement']]); break;
+        case 'announcements': $rows = getPosts($opts + ['type' => 'announcement']); break;
         case 'writing': $rows = getPosts($opts + ['type' => 'article']); break;
         case 'research': $rows = getPosts($opts + ['type' => 'research']); break;
         case 'books': $rows = getBooks(['limit' => $section['limit']]); break;
         case 'lessons': $rows = getLessons(['limit' => $section['limit']]); break;
+        case 'topics': $rows = jhd_home_topics($section['limit']); break;
         case 'media': $rows = getLatestMediaItems($section['limit']); break;
     }
     if (!$lead && !$rows) continue;
     $shown = true;
-    if (in_array($key, ['popular','latest','news','writing','research'], true)) jhd_preload_post_images($rows);
+    if (in_array($key, ['popular','latest','news','announcements','writing','research'], true)) jhd_preload_post_images($rows);
+    /*
+     * حالت چیدمان هر بخش از پنل مدیریت می‌آید:
+     *   auto → ردیف فشردهٔ افقی در موبایل، کاشی کوچک دوستونی از تبلت به بالا؛
+     *   rows → همیشه ردیف افقی تمام‌عرض (کم‌ارتفاع‌ترین حالت)؛
+     *   grid → کارت بزرگ‌تر شبکه‌ای (چیدمان پیشین).
+     * در همهٔ حالت‌ها تصویر کوچک یک طرف و عنوان طرف دیگر است.
+     */
+    $mode = (string)($section['mode'] ?? 'auto');
+    $cardOpts = [];
+    if ($mode !== 'grid') $cardOpts['compact'] = true;
+    if ($mode === 'auto') $cardOpts['col'] = 'col-12 col-md-6';
+    elseif ($mode === 'rows') $cardOpts['col'] = 'col-12';
     ?>
     <section class="jhd-section" data-home-section="<?= sanitize($key) ?>" aria-labelledby="home-<?= sanitize($key) ?>-heading">
       <div class="container">
-      <?php $archive = ['news' => 'news', 'writing' => 'articles', 'research' => 'articles', 'books' => 'books', 'lessons' => 'lessons', 'media' => 'media'][$key] ?? null; ?>
+      <?php /* فهرست «همهٔ موضوعات» از پیش به آرشیو مقالات هدایت می‌شود؛ پس
+             برای بخش موضوعات پیوند «مشاهدهٔ همه» نمی‌گذاریم — هر کاشی مستقیماً
+             به هاب همان موضوع می‌رود. */ ?>
+      <?php $archive = ['news' => 'news', 'announcements' => 'announcements', 'writing' => 'articles', 'research' => 'articles', 'books' => 'books', 'lessons' => 'lessons', 'media' => 'media'][$key] ?? null; ?>
       <?= jhd_section_head(['title' => $section['title'], 'title_id' => 'home-' . $key . '-heading',
           'url' => $archive ? url($archive, $key === 'research' ? ['type' => 'research'] : []) : '',
-          'link' => $key === 'news' ? 'همهٔ اخبار' : 'مشاهدهٔ همه']) ?>
+          'link' => $key === 'news' ? 'همهٔ اخبار' : ($key === 'announcements' ? 'همهٔ اطلاعیه‌ها' : 'مشاهدهٔ همه')]) ?>
       <?php if ($lead): ?>
         <?= jhd_lead_story($lead) ?>
       <?php else: ?>
-        <div class="row g-4">
+        <div class="row <?= $mode === 'grid' ? 'g-3' : 'g-2' ?>">
         <?php foreach ($rows as $row) {
-            if ($key === 'books') echo renderBookCard($row);
-            elseif ($key === 'lessons') echo renderLessonCard($row);
+            if ($key === 'books') echo renderBookCard($row, $cardOpts);
+            elseif ($key === 'lessons') echo renderLessonCard($row, $cardOpts);
+            elseif ($key === 'topics') echo renderTopicCard($row, $cardOpts + ['minimal' => true]);
             elseif ($key === 'media') echo renderMediaCard([
                 'kind' => $row['media_kind'], 'id' => $row['media_id'], 'title' => $row['title'],
                 'slug' => $row['slug'], 'target' => $row['target'], 'post_type' => $row['post_type'],
                 'published_at' => $row['published_at'], 'thumbnail' => $row['featured_image'],
-            ]);
-            else echo renderPostCard($row);
+            ], $cardOpts);
+            else echo renderPostCard($row, $cardOpts);
         } ?>
         </div>
       <?php endif; ?>
