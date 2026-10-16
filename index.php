@@ -104,6 +104,7 @@ require_once __DIR__ . '/includes/header.php';
 <?php
 $shown = false;
 foreach ($layout as $key => $section) {
+    if ($key === 'topics') continue; // بخش عمومی «موضوعات علمی» از خروجی عمومی حذف شد.
     if (empty($homeSettings['sections'][$key])) continue;
     $rows = []; $lead = null;
     $opts = ['limit' => $section['limit'], 'sort' => 'newest'];

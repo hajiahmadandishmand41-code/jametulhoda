@@ -431,7 +431,7 @@ function jhd_card(array $card, array $opts = []): string {
 
     $body  = jhd_card_meta_line($card);
     $body .= '<h3 class="jhd-card-title">'
-        . ($href !== '' ? '<a href="' . sanitize($href) . '">' . sanitize($title) . '</a>' : sanitize($title))
+        . ($href !== '' ? '<a class="stretched-link" href="' . sanitize($href) . '">' . sanitize($title) . '</a>' : sanitize($title))
         . '</h3>';
     if ($summary !== '' && $variant !== 'compact') {
         $body .= '<p class="jhd-card-summary">' . sanitize($summary) . '</p>';
@@ -1376,13 +1376,14 @@ function jhd_persian_digits(int $number): string {
 
 /** ردیف اشتراک‌گذاری مطلب. */
 function jhd_share_row(string $url, string $title): string {
-    $enc = rawurlencode($url);
+    $shareUrl = jhd_absolute_url($url);
+    $enc = rawurlencode($shareUrl);
     $encTitle = rawurlencode($title);
     return '<div class="jhd-share">'
         . '<span class="text-muted"><i class="bi bi-share ms-1"></i>اشتراک‌گذاری:</span>'
         . '<a class="jhd-icon-btn" href="https://t.me/share/url?url=' . $enc . '&text=' . $encTitle . '" target="_blank" rel="noopener noreferrer" aria-label="اشتراک در تلگرام"><i class="bi bi-telegram"></i></a>'
         . '<a class="jhd-icon-btn" href="https://wa.me/?text=' . $enc . '%20' . $encTitle . '" target="_blank" rel="noopener noreferrer" aria-label="اشتراک در واتس‌اپ"><i class="bi bi-whatsapp"></i></a>'
-        . '<button type="button" class="jhd-icon-btn" data-copy-link="' . sanitize($url) . '" aria-label="کپی پیوند"><i class="bi bi-link-45deg"></i></button>'
+        . '<button type="button" class="jhd-icon-btn" data-copy-link="' . sanitize($shareUrl) . '" data-share-title="' . sanitize($title) . '" aria-label="اشتراک‌گذاری"><i class="bi bi-link-45deg"></i></button>'
         . '</div>';
 }
 

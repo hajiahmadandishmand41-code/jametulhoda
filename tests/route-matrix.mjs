@@ -140,12 +140,10 @@ for (const kind of ['video', 'audio']) {
   }
 }
 
-// Topic URLs intentionally retired in the current application. Check the
-// permanent compatibility redirect rather than expecting deleted topic pages.
+// Unknown topic slugs must now produce a real 404, not a redirect.
 for (const path of ['/index.php?p=topic&slug=this-does-not-exist-xyz','/topic/this-does-not-exist-xyz']) {
   const r=await fetch(base+path,{redirect:'manual',signal:AbortSignal.timeout(30000)});
-  const target=new URL(r.headers.get('location') || '',base);
-  check('retired topic permanent redirect '+path,r.status===301 && target.origin===new URL(base).origin && /articles|p=articles/.test(target.pathname+target.search),String(r.status));
+  check('unknown topic 404 '+path, r.status === 404, String(r.status));
 }
 
 // ── True 404 (no soft-404) ──────────────────────────────────────────────────

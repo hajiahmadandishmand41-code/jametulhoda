@@ -4928,3 +4928,17 @@ h1,h2,h3,h4,h5,h6,.jhd-section-head h2,.jhd-auth-card h1 {
   .jhd-homepage .jhd-card:not(.jhd-card--featured):not(.jhd-card--compact) > .jhd-card-body { padding:1rem; }
   .jhd-public-site .jhd-card--featured > .jhd-card-media { max-height:none; aspect-ratio:16 / 9; }
 }
+
+/* ─── کل کارت قابل کلیک (stretched link) ─────────────────────────────── */
+.jhd-card .btn-read-more,
+.jhd-card .jhd-icon-btn,
+.jhd-card .jhd-share,
+.jhd-card .jhd-gallery__cell,
+.jhd-card .jhd-card-kids a {
+  position: relative;
+  z-index: 2;
+}
+.jhd-card .jhd-card-media a {
+  position: relative;
+  z-index: 1;
+}

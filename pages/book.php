@@ -177,6 +177,8 @@ $bookDownloadWordUrl = $bookDetailUrl . (str_contains($bookDetailUrl, '?') ? '&'
 </div>
 </div>
 
+<?= jhd_share_row($bookCanonical, (string)$book['title']) ?>
+
 <?php if ($related): ?>
 <section class="jhd-book-related jhd-book-section" aria-labelledby="book-related-title">
   <h2 id="book-related-title" class="jhd-book-section-title"><i class="bi bi-collection" aria-hidden="true"></i>کتاب‌های مرتبط</h2>
