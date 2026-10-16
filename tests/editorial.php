@@ -20,6 +20,19 @@ function verify(bool $ok, string $label): void {
     $checks++;
 }
 $before = (int)$db->query('SELECT COUNT(*) FROM posts')->fetchColumn();
+// Public list defaults must be chronological even when older rows are marked featured.
+$expectedPostIds = array_map('intval', $db->query("SELECT id FROM posts WHERE status='published' ORDER BY COALESCE(published_at, created_at) DESC, id DESC")->fetchAll(PDO::FETCH_COLUMN));
+$actualPostIds = array_map('intval', array_column(getPosts(['limit' => 100]), 'id'));
+verify($actualPostIds === $expectedPostIds, 'default post list sorts newest-first independent of featured flag');
+
+$expectedBookIds = array_map('intval', $db->query("SELECT id FROM books WHERE status='published' ORDER BY created_at DESC, id DESC")->fetchAll(PDO::FETCH_COLUMN));
+$actualBookIds = array_map('intval', array_column(getBooks(['limit' => 100]), 'id'));
+verify($actualBookIds === $expectedBookIds, 'book list sorts newest-first independent of featured flag');
+
+$expectedLessonIds = array_map('intval', $db->query("SELECT id FROM lessons WHERE status='published' ORDER BY created_at DESC, id DESC")->fetchAll(PDO::FETCH_COLUMN));
+$actualLessonIds = array_map('intval', array_column(getLessons(['limit' => 100]), 'id'));
+verify($actualLessonIds === $expectedLessonIds, 'lesson feed sorts newest-first independent of featured flag');
+
 verify(getMostViewedPosts() === [], 'zero views: no popular fallback');
 $db->exec("UPDATE posts SET view_count=49 WHERE post_type='news'");
 verify(getMostViewedPosts() === [], '49 is not eligible');
