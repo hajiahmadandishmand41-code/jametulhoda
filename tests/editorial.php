@@ -103,6 +103,18 @@ verify(!array_intersect($railIds, array_column($pageNews,'id')), 'listing rails 
 $homeCfg = jhd_normalize_home_config(['hero_mode'=>'auto']);
 $lead = jhd_home_feature($homeCfg);
 verify($lead !== null && $lead['post_type'] !== '', 'auto lead resolves for homepage de-duplication');
+// Shared archive: lead once, no repeated records, compact rows on later pages/search.
+$archiveItems = getPosts(['sort'=>'newest', 'limit'=>3]);
+verify(count($archiveItems) === 3, 'archive fixture has three items');
+$archive = jhd_post_archive($archiveItems);
+verify(substr_count($archive, 'class="jhd-lead"') === 1, 'one archive banner');
+verify(substr_count($archive, 'jhd-card--row') === 2, 'remaining stories are horizontal rows');
+foreach ([['page'=>2], ['search'=>'test']] as $options) {
+    $rows = jhd_post_archive($archiveItems, $options);
+    verify(!str_contains($rows, 'class="jhd-lead"') && substr_count($rows, 'jhd-card--row') === 3, 'search and pagination keep every item compact');
+}
+verify(jhd_post_archive([]) === '', 'empty archive has no empty wrapper');
+verify(!str_contains(jhd_post_archive([$archiveItems[0]]), 'jhd-archive-rows'), 'single item has only a banner');
 $storedConfig = json_encode(jhd_normalize_home_config(['layout'=>['news'=>['title'=>'پایدار']]]));
 $db->prepare("INSERT INTO settings(setting_key,value) VALUES ('homepage_config',?) ON CONFLICT(setting_key) DO UPDATE SET value=EXCLUDED.value")->execute([$storedConfig]);
 $independent = newDatabaseConnection();

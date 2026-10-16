@@ -36,12 +36,7 @@ require_once __DIR__ . '/../includes/header.php';
     <div class="jhd-empty-state"><i class="bi bi-megaphone" aria-hidden="true"></i><p>اطلاعیه‌ای یافت نشد</p></div>
     <?php else: ?>
     <?= renderCategoryChips(['announcement'], url('announcements'), 'همه اطلاعیه‌ها') ?>
-    <?php jhd_preload_post_topics($posts); ?>
-    <?= jhd_grid_open() ?>
-        <?php foreach ($posts as $p):
-            echo renderPostCard($p, ['cta' => 'ادامه مطلب و جزییات', 'excerpt' => 130]);
-        endforeach; ?>
-    </div>
+    <?= jhd_post_archive($posts, ['page' => $page, 'search' => $search ?? '', 'cta' => 'ادامه مطلب']) ?>
     <?php if ($pages > 1): ?><div class="mt-5"><?= paginate($total, $limit, $page, url('announcements', ['page' => '%d'])) ?></div><?php endif; ?>
     <?php endif; ?>
 </div></div>

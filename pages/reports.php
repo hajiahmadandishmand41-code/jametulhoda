@@ -102,12 +102,7 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
     <?php else: ?>
     <?= renderCategoryChips(['report'], url('reports'), 'همه گزارش‌ها') ?>
-    <?php jhd_preload_post_topics($posts); ?>
-    <?= jhd_grid_open() ?>
-      <?php foreach ($posts as $k => $p):
-        echo renderPostCard($p, ['featured' => $k === 0 && empty($search), 'cta' => 'مشاهده گزارش', 'excerpt' => 110]);
-      endforeach; ?>
-    </div>
+    <?= jhd_post_archive($posts, ['page' => $page, 'search' => $search ?? '', 'cta' => 'ادامه مطلب']) ?>
 
 
     <?= jhd_discovery_band([

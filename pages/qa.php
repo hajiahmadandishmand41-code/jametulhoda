@@ -21,10 +21,8 @@ $noindexSeo = ($total === 0);
 <form method="get" class="mb-4"><?= queryKeepFields() ?><div class="input-group" style="max-width:480px"><input type="search" name="q" class="form-control" aria-label="جستجوی پرسش و پاسخ" placeholder="جستجوی پرسش..." value="<?= sanitize($search) ?>"><button type="submit" class="btn btn-primary" aria-label="جستجو"><i class="bi bi-search" aria-hidden="true"></i></button></div></form>
 <?= renderCategoryChips(['qa'], url('qa'), 'همه پرسش‌ها') ?>
 <?php if(empty($posts)): ?><?= renderEmptyState('bi-question-circle', 'هنوز پرسشی در این بخش ثبت نشده است.', url(), 'بازگشت به صفحه اصلی') ?>
-<?php else: ?><?php jhd_preload_post_topics($posts); ?>
-<?= jhd_grid_open() ?><?php foreach($posts as $p):
-echo renderPostCard($p, ['cta'=>'مشاهده پاسخ','excerpt'=>120]);
-endforeach; ?></div>
+<?php else: ?>
+<?= jhd_post_archive($posts, ['page' => $page, 'search' => $search, 'cta' => 'مشاهده پاسخ']) ?>
 <?php if($pages>1): ?><div class="mt-4"><?= paginate($total,$limit,$page, url('qa', ['q' => $search, 'page' => '%d'])) ?></div><?php endif; ?>
 <?php endif; ?>
 </div></div>
