@@ -42,6 +42,48 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     });
+
+    // اشتراک‌گذاری: در موبایل ابتدا Web Share API، در غیر این صورت کپی لینک.
+    document.querySelectorAll('[data-copy-link]').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var url = this.getAttribute('data-copy-link') || window.location.href;
+            var title = this.getAttribute('data-share-title') || document.title;
+            if (navigator.share) {
+                navigator.share({ title: title, url: url }).catch(function (err) {
+                    if (err && err.name === 'AbortError') return;
+                    fallbackCopy(url);
+                });
+                return;
+            }
+            fallbackCopy(url);
+        });
+    });
+
+    function fallbackCopy(url) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(function () {
+                showToast('لینک کپی شد!', 'success');
+            }).catch(function () {
+                showToast('کپی لینک ناموفق بود', 'error');
+            });
+        } else {
+            try {
+                var ta = document.createElement('textarea');
+                ta.value = url;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                ta.remove();
+                showToast('لینک کپی شد!', 'success');
+            } catch (err) {
+                showToast('کپی لینک ناموفق بود', 'error');
+            }
+        }
+    }
     if ('IntersectionObserver' in window) {
         var lazyImages = document.querySelectorAll('img[loading="lazy"]');
         var imageObserver = new IntersectionObserver(function (entries) {

@@ -267,4 +267,6 @@ require_once __DIR__.'/../includes/header.php';
  </div>
 </div>
 
+<?= jhd_share_row(lessonUrl($lesson), (string)$lesson['title']) ?>
+
 <?php require_once __DIR__.'/../includes/footer.php'; ?>

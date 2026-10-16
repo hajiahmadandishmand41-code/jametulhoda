@@ -74,7 +74,7 @@ check(lead.includes('jhd-lead__body'), 'lead renders its text side');
 check(!lead.includes('<img') || lead.includes('jhd-lead__media'), 'lead is horizontal: whenever it has an image, media sits beside the text');
 check(lead.includes('jhd-lead__meta'), 'lead shows date/author meta');
 const homeSection = key => home.match(new RegExp(`<section class="jhd-section" data-home-section="${key}"[\\s\\S]*?</section>`))?.[0] || '';
-check(homeSection('topics') !== '', 'topics section (موضوعات علمی) renders on the homepage');
+check(homeSection('topics') === '', 'topics section (موضوعات علمی) is removed from the homepage');
 check(homeSection('announcements') !== '', 'announcements section (اطلاعیه‌ها) renders on the homepage');
 check(!/>اطلاعیه</.test(homeSection('news')), 'news section has no announcement duplicates while its own section is on');
 for (const key of ['news', 'writing', 'research', 'books', 'lessons', 'media', 'topics', 'announcements']) {

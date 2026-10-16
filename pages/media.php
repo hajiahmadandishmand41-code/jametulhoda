@@ -165,4 +165,6 @@ require_once __DIR__ . '/../includes/header.php';
 </div>
 </div>
 </div></div></div>
+<?= jhd_share_row(mediaUrl($kind, (int)$media['id']), (string)$mediaTitle) ?>
+
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

@@ -225,4 +225,6 @@ require_once __DIR__ . '/../includes/header.php';
 </div></div>
 
 <script src="<?= asset('js/media-player.js') ?>"></script>
+<?= jhd_share_row(speechUrl($post), (string)$post['title']) ?>
+
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

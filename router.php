@@ -445,12 +445,12 @@ if ($queryRoute === 'home' || $queryRoute === '/') { $queryRoute = ''; unset($_G
  * permanent redirect is appropriate. Detail slugs remain encoded exactly once
  * by the central url() helper.
  */
-if (JHD_PRETTY_URLS && $path === '/index.php' && $queryRoute !== '') {
+if (JHD_PRETTY_URLS && $path === '/index.php' && $queryRoute !== '' && $queryRoute !== 'topic') {
     $legacyQuery = $_GET;
     unset($legacyQuery['p']);
     $legacyCanonical = url($queryRoute, $legacyQuery);
     if ($legacyCanonical !== '') {
-        if (in_array($queryRoute, ['topic', 'topics'], true)) {
+        if ($queryRoute === 'topics') {
             $legacyCanonical = url('articles');
         }
         header('Location: ' . $legacyCanonical, true, 301);
