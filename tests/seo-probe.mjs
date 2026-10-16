@@ -371,9 +371,7 @@ const contentSlug = (label) => {
 if (contentSamples.has('news')) legacyPairs.push(['/post/' + encodeURIComponent(contentSlug('news')), contentSamples.get('news')]);
 if (contentSamples.has('article')) legacyPairs.push(['/article/' + encodeURIComponent(contentSlug('article')), contentSamples.get('article')]);
 if (contentSamples.has('report')) legacyPairs.push(['/report/' + encodeURIComponent(contentSlug('report')), contentSamples.get('report')]);
-legacyPairs.push(['/topics', queryMode ? '/index.php?p=articles' : '/articles']);
 legacyPairs.push(['/topic/mahdaviat', queryMode ? '/index.php?p=articles' : '/articles']);
-legacyPairs.push(['/topics/mahdaviat', queryMode ? '/index.php?p=articles' : '/articles']);
 legacyPairs.push(['/research', queryMode ? '/index.php?p=articles&type=research' : '/articles?type=research']);
 legacyPairs.push(['/library', queryMode ? '/index.php?p=books' : '/books']);
 legacyPairs.push(['/index.php?p=news', queryMode ? '/index.php?p=news' : '/news']);

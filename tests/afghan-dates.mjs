@@ -103,13 +103,11 @@ if (process.env.TEST_BASE_URL) {
   const iranianMonthsRe = /\b(فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور|مهر|آبان|آذر|دی|بهمن|اسفند)\b/;
   const afghanMonthsRe = /(حمل|ثور|جوزا|سرطان|اسد|سنبله|میزان|عقرب|قوس|جدی|دلو|حوت)/;
 
-  // 1) Legacy topic routes permanently redirect (301) to /articles
-  for (const legacyPath of ['/topics', '/topic', '/topic/mahdaviat', '/topics/mahdaviat', '/index.php?p=topics', '/index.php?p=topic&slug=mahdaviat']) {
-    const r = await fetch(base + legacyPath, { redirect: 'manual' });
-    const loc = r.headers.get('location') || '';
-    assert.equal(r.status, 301, `${legacyPath} should return 301`);
-    assert.ok(/\/articles(\?|$)|p=articles/.test(loc), `${legacyPath} should redirect to /articles, got ${loc}`);
-    console.log(`PASS  legacy ${legacyPath} -> 301 ${loc}`);
+  // 1) Topic routes are real pages now
+  for (const livePath of ['/topics', '/topic/mahdaviat', '/topics/mahdaviat']) {
+    const r = await fetch(base + livePath, { redirect: 'manual' });
+    assert.equal(r.status, 200, `${livePath} should return 200`);
+    console.log(`PASS  topic route ${livePath} -> 200`);
   }
 
   // 2) Mobile API topics remain intact
@@ -129,7 +127,7 @@ if (process.env.TEST_BASE_URL) {
     assert.ok(!html.includes('jhd-card__topics'), `${pubPath} has no jhd-card__topics`);
     assert.ok(!html.includes('jhd-topic-pill'), `${pubPath} has no jhd-topic-pill`);
     assert.ok(!html.includes('id="archive-search-topic"'), `${pubPath} has no topic filter select`);
-    assert.ok(!/href="[^"]*\/topics(?:\/|"|\?)/.test(html), `${pubPath} has no /topics link`);
+
     assert.ok(!iranianMonthsRe.test(html), `${pubPath} has no Iranian month names`);
     console.log(`PASS  public page ${pubPath} clean (no topics UI, no Iranian months)`);
   }

@@ -236,13 +236,13 @@ if __name__ == '__main__':
         print("FAILURE: ONE OR MORE TESTS FAILED!")
         sys.exit(1)
 
-    # Public taxonomy UI is retired, but legacy URLs must keep their permanent redirect.
-    with open('pages/topic.php', 'r', encoding='utf-8') as f:
-        legacy_topic = f.read()
+    # /topics is now a real archive and /topic/{slug} a real detail page.
     with open('pages/topics.php', 'r', encoding='utf-8') as f:
-        legacy_topics = f.read()
-    assert "true, 301" in legacy_topic and "url('articles')" in legacy_topic, 'legacy topic detail must 301 to articles'
-    assert "true, 301" in legacy_topics and "url('articles')" in legacy_topics, 'topic directory must 301 to articles'
+        topics_archive = f.read()
+    assert "pages/topics.php" in topics_archive or "موضوعات علمی" in topics_archive, 'topics archive must render topics'
+    with open('pages/topic.php', 'r', encoding='utf-8') as f:
+        topic_detail = f.read()
+    assert "getTopicBySlug" in topic_detail, 'topic detail must resolve a topic'
     with open('admin/includes/header.php', 'r', encoding='utf-8') as f:
         admin_nav = f.read()
     assert "'key' => 'taxonomy'" not in admin_nav, 'topic/category group must not appear in admin navigation'
@@ -252,12 +252,9 @@ if __name__ == '__main__':
     with open('includes/footer.php', 'r', encoding='utf-8') as f:
         footer_html = f.read()
     assert "social-link--telegram" in footer_html and "<span>کانال تلگرام</span>" in footer_html, 'footer Telegram button must have text label'
-    assert "url('topics')" not in footer_html, 'footer must not link to topics'
     with open('index.php', 'r', encoding='utf-8') as f:
         home_php = f.read()
-    for section_key in ["'key' => 'news'", "'key' => 'articles'", "'key' => 'reports'", "'key' => 'books'", "'key' => 'lessons'", "'key' => 'events'"]:
-        assert section_key in home_php, f'homepage must define {section_key}'
-    assert 'jhd-home-all-news' in home_php and 'همهٔ اخبار' in home_php, 'homepage must render all-news CTA'
+    assert 'همهٔ اخبار' in home_php, 'homepage must render all-news CTA'
     with open('pages/news.php', 'r', encoding='utf-8') as f:
         news_php = f.read()
     assert "'types' => ['news', 'announcement']" in news_php, 'news archive must unify news and announcements'

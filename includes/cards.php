@@ -1463,6 +1463,7 @@ function jhd_post_nav(?array $prev, ?array $next): string {
 function jhd_nav_sections(): array {
     return [
         'primary' => [
+            ['route' => 'topics',   'label' => 'موضوعات علمی', 'icon' => 'bi-diagram-3',     'types' => [],                  'extra_active' => ['topic']],
             ['route' => 'lessons',  'label' => 'دروس',          'icon' => 'bi-mortarboard',   'types' => [],                  'extra_active' => ['lesson']],
             ['route' => 'books',    'label' => 'کتابخانه',      'icon' => 'bi-book',          'types' => [],                  'extra_active' => ['book']],
             ['route' => 'articles', 'label' => 'مقالات',      'icon' => 'bi-pencil-square', 'types' => ['article','research'], 'extra_active' => ['research', 'reports', 'qa', 'post', 'article']],

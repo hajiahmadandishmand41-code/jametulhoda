@@ -87,10 +87,10 @@ try {
   // Audit every requested public route in a real browser, not just the landing page.
   // Route smoke checks status/canonical metadata; this layer checks visible content,
   // responsive overflow and actual browser resource/runtime errors.
-  const retiredTopics=await page.goto(new URL('topics',base.endsWith('/')?base:base+'/').href,{waitUntil:'networkidle'});
-  assert.equal(retiredTopics?.status(),200,'topics directory safely redirects');
-  const redirectedTopicUrl=new URL(page.url());
-  assert.ok(redirectedTopicUrl.pathname.replace(/\/+$/,'').endsWith('/articles')||redirectedTopicUrl.searchParams.get('p')==='articles','topics directory redirects to articles');
+  const topicsArchive=await page.goto(new URL('topics',base.endsWith('/')?base:base+'/').href,{waitUntil:'networkidle'});
+  assert.equal(topicsArchive?.status(),200,'topics archive loads');
+  const topicsUrl=new URL(page.url());
+  assert.ok(topicsUrl.pathname.replace(/\/+$/,'').endsWith('/topics'),'topics archive stays on topics');
   const publicRoutes=['news','articles','reports','events','books','lessons','research','media','videos','audios','search','about','contact','qa','login'];
   const pageViewportAudit=[];
   for (const route of publicRoutes) {

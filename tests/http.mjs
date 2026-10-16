@@ -29,8 +29,8 @@ const publicPaths=['/','/index.php',
  '/sitemap.xml','/sitemap.php','/robots.txt','/robots.php',
  '/assets/css/design-system.css','/assets/img/logo.png','/assets/images/logo.png','/favicon.ico',
  '/php/install','/php/install.php','/php/install/'];
-const retiredTopics=await api.get('/topics',{maxRedirects:0});
-check('topics directory redirects permanently to articles',retiredTopics.status()===301&&/\/articles(\?|$)|p=articles/.test(String(retiredTopics.headers()['location']||'')),String(retiredTopics.status())+' '+String(retiredTopics.headers()['location']||''));
+const topicsArchive=await api.get('/topics',{maxRedirects:0});
+check('topics directory is a real archive',topicsArchive.status()===200,String(topicsArchive.status()));
 for(const path of publicPaths){const r=await api.get(path);check('GET '+path,r.status()===200||r.status()===302||r.status()===301,String(r.status()));}
 const sitemapResponse=await api.get('/sitemap.xml');
 const sitemapXml=await sitemapResponse.text();

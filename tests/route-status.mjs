@@ -170,7 +170,6 @@ for (const [path, marker] of [
 for (const [path, expectLoc] of [
   ['/post', '/articles'],
   ['/lesson', '/lessons'],
-  ['/topics', '/articles'],
   ['/topic', '/articles'],
   ['/topic/mahdaviat', '/articles'],
   ['/topic.php?slug=mahdaviat', '/articles'],
