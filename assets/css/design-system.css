@@ -4942,3 +4942,70 @@ h1,h2,h3,h4,h5,h6,.jhd-section-head h2,.jhd-auth-card h1 {
   position: relative;
   z-index: 1;
 }
+
+/* Shared public archives: a banner followed by compact RTL image/text rows.
+   Scoped deliberately: homepage, book covers and related cards stay unchanged. */
+.jhd-post-archive { display: grid; gap: 1.4rem; min-width: 0; }
+.jhd-post-archive > .jhd-lead {
+  max-width: none;
+  margin: 0;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  padding: clamp(.8rem, 2vw, 1.5rem);
+  border: 1px solid var(--jhd-border);
+  border-radius: var(--jhd-radius);
+  background: var(--jhd-surface, #fff);
+}
+.jhd-post-archive .jhd-lead__media { max-height: 360px; width: 100%; }
+.jhd-post-archive .jhd-lead__title { font-size: clamp(1.15rem, 2.3vw, 1.9rem); }
+.jhd-post-archive .jhd-archive-rows { row-gap: .75rem !important; column-gap: 0 !important; }
+.jhd-public-site .jhd-post-archive .jhd-card--row {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  min-height: 0;
+}
+.jhd-public-site .jhd-post-archive .jhd-card--row > .jhd-card-media {
+  flex: 0 0 clamp(120px, 21vw, 210px);
+  width: clamp(120px, 21vw, 210px);
+  min-width: 0;
+  max-width: none;
+  height: auto;
+  min-height: 130px;
+  max-height: none;
+  aspect-ratio: auto;
+  border-radius: 0;
+}
+.jhd-public-site .jhd-post-archive .jhd-card--row > .jhd-card-body {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: .8rem 1rem;
+  gap: .35rem;
+}
+.jhd-post-archive .jhd-card--row .jhd-card-title { font-size: 1rem; line-height: 1.75; }
+.jhd-post-archive .jhd-card--row .jhd-card-summary {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: .84rem;
+  line-height: 1.8;
+  margin: 0;
+}
+.jhd-post-archive .jhd-card--row .jhd-card-foot { margin-top: auto; padding-top: .35rem; }
+@media (max-width: 575.98px) {
+  .jhd-post-archive { gap: 1rem; }
+  .jhd-post-archive > .jhd-lead { grid-template-columns: minmax(0, 1fr); gap: .8rem; }
+  .jhd-post-archive .jhd-lead__media { aspect-ratio: 16 / 9; max-height: 260px; }
+  .jhd-post-archive .jhd-lead__summary { display: block; }
+  .jhd-public-site .jhd-post-archive .jhd-card--row > .jhd-card-media {
+    flex-basis: 88px;
+    width: 88px;
+    min-height: 112px;
+  }
+  .jhd-public-site .jhd-post-archive .jhd-card--row > .jhd-card-body { padding: .55rem .65rem; gap: .2rem; }
+  .jhd-post-archive .jhd-card--row .jhd-card-title { font-size: .86rem; }
+  .jhd-post-archive .jhd-card--row .jhd-card-summary { font-size: .75rem; }
+  .jhd-post-archive .jhd-card--row .jhd-card-author { display: none; }
+}
+.jhd-post-archive > .jhd-lead--text-only { grid-template-columns: minmax(0, 1fr); }

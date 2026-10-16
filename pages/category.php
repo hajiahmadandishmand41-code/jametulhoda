@@ -70,11 +70,7 @@ require_once __DIR__ . '/../includes/header.php';
     <?php if (empty($posts)): ?>
     <div class="jhd-empty-state"><i class="bi bi-folder" aria-hidden="true"></i><p>مطلبی یافت نشد</p></div>
     <?php else: ?>
-    <?= jhd_grid_open() ?>
-        <?php foreach ($posts as $k => $p):
-            echo renderPostCard($p, ['featured' => $k === 0, 'cta' => 'ادامه مطلب', 'excerpt' => 120]);
-        endforeach; ?>
-    </div>
+    <?= jhd_post_archive($posts, ['page' => $page, 'search' => $search ?? '', 'cta' => 'ادامه مطلب']) ?>
     <?php if ($pages > 1): ?><div class="mt-5"><?= paginate($total, $limit, $page, url('category', ['slug' => $slug, 'page' => '%d'])) ?></div><?php endif; ?>
     <?php endif; ?>
 </div></div>

@@ -109,25 +109,7 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
         <?php else: ?>
 
-        <?php
-        $newsList = $posts;
-        // مطلب نخست صفحه، همان «خبر اصلی» صفحهٔ نخست: عکس بزرگ و جزئیات در کنار آن.
-        if (!$search && $page === 1 && $newsList) {
-            echo '<div class="mb-4">' . jhd_lead_story($newsList[0], [
-                'eyebrow' => jhd_listing_lead_eyebrow($sort, 'خبر'),
-            ]) . '</div>';
-            $newsList = array_slice($newsList, 1);
-        }
-        ?>
-        <?php jhd_preload_post_topics($newsList); ?>
-        <?= jhd_grid_open() ?>
-            <?php foreach ($newsList as $news):
-                echo renderPostCard($news, [
-                    'cta' => 'ادامه مطلب',
-                    'excerpt' => 130,
-                ]);
-            endforeach; ?>
-        <?= jhd_grid_close() ?>
+        <?= jhd_post_archive($posts, ['page' => $page, 'search' => $search, 'sort' => $sort]) ?>
 
     <?php $rails = jhd_listing_rails($posts); ?>
     <?= jhd_discovery_band([

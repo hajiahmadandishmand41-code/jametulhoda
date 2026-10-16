@@ -422,6 +422,7 @@ function jhd_card(array $card, array $opts = []): string {
     $classes = ['jhd-card', 'jhd-card--' . jhd_type_class($type)];
     if ($variant === 'featured') $classes[] = 'jhd-card--featured';
     if ($variant === 'compact')  $classes[] = 'jhd-card--compact';
+    if ($variant === 'row') $classes[] = 'jhd-card--row';
     if (trim((string)($card['image'] ?? '')) === '') $classes[] = 'jhd-card--noimage';
     if (!empty($opts['class'])) $classes[] = (string)$opts['class'];
 
@@ -482,7 +483,7 @@ function jhd_card_list(array $items, callable $mapper, array $opts = []): string
  */
 function renderPostCard(array $post, array $opts = []): string {
     $type = (string)($opts['type'] ?? ($post['post_type'] ?? 'post'));
-    $variant = !empty($opts['featured']) ? 'featured' : (!empty($opts['compact']) ? 'compact' : 'default');
+    $variant = !empty($opts['featured']) ? 'featured' : (!empty($opts['compact']) ? 'compact' : (!empty($opts['row']) ? 'row' : 'default'));
     $rawDate = (string)($post['published_at'] ?? $post['created_at'] ?? '');
     $topics = []; // Public topic chips are retired; taxonomy data remains stored.
     $author = trim((string)($post['author_name'] ?? '')) ?: trim((string)($post['speaker'] ?? ''));
@@ -526,6 +527,33 @@ function renderPostCard(array $post, array $opts = []): string {
         'eager'     => !empty($opts['eager']),
         'no_gallery'=> !empty($opts['no_gallery']),
     ]);
+}
+
+/** Shared archive rhythm: one lead on page one, then small image/text rows.
+ * Input order is preserved so category/search/sort and pagination stay truthful.
+ */
+function jhd_post_archive(array $posts, array $opts = []): string {
+    if (!$posts) return '';
+    $html = '<div class="jhd-post-archive">';
+    if ((int)($opts['page'] ?? 1) === 1 && trim((string)($opts['search'] ?? '')) === '') {
+        $html .= jhd_lead_story($posts[0], [
+            'eyebrow' => jhd_listing_lead_eyebrow((string)($opts['sort'] ?? 'newest'), 'مطلب'),
+            'class' => empty($posts[0]['featured_image']) ? 'jhd-lead--text-only' : '',
+        ]);
+        $posts = array_slice($posts, 1);
+    }
+    if ($posts) {
+        jhd_preload_post_topics($posts);
+        $html .= jhd_grid_open('jhd-archive-rows');
+        foreach ($posts as $post) {
+            $html .= renderPostCard($post, [
+                'row' => true, 'col' => 'col-12',
+                'excerpt' => 130, 'cta' => (string)($opts['cta'] ?? 'ادامه مطلب'),
+            ]);
+        }
+        $html .= jhd_grid_close();
+    }
+    return $html . '</div>';
 }
 
 /**
