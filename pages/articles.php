@@ -166,16 +166,30 @@ require_once __DIR__ . '/../includes/header.php';
     <?php if (empty($posts)): ?>
     <?= renderEmptyState('bi-file-text', $search ? 'مطلبی مطابق با جستجوی شما یافت نشد؛ عبارت دیگری را بیازمایید.' : 'هنوز مطلبی در این بخش ثبت نشده است.', url('articles'), 'مشاهده همه مقالات و پژوهش‌ها') ?>
     <?php else: ?>
-    <?php jhd_preload_post_images($posts); ?>
+    <?php
+    // مطلب نخست صفحه، مثل صفحهٔ نخست: عکس بزرگ و جزئیات در کنار آن؛ بقیه فهرست.
+    $articleList = $posts;
+    if (!$search && $page === 1) {
+        $leadNoun = $typeKey === 'research' ? 'پژوهش' : ($typeKey === 'article' ? 'مقاله' : 'مطلب');
+        echo '<div class="mb-4">' . jhd_lead_story($articleList[0], [
+            'eyebrow' => jhd_listing_lead_eyebrow($sort, $leadNoun),
+        ]) . '</div>';
+        $articleList = array_slice($articleList, 1);
+    }
+    jhd_preload_post_images($articleList);
+    ?>
+    <?php if ($articleList): ?>
     <?= jhd_grid_open('jhd-articles-grid') ?>
-      <?php foreach ($posts as $p):
+      <?php foreach ($articleList as $p):
         echo renderEditorialRow($p, ['cta' => $p['post_type'] === 'research' ? 'مطالعه پژوهش' : 'مطالعه مقاله', 'excerpt' => 220]);
       endforeach; ?>
     <?= jhd_grid_close() ?>
+    <?php endif; ?>
 
+    <?php $rails = jhd_listing_rails($posts); ?>
     <?= jhd_discovery_band([
-        'latest'  => getLatestPosts(5),
-        'popular' => getMostViewedPosts(5),
+        'latest'  => $rails['latest'],
+        'popular' => $rails['popular'],
         'latest_title' => 'تازه‌ترین‌ها',
         'latest_more'  => 'همهٔ اخبار',
         'latest_more_url' => url('news'),

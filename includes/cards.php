@@ -1304,6 +1304,30 @@ function jhd_about_band(array $opts = []): string {
 }
 
 /**
+ * برچسب مطلب بزرگ ابتدای فهرست، بر اساس مرتب‌سازی فعلی صفحه.
+ * مثال: «آخرین خبر»، «قدیمی‌ترین خبر»، «پربازدیدترین مقاله».
+ */
+function jhd_listing_lead_eyebrow(string $sort, string $noun): string {
+    return match ($sort) {
+        'oldest'  => 'قدیمی‌ترین ' . $noun,
+        'popular' => 'پربازدیدترین ' . $noun,
+        default   => 'آخرین ' . $noun,
+    };
+}
+
+/**
+ * ریل‌های «تازه‌ترین‌ها» و «پربازدیدترین‌ها» برای صفحه‌ای که خودش فهرست را
+ * نشان می‌دهد. مطلب‌هایی که همان صفحه نشان داده، دوباره در ریل نمی‌آیند.
+ */
+function jhd_listing_rails(array $shownPosts): array {
+    $exclude = array_values(array_filter(array_map(static fn($p): int => (int)($p['id'] ?? 0), $shownPosts)));
+    return [
+        'latest'  => getPosts(['sort' => 'newest', 'limit' => 3, 'exclude_ids' => $exclude]),
+        'popular' => getPosts(['sort' => 'popular', 'min_views' => jhd_popular_min_views(), 'limit' => 3, 'exclude_ids' => $exclude]),
+    ];
+}
+
+/**
  * نوار کشف — «تازه‌ترین‌ها» و «پربازدیدترین‌ها» در کنار هم.
  *
  * روی صفحه‌های فهرست استفاده می‌شود تا خواننده هم مسیر تازه‌ها را ببیند و
