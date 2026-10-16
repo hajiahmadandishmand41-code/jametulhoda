@@ -1177,17 +1177,15 @@ function getPosts(array $opts = []): array {
     if ($limit  > 100) $limit  = 100;
     if ($offset < 0)   $offset = 0;
     $whereStr = implode(' AND ', $where);
-    // Homepage feeds opt into chronological order; all existing calls retain
-    // their established featured-first ordering unless they request otherwise.
-    $sort = (string)($opts['sort'] ?? '');
-    if ($sort === 'newest') {
-        $orderBy = 'COALESCE(p.published_at, p.created_at) DESC, p.id DESC';
-    } elseif ($sort === 'oldest') {
+    // Every public listing is newest-first by default. "Featured" remains
+    // a visual flag/filter and must not push an older publication above newer content.
+    $sort = (string)($opts['sort'] ?? 'newest');
+    if ($sort === 'oldest') {
         $orderBy = 'COALESCE(p.published_at, p.created_at) ASC, p.id ASC';
     } elseif ($sort === 'popular') {
         $orderBy = 'p.view_count DESC, COALESCE(p.published_at, p.created_at) DESC, p.id DESC';
     } else {
-        $orderBy = 'p.is_featured DESC, p.published_at DESC, p.id DESC';
+        $orderBy = 'COALESCE(p.published_at, p.created_at) DESC, p.id DESC';
     }
     $sql = "SELECT p.*, c.name AS cat_name, COALESCE(NULLIF(p.author_name,''), NULLIF(p.speaker,''), u.full_name) AS author_name FROM posts p LEFT JOIN categories c ON c.id = p.category_id LEFT JOIN users u ON u.id = p.author_id WHERE $whereStr ORDER BY $orderBy LIMIT $limit OFFSET $offset";
     try {
@@ -1755,7 +1753,7 @@ function getLessons(array $opts = []): array {
              LEFT JOIN lesson_collections lc ON lc.id = l.collection_id
              LEFT JOIN lesson_volumes lv ON lv.id = l.volume_id
              WHERE $whereStr
-             ORDER BY l.is_featured DESC, l.created_at DESC, l.id DESC
+             ORDER BY l.created_at DESC, l.id DESC
              LIMIT ? OFFSET ?"
         );
         $stmt->execute(array_merge($params, [$limit, $offset]));
@@ -2633,7 +2631,8 @@ function getBooks(array $opts = []): array {
         if($topic){ $where[]="EXISTS (SELECT 1 FROM book_topics bt WHERE bt.book_id=b.id AND bt.topic_id=?)"; $params[]=(int)$topic; }
         if($featured){ $where[]="b.is_featured=1"; }
         $whereStr=implode(' AND ',$where);
-        $stmt=$db->prepare("SELECT b.* FROM books b WHERE $whereStr ORDER BY b.is_featured DESC, b.created_at DESC LIMIT ? OFFSET ?");
+        // A featured badge never overrides the publication/addition chronology in public lists.
+        $stmt=$db->prepare("SELECT b.* FROM books b WHERE $whereStr ORDER BY b.created_at DESC, b.id DESC LIMIT ? OFFSET ?");
         $stmt->execute(array_merge($params,[$limit,$offset])); return $stmt->fetchAll();
     } catch (PDOException $e) { return []; }
 }
