@@ -14,7 +14,8 @@
     "test:compact": "node tests/compact-design.mjs",
     "test:editorial-browser": "node tests/editorial-browser.mjs",
     "test:media-display": "node tests/admin-media-display.mjs",
-    "test:upload-ownership": "php tests/upload-ownership.php"
+    "test:upload-ownership": "php tests/upload-ownership.php",
+    "test:phase2": "node tests/phase2-acceptance.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

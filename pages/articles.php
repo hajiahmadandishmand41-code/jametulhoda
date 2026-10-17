@@ -33,17 +33,20 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 startPublicSession();
 
+$pageCfg = jhd_internal_page_config('articles');
 $search = trim($_GET['q'] ?? '');
 
 $category = max(0, (int)($_GET['cat'] ?? 0));
-$sort = (string)($_GET['sort'] ?? 'newest');
-if (!in_array($sort, ['newest', 'oldest', 'popular'], true)) $sort = 'newest';
+$defaultSort = in_array((string)($pageCfg['sort'] ?? 'newest'), ['newest', 'oldest', 'popular', 'featured'], true) ? (string)$pageCfg['sort'] : 'newest';
+$sort = (string)($_GET['sort'] ?? $defaultSort);
+if (!in_array($sort, ['newest', 'oldest', 'popular', 'featured'], true)) $sort = 'newest';
 $archiveCategories = getCategories();
 $page = max(1, (int)($_GET['page'] ?? 1));
-$limit = 12;
+$limit = (int)($pageCfg['per_page'] ?? 12);
 $offset = ($page - 1) * $limit;
 
-$base = ['types' => $types, 'sort' => $sort];
+$base = ['types' => $types, 'sort' => $sort === 'featured' ? 'newest' : $sort];
+if ($sort === 'featured') $base['featured'] = 1;
 if ($category) $base['cat'] = $category;
 if ($search) $base['search'] = $search;
 
@@ -166,7 +169,7 @@ require_once __DIR__ . '/../includes/header.php';
     <?php if (empty($posts)): ?>
     <?= renderEmptyState('bi-file-text', $search ? 'مطلبی مطابق با جستجوی شما یافت نشد؛ عبارت دیگری را بیازمایید.' : 'هنوز مطلبی در این بخش ثبت نشده است.', url('articles'), 'مشاهده همه مقالات و پژوهش‌ها') ?>
     <?php else: ?>
-    <?= jhd_post_archive($posts, ['page' => $page, 'search' => $search, 'sort' => $sort, 'cta' => 'مطالعه مطلب']) ?>
+    <?= jhd_post_archive($posts, array_merge($pageCfg, ['page' => $page, 'search' => $search, 'sort' => $sort, 'cta' => 'مطالعه مطلب'])) ?>
 
     <?php $rails = jhd_listing_rails($posts); ?>
     <?= jhd_discovery_band([

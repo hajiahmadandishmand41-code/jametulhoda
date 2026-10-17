@@ -37,12 +37,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 requireMediaUploads(handleMediaUploads('book', $id, $_FILES['attachment_files'] ?? [], 'document'));
                 $status = in_array($_POST['status'] ?? '', ['published','draft'], true) ? $_POST['status'] : 'draft';
                 $pages = max(0, (int)($_POST['pages'] ?? 0));
-                $slug = uniqueSlug('books', $title, $id);
+                $slug = ($title === (string)($book['title'] ?? '') && !empty($book['slug'])) ? (string)$book['slug'] : uniqueSlug('books', $title, $id);
                 $db->prepare('UPDATE books SET title=?,slug=?,description=?,author=?,translator=?,publisher=?,publish_year=?,pages=?,toc=?,cover_image=?,pdf_file=?,word_file=?,is_featured=?,sort_order=?,status=?,updated_at=NOW() WHERE id=?')->execute([
                     $title,$slug,trim((string)($_POST['description'] ?? '')) ?: null,trim((string)($_POST['author'] ?? '')) ?: null,trim((string)($_POST['translator'] ?? '')) ?: null,trim((string)($_POST['publisher'] ?? '')) ?: null,trim((string)($_POST['publish_year'] ?? '')) ?: null,$pages ?: null,trim((string)($_POST['toc'] ?? '')) ?: null,$cover ?: null,$pdf ?: null,$word ?: null,!empty($_POST['is_featured']) ? 1 : 0,(int)($_POST['sort_order'] ?? 0),$status,$id
                 ]);
-                if (isset($_POST['topic_ids'])) {
-                    setBookTopics($id, validatedTopicIds((array)$_POST['topic_ids']));
+                if (!empty($_POST['topics_form_present']) || isset($_POST['topic_ids'])) {
+                    setBookTopics($id, jhd_parse_id_list($_POST['topic_ids'] ?? []));
+                }
+                if (isset($_POST['featured_media_pref'])) {
+                    jhd_save_featured_media_pref('book', $id, ['mode' => (string)$_POST['featured_media_pref']]);
                 }
                 foreach ((array)($_POST['delete_attachment'] ?? []) as $mediaId) deleteMediaFile((int)$mediaId,'book',$id);
                 $stmt->execute([$id]); $book=$stmt->fetch();
@@ -59,5 +62,46 @@ $attachments = getMediaFor('book',$id,'document');
 <form method="post" enctype="multipart/form-data" class="admin-form"><?= csrfField() ?><div class="row g-4"><div class="col-lg-8">
 <section class="admin-card mb-4"><div class="admin-card-header">اطلاعات کتاب</div><div class="admin-card-body"><div class="mb-3"><label class="form-label">عنوان <span class="text-danger">*</span></label><input class="form-control" required name="title" value="<?= sanitize($book['title']) ?>"></div><div class="mb-3"><label class="form-label">توضیح / معرفی</label><textarea class="form-control" name="description" rows="5"><?= sanitize((string)$book['description']) ?></textarea></div><div class="row g-3"><div class="col-md-6"><label class="form-label">نویسنده</label><input class="form-control" name="author" value="<?= sanitize((string)$book['author']) ?>"></div><div class="col-md-6"><label class="form-label">مترجم</label><input class="form-control" name="translator" value="<?= sanitize((string)$book['translator']) ?>"></div><div class="col-md-5"><label class="form-label">ناشر</label><input class="form-control" name="publisher" value="<?= sanitize((string)$book['publisher']) ?>"></div><div class="col-md-3"><label class="form-label">سال نشر</label><input class="form-control" name="publish_year" value="<?= sanitize((string)$book['publish_year']) ?>"></div><div class="col-md-2"><label class="form-label">صفحات</label><input class="form-control" type="number" min="0" name="pages" value="<?= (int)$book['pages'] ?>"></div><div class="col-md-2"><label class="form-label">ترتیب</label><input class="form-control" type="number" name="sort_order" value="<?= (int)$book['sort_order'] ?>"></div></div><div class="mt-3"><label class="form-label">فهرست مطالب</label><textarea class="form-control" name="toc" rows="4"><?= sanitize((string)$book['toc']) ?></textarea></div></div></section>
 <section class="admin-card"><div class="admin-card-header">فایل‌های کتاب</div><div class="admin-card-body"><div class="row g-3"><div class="col-md-4"><label class="form-label">جلد</label><?php if($book['cover_image']): ?><a class="d-block small mb-2" target="_blank" rel="noopener noreferrer" href="<?= imgUrl($book['cover_image']) ?>">مشاهده جلد فعلی</a><label class="form-check small"><input class="form-check-input" type="checkbox" name="remove_cover" value="1"> حذف جلد</label><?php endif; ?><input class="form-control mt-2" type="file" name="cover_image" accept="image/jpeg,image/png,image/gif,image/webp"></div><div class="col-md-4"><label class="form-label">PDF</label><?php if($book['pdf_file']): ?><a class="d-block small mb-2" target="_blank" rel="noopener noreferrer" href="<?= imgUrl($book['pdf_file']) ?>">فایل فعلی</a><label class="form-check small"><input class="form-check-input" type="checkbox" name="remove_pdf" value="1"> حذف PDF</label><?php endif; ?><input class="form-control mt-2" type="file" name="pdf_file" accept="application/pdf,.pdf"></div><div class="col-md-4"><label class="form-label">Word</label><?php if($book['word_file']): ?><a class="d-block small mb-2" target="_blank" rel="noopener noreferrer" href="<?= imgUrl($book['word_file']) ?>">فایل فعلی</a><label class="form-check small"><input class="form-check-input" type="checkbox" name="remove_word" value="1"> حذف Word</label><?php endif; ?><input class="form-control mt-2" type="file" name="word_file" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"></div></div><hr><label class="form-label">افزودن فایل تکمیلی</label><input class="form-control" multiple type="file" name="attachment_files[]" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"><?php if($attachments): ?><ul class="list-group list-group-flush mt-3"><?php foreach($attachments as $file): ?><li class="list-group-item d-flex justify-content-between gap-2"><a class="small text-truncate" target="_blank" rel="noopener noreferrer" href="<?= imgUrl($file['file_path']) ?>"><?= sanitize($file['title'] ?: basename($file['file_path'])) ?></a><label class="form-check small text-danger"><input class="form-check-input" type="checkbox" name="delete_attachment[]" value="<?= (int)$file['id'] ?>"> حذف</label></li><?php endforeach; ?></ul><?php endif; ?></div></section>
-</div><aside class="col-lg-4"><section class="admin-card"><div class="admin-card-header">انتشار</div><div class="admin-card-body"><label class="form-label">وضعیت</label><select class="form-select mb-3" name="status"><option value="draft" <?= $book['status']==='draft'?'selected':'' ?>>پیش‌نویس</option><option value="published" <?= $book['status']==='published'?'selected':'' ?>>منتشرشده</option></select><label class="form-check mb-3"><input class="form-check-input" type="checkbox" name="is_featured" value="1" <?= !empty($book['is_featured'])?'checked':'' ?>><span class="form-check-label">نمایش ویژه</span></label><button type="submit" class="btn btn-success w-100">ذخیره تغییرات</button></div></section></aside></div></form>
+</div><aside class="col-lg-4">
+<?php
+$bookMediaPref = jhd_get_featured_media_pref('book', $id);
+$bookTopicIds = array_map(static fn(array $r): int => (int)$r['id'], getBookTopics($id));
+$allTopicsForBook = getTopics();
+?>
+<section class="admin-card mb-3"><div class="admin-card-header">انتشار</div><div class="admin-card-body"><label class="form-label">وضعیت</label><select class="form-select mb-3" name="status"><option value="draft" <?= $book['status']==='draft'?'selected':'' ?>>پیش‌نویس</option><option value="published" <?= $book['status']==='published'?'selected':'' ?>>منتشرشده</option></select><label class="form-check mb-3"><input class="form-check-input" type="checkbox" name="is_featured" value="1" <?= !empty($book['is_featured'])?'checked':'' ?>><span class="form-check-label">نمایش ویژه</span></label><button type="submit" class="btn btn-success w-100">ذخیره تغییرات</button></div></section>
+<section class="admin-card mb-3">
+  <div class="admin-card-header"><i class="bi bi-stars ms-1"></i>انتخاب رسانه شاخص</div>
+  <div class="admin-card-body">
+    <select name="featured_media_pref" class="form-select form-select-sm">
+      <?php foreach (jhd_featured_media_pref_options() as $pmKey => $pmLabel): ?>
+        <option value="<?= sanitize($pmKey) ?>" <?= (($bookMediaPref['mode'] ?? 'auto') === $pmKey) ? 'selected' : '' ?>><?= sanitize($pmLabel) ?></option>
+      <?php endforeach; ?>
+    </select>
+    <div class="form-text">اگر کتاب تصویر جلد ندارد ولی فایل PDF یا Word دارد، کارت سند به شکل مناسب نمایش داده می‌شود.</div>
+  </div>
+</section>
+<section class="admin-card">
+  <div class="admin-card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-diagram-3 ms-1"></i>موضوعات علمی کتاب</span>
+    <a href="<?= sanitize(adminUrl('topics')) ?>" target="_blank" class="small text-decoration-none">+ مدیریت</a>
+  </div>
+  <div class="admin-card-body">
+    <input type="hidden" name="topics_form_present" value="1">
+    <?php if (!$allTopicsForBook): ?>
+      <div class="text-muted small">هنوز موضوعی ثبت نشده است.</div>
+    <?php else: ?>
+      <div style="max-height:220px;overflow-y:auto;border:1px solid var(--admin-border);border-radius:8px;padding:8px">
+        <?php foreach (getTopicFlatTree(null, 5) as $tp):
+          $tpId = (int)$tp['id'];
+        ?>
+          <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" name="topic_ids[]" id="ebtp_<?= $tpId ?>" value="<?= $tpId ?>" <?= in_array($tpId, $bookTopicIds, true) ? 'checked' : '' ?>>
+            <label class="form-check-label small" for="ebtp_<?= $tpId ?>"><?= str_repeat('— ', (int)($tp['depth'] ?? 0)) . sanitize($tp['name']) ?></label>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    <?php endif; ?>
+  </div>
+</section>
+</aside></div></form>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

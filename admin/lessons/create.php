@@ -49,6 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             syncPrimaryMediaFile('lesson',$lessonId,'audio',$audio,$values['title']);
             syncPrimaryMediaFile('lesson',$lessonId,'video',$video,$values['title']);
             setLessonTopics($lessonId,$selectedTopics);
+            jhd_save_featured_media_pref('lesson', $lessonId, ['mode' => (string)($_POST['featured_media_pref'] ?? 'auto')]);
             requireMediaUploads(
                 handleMediaUploads('lesson', $lessonId, $_FILES['attachment_files'] ?? [], 'document', $context),
                 handleMediaUploads('lesson', $lessonId, $_FILES['audio_files'] ?? [], 'audio', $context),
@@ -66,5 +67,40 @@ $allTopics=getTopics();
 <section class="admin-card mb-4"><div class="admin-card-header">محتوای درس</div><div class="admin-card-body"><div class="mb-3"><label class="form-label">عنوان <span class="text-danger">*</span></label><input class="form-control" name="title" required value="<?=sanitize((string)$values['title'])?>"></div><div class="row g-3"><div class="col-md-6"><label class="form-label">موضوع درسی</label><input class="form-control" name="subject" value="<?=sanitize((string)$values['subject'])?>"></div><div class="col-md-6"><label class="form-label">مدرس</label><input class="form-control" name="teacher" value="<?=sanitize((string)$values['teacher'])?>"></div></div><div class="mt-3"><label class="form-label">خلاصه</label><textarea rows="3" class="form-control" name="summary"><?=sanitize((string)$values['summary'])?></textarea></div><div class="mt-3"><label class="form-label">متن کامل</label><textarea rows="10" class="form-control" name="content"><?=htmlspecialchars((string)$values['content'],ENT_QUOTES,'UTF-8')?></textarea></div><div class="mt-3"><label class="form-label">منابع</label><textarea rows="4" class="form-control" name="sources"><?=sanitize((string)$values['sources'])?></textarea></div></div></section>
 <section class="admin-card mb-4"><div class="admin-card-header">مسیر آموزشی</div><div class="admin-card-body"><div class="row g-3"><div class="col-md-5"><label class="form-label">دوره / مجموعه</label><select class="form-select" name="collection_id"><option value="">بدون دوره</option><?php foreach($collections as $collection):?><option value="<?= (int)$collection['id']?>" <?= (int)$values['collection_id']===(int)$collection['id']?'selected':''?>><?=sanitize($collection['title'])?></option><?php endforeach;?></select></div><div class="col-md-5"><label class="form-label">جلد / بخش</label><select class="form-select" name="volume_id"><option value="">بدون جلد</option><?php foreach($volumes as $entry):?><option value="<?= (int)$entry['volume']['id']?>" <?= (int)$values['volume_id']===(int)$entry['volume']['id']?'selected':''?>><?=sanitize($entry['collection']['title'].' — '.$entry['volume']['title'])?></option><?php endforeach;?></select></div><div class="col-md-2"><label class="form-label">شماره</label><input type="number" min="1" class="form-control" name="lesson_number" value="<?= (int)$values['lesson_number']?>"></div></div></div></section>
 <section class="admin-card"><div class="admin-card-header">رسانه و فایل‌ها</div><div class="admin-card-body"><div class="row g-3"><div class="col-md-3"><label class="form-label">تصویر</label><input class="form-control" type="file" name="featured_image" accept="image/jpeg,image/png,image/gif,image/webp"></div><div class="col-md-3"><label class="form-label">صوت</label><input class="form-control" type="file" name="audio_file" accept="audio/*,.mp3,.ogg,.wav,.m4a"></div><div class="col-md-3"><label class="form-label">ویدیو</label><input class="form-control" type="file" name="video_file" accept="video/*,.mp4,.webm,.mov,.mkv"></div><div class="col-md-3"><label class="form-label">PDF</label><input class="form-control" type="file" name="pdf_file" accept="application/pdf,.pdf"></div></div><div class="row g-3 mt-2"><div class="col-md-6"><label class="form-label">صوت‌های تکمیلی</label><input class="form-control" type="file" multiple name="audio_files[]" accept="audio/*"></div><div class="col-md-6"><label class="form-label">ویدیوهای تکمیلی</label><input class="form-control" type="file" multiple name="video_files[]" accept="video/*"></div></div><div class="mt-3"><label class="form-label">فایل‌های تکمیلی</label><input class="form-control" multiple type="file" name="attachment_files[]" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"></div></div></section>
-</div><aside class="col-lg-4"><section class="admin-card"><div class="admin-card-header">انتشار</div><div class="admin-card-body"><label class="form-label">وضعیت</label><select class="form-select mb-3" name="status"><option value="draft" <?=$values['status']==='draft'?'selected':''?>>پیش‌نویس</option><option value="published" <?=$values['status']==='published'?'selected':''?>>منتشرشده</option></select><label class="form-label">سطح</label><select class="form-select mb-3" name="level"><option value="beginner" <?=$values['level']==='beginner'?'selected':''?>>مبتدی</option><option value="intermediate" <?=$values['level']==='intermediate'?'selected':''?>>متوسط</option><option value="advanced" <?=$values['level']==='advanced'?'selected':''?>>پیشرفته</option></select><label class="form-label">ترتیب</label><input class="form-control mb-3" type="number" name="sort_order" value="<?= (int)$values['sort_order']?>"><button class="btn btn-success w-100">ایجاد درس</button></div></section></aside></div></form>
+</div><aside class="col-lg-4">
+<section class="admin-card mb-3"><div class="admin-card-header">انتشار</div><div class="admin-card-body"><label class="form-label">وضعیت</label><select class="form-select mb-3" name="status"><option value="draft" <?=$values['status']==='draft'?'selected':''?>>پیش‌نویس</option><option value="published" <?=$values['status']==='published'?'selected':''?>>منتشرشده</option></select><label class="form-label">سطح</label><select class="form-select mb-3" name="level"><option value="beginner" <?=$values['level']==='beginner'?'selected':''?>>مبتدی</option><option value="intermediate" <?=$values['level']==='intermediate'?'selected':''?>>متوسط</option><option value="advanced" <?=$values['level']==='advanced'?'selected':''?>>پیشرفته</option></select><label class="form-label">ترتیب</label><input class="form-control mb-3" type="number" name="sort_order" value="<?= (int)$values['sort_order']?>"><button class="btn btn-success w-100">ایجاد درس</button></div></section>
+<section class="admin-card mb-3">
+  <div class="admin-card-header"><i class="bi bi-stars ms-1"></i>انتخاب رسانه شاخص</div>
+  <div class="admin-card-body">
+    <select name="featured_media_pref" class="form-select form-select-sm">
+      <?php foreach (jhd_featured_media_pref_options() as $pmKey => $pmLabel): ?>
+        <option value="<?= sanitize($pmKey) ?>" <?= (($_POST['featured_media_pref'] ?? 'auto') === $pmKey) ? 'selected' : '' ?>><?= sanitize($pmLabel) ?></option>
+      <?php endforeach; ?>
+    </select>
+    <div class="form-text">اگر درس تصویر و ویدیو یا صوت دارد، می‌توانید اولویت نمایش رسانه شاخص در کارت‌ها را مشخص کنید.</div>
+  </div>
+</section>
+<section class="admin-card">
+  <div class="admin-card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-diagram-3 ms-1"></i>موضوعات علمی درس</span>
+    <a href="<?= sanitize(adminUrl('topics')) ?>" target="_blank" class="small text-decoration-none">+ مدیریت</a>
+  </div>
+  <div class="admin-card-body">
+    <?php if (!$allTopics): ?>
+      <div class="text-muted small">هنوز موضوعی ثبت نشده است.</div>
+    <?php else: ?>
+      <div style="max-height:220px;overflow-y:auto;border:1px solid var(--admin-border);border-radius:8px;padding:8px">
+        <?php foreach (getTopicFlatTree(null, 5) as $tp):
+          $tpId = (int)$tp['id'];
+        ?>
+          <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" name="topic_ids[]" id="ltp_<?= $tpId ?>" value="<?= $tpId ?>" <?= in_array($tpId, $selectedTopics, true) ? 'checked' : '' ?>>
+            <label class="form-check-label small" for="ltp_<?= $tpId ?>"><?= str_repeat('— ', (int)($tp['depth'] ?? 0)) . sanitize($tp['name']) ?></label>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    <?php endif; ?>
+  </div>
+</section>
+</aside></div></form>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

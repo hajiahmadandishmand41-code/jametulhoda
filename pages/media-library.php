@@ -20,9 +20,11 @@ if (in_array($mediaPath, ['/audio', '/audios'], true) || ($mediaPath === '/media
     $canonicalOverride = url('media');
 }
 
+$pageCfg = jhd_internal_page_config('media');
 $page = max(1, (int)($_GET['page'] ?? 1));
-$limit = 12;
+$limit = (int)($pageCfg['per_page'] ?? 12);
 $offset = ($page - 1) * $limit;
+$sort = (string)($_GET['sort'] ?? ($pageCfg['sort'] ?? 'newest'));
 $column = $kind === 'audio' ? 'audio_file' : 'video_file';
 
 $sql = "SELECT m.id AS media_id, m.file_path AS path, p.title, p.slug, p.post_type, p.featured_image, p.published_at AS date, 'post' AS target
@@ -44,7 +46,8 @@ if ($db !== null) {
         $countStmt->execute([$kind, $kind]);
         $total = (int)$countStmt->fetchColumn();
 
-        $queryStmt = $db->prepare('SELECT * FROM (' . $sql . ') media ORDER BY date DESC LIMIT ? OFFSET ?');
+        $orderDir = $sort === 'oldest' ? 'ASC' : 'DESC';
+        $queryStmt = $db->prepare('SELECT * FROM (' . $sql . ') media ORDER BY date ' . $orderDir . ' LIMIT ? OFFSET ?');
         $queryStmt->execute([$kind, $kind, $limit, $offset]);
         $items = $queryStmt->fetchAll();
     } catch (PDOException $e) {
@@ -78,7 +81,7 @@ require_once __DIR__ . '/../includes/header.php';
   </div>
 </div>
 
-<div class="jhd-section">
+<div class="jhd-section" data-display-mode="<?= sanitize((string)($pageCfg['mode'] ?? 'grid')) ?>">
   <div class="container">
     <?= jhd_page_head([
         'eyebrow' => 'نگارخانه صوتی و تصویری',
@@ -104,18 +107,29 @@ require_once __DIR__ . '/../includes/header.php';
                   'slug' => (string)$item['slug'],
                   'post_type' => (string)($item['post_type'] ?? ''),
               ]);
-          // همان کارت رسانه‌ای سراسری؛ برای صوت، پخش‌کننده داخل بدنهٔ کارت می‌آید
-          // تا شنیدن بدون ترک صفحه ممکن باشد و طراحی هم یکسان بماند.
           $player = $kind === 'audio'
               ? '<div class="jhd-player jhd-player--card"><audio controls preload="none" src="' . sanitize(imgUrl((string)$item['path'])) . '" aria-label="' . sanitize((string)$item['title']) . '"></audio></div>'
               : '';
+          $mMode = (string)($pageCfg['mode'] ?? 'grid');
           echo renderMediaCard([
               'kind'         => $kind,
               'title'        => (string)$item['title'],
               'thumbnail'    => (string)($item['featured_image'] ?? ''),
+              'file_path'    => (string)($item['path'] ?? ''),
               'published_at' => (string)($item['date'] ?? ''),
               'body_extra'   => $player,
-          ], ['url' => $itemUrl, 'eager' => $i < 3, 'cta' => $kind === 'audio' ? 'صفحهٔ صوت' : 'پخش و دریافت']);
+          ], [
+              'url'           => $itemUrl,
+              'eager'         => $i < 3,
+              'cta'           => $kind === 'audio' ? 'صفحهٔ صوت' : 'پخش و دریافت',
+              'col'           => in_array($mMode, ['list', 'rows', 'horizontal', 'minimal'], true) ? 'col-12' : JHD_CARD_COL,
+              'row'           => $mMode === 'horizontal',
+              'compact'       => in_array($mMode, ['rows', 'minimal'], true),
+              'minimal_title' => $mMode === 'minimal',
+              'show_media'    => $pageCfg['show_media'] ?? true,
+              'show_date'     => $pageCfg['show_date'] ?? true,
+              'show_meta'     => $pageCfg['show_meta'] ?? true,
+          ]);
       endforeach; ?>
     <?= jhd_grid_close() ?>
 

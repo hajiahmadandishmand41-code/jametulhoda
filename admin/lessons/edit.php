@@ -36,8 +36,12 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     handleMediaUploads('lesson', $id, $_FILES['video_files'] ?? [], 'video', $context)
    );
    $status=in_array($_POST['status']??'', ['published','draft'],true)?$_POST['status']:'draft';$level=in_array($_POST['level']??'', ['beginner','intermediate','advanced'],true)?$_POST['level']:'beginner';$lessonNo=max(0,(int)($_POST['lesson_number']??0));
-   $db->prepare('UPDATE lessons SET title=?,slug=?,subject=?,teacher=?,content=?,summary=?,sources=?,featured_image=?,audio_file=?,video_file=?,pdf_file=?,status=?,page_section=?,level=?,sort_order=?,lesson_number=?,collection_id=?,volume_id=?,updated_at=NOW() WHERE id=?')->execute([$title,uniqueSlug('lessons',$title,$id),trim((string)($_POST['subject']??''))?:null,trim((string)($_POST['teacher']??''))?:null,(string)($_POST['content']??'')?:null,trim((string)($_POST['summary']??''))?:null,trim((string)($_POST['sources']??''))?:null,$image?:null,$audio?:null,$video?:null,$pdf?:null,$status,'lessons',$level,(int)($_POST['sort_order']??0),$lessonNo?:null,$collectionId?:null,$volumeId?:null,$id]);
-   syncPrimaryMediaFile('lesson',$id,'audio',$audio,$title);syncPrimaryMediaFile('lesson',$id,'video',$video,$title);if(isset($_POST['topic_ids']))setLessonTopics($id,validatedTopicIds((array)$_POST['topic_ids']));foreach((array)($_POST['delete_attachment']??[])as$mediaId)deleteMediaFile((int)$mediaId,'lesson',$id);
+   $lessonSlug = ($title === (string)($lesson['title'] ?? '') && !empty($lesson['slug'])) ? (string)$lesson['slug'] : uniqueSlug('lessons', $title, $id);
+   $db->prepare('UPDATE lessons SET title=?,slug=?,subject=?,teacher=?,content=?,summary=?,sources=?,featured_image=?,audio_file=?,video_file=?,pdf_file=?,status=?,page_section=?,level=?,sort_order=?,lesson_number=?,collection_id=?,volume_id=?,updated_at=NOW() WHERE id=?')->execute([$title,$lessonSlug,trim((string)($_POST['subject']??''))?:null,trim((string)($_POST['teacher']??''))?:null,(string)($_POST['content']??'')?:null,trim((string)($_POST['summary']??''))?:null,trim((string)($_POST['sources']??''))?:null,$image?:null,$audio?:null,$video?:null,$pdf?:null,$status,'lessons',$level,(int)($_POST['sort_order']??0),$lessonNo?:null,$collectionId?:null,$volumeId?:null,$id]);
+   syncPrimaryMediaFile('lesson',$id,'audio',$audio,$title);syncPrimaryMediaFile('lesson',$id,'video',$video,$title);
+   if(!empty($_POST['topics_form_present']) || isset($_POST['topic_ids']))setLessonTopics($id,jhd_parse_id_list($_POST['topic_ids']??[]));
+   if(isset($_POST['featured_media_pref']))jhd_save_featured_media_pref('lesson',$id,['mode'=>(string)$_POST['featured_media_pref']]);
+   foreach((array)($_POST['delete_attachment']??[])as$mediaId)deleteMediaFile((int)$mediaId,'lesson',$id);
    foreach (['document','audio','video'] as $kind) {
     $items = array_filter(getMediaFor('lesson', $id, $kind), static fn($m) => (int)$m['sort_order'] !== -1000000);
     $ids = array_values(array_map('intval', array_column($items, 'id')));
@@ -59,5 +63,46 @@ function lessonFileControl(string $name,string $label,string $path,string $accep
 <section class="admin-card mb-4"><div class="admin-card-header">محتوای درس</div><div class="admin-card-body"><div class="mb-3"><label class="form-label">عنوان <span class="text-danger">*</span></label><input class="form-control" required name="title" value="<?=sanitize($lesson['title'])?>"></div><div class="row g-3"><div class="col-md-6"><label class="form-label">موضوع درسی</label><input class="form-control" name="subject" value="<?=sanitize((string)$lesson['subject'])?>"></div><div class="col-md-6"><label class="form-label">مدرس</label><input class="form-control" name="teacher" value="<?=sanitize((string)$lesson['teacher'])?>"></div></div><div class="mt-3"><label class="form-label">خلاصه</label><textarea class="form-control" rows="3" name="summary"><?=sanitize((string)$lesson['summary'])?></textarea></div><div class="mt-3"><label class="form-label">متن کامل</label><textarea class="form-control" rows="10" name="content"><?=htmlspecialchars((string)$lesson['content'],ENT_QUOTES,'UTF-8')?></textarea></div><div class="mt-3"><label class="form-label">منابع</label><textarea class="form-control" rows="4" name="sources"><?=sanitize((string)$lesson['sources'])?></textarea></div></div></section>
 <section class="admin-card mb-4"><div class="admin-card-header">مسیر آموزشی</div><div class="admin-card-body"><div class="row g-3"><div class="col-md-5"><label class="form-label">دوره</label><select name="collection_id" class="form-select"><option value="">بدون دوره</option><?php foreach($collections as $collection):?><option value="<?= (int)$collection['id']?>" <?= (int)$lesson['collection_id']===(int)$collection['id']?'selected':''?>><?=sanitize($collection['title'])?></option><?php endforeach;?></select></div><div class="col-md-5"><label class="form-label">جلد / بخش</label><select name="volume_id" class="form-select"><option value="">بدون جلد</option><?php foreach($volumes as $entry):?><option value="<?= (int)$entry['volume']['id']?>" <?= (int)$lesson['volume_id']===(int)$entry['volume']['id']?'selected':''?>><?=sanitize($entry['collection']['title'].' — '.$entry['volume']['title'])?></option><?php endforeach;?></select></div><div class="col-md-2"><label class="form-label">شماره</label><input class="form-control" min="1" type="number" name="lesson_number" value="<?= (int)$lesson['lesson_number']?>"></div></div></div></section>
 <section class="admin-card"><div class="admin-card-header">رسانه و فایل‌ها</div><div class="admin-card-body"><div class="row g-3"><?=lessonFileControl('featured_image','تصویر',(string)$lesson['featured_image'],'image/jpeg,image/png,image/gif,image/webp','remove_image')?><?=lessonFileControl('audio_file','صوت',(string)$lesson['audio_file'],'audio/*,.mp3,.ogg,.wav,.m4a','remove_audio')?><?=lessonFileControl('video_file','ویدیو',(string)$lesson['video_file'],'video/*,.mp4,.webm,.mov,.mkv','remove_video')?><?=lessonFileControl('pdf_file','PDF',(string)$lesson['pdf_file'],'application/pdf,.pdf','remove_pdf')?></div><hr><div class="row g-3 mb-3"><div class="col-md-6"><label class="form-label">صوت‌های تکمیلی</label><input class="form-control" type="file" name="audio_files[]" accept="audio/*" multiple></div><div class="col-md-6"><label class="form-label">ویدیوهای تکمیلی</label><input class="form-control" type="file" name="video_files[]" accept="video/*" multiple></div></div><label class="form-label">فایل‌های تکمیلی</label><input class="form-control" type="file" multiple name="attachment_files[]" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"><?php foreach (['audio'=>$extraAudio,'video'=>$extraVideo] as $kind=>$items): ?><?php if($items):?><p class="small fw-bold mt-3"><?= $kind === 'audio' ? 'صوت‌ها' : 'ویدیوها' ?></p><ul class="list-group"><?php foreach($items as $file):?><li class="list-group-item d-flex flex-wrap align-items-center gap-2"><a href="<?=sanitize(imgUrl($file['file_path']))?>" target="_blank" rel="noopener"><?=sanitize($file['title'] ?: basename($file['file_path']))?></a><input type="number" class="form-control form-control-sm ms-auto" style="width:5rem" aria-label="ترتیب" name="media_rank[<?= $kind ?>][<?= (int)$file['id'] ?>]" value="<?= (int)$file['sort_order'] ?>"><label class="small text-danger"><input type="checkbox" name="delete_attachment[]" value="<?= (int)$file['id'] ?>"> حذف</label></li><?php endforeach;?></ul><?php endif;?><?php endforeach;?><?php if($attachments):?><ul class="list-group list-group-flush mt-3"><?php foreach($attachments as$file):?><li class="list-group-item d-flex justify-content-between gap-2"><a class="small text-truncate" target="_blank" rel="noopener noreferrer" href="<?=imgUrl($file['file_path'])?>"><?=sanitize($file['title']?:basename($file['file_path']))?></a><input type="number" class="form-control form-control-sm ms-auto" style="width:5rem" aria-label="ترتیب" name="media_rank[document][<?= (int)$file['id'] ?>]" value="<?= (int)$file['sort_order'] ?>"><label class="form-check small text-danger"><input class="form-check-input" type="checkbox" name="delete_attachment[]" value="<?= (int)$file['id']?>"> حذف</label></li><?php endforeach;?></ul><?php endif;?></div></section>
-</div><aside class="col-lg-4"><section class="admin-card"><div class="admin-card-header">انتشار</div><div class="admin-card-body"><label class="form-label">وضعیت</label><select class="form-select mb-3" name="status"><option value="draft" <?=$lesson['status']==='draft'?'selected':''?>>پیش‌نویس</option><option value="published" <?=$lesson['status']==='published'?'selected':''?>>منتشرشده</option></select><label class="form-label">سطح</label><select class="form-select mb-3" name="level"><option value="beginner" <?=$lesson['level']==='beginner'?'selected':''?>>مبتدی</option><option value="intermediate" <?=$lesson['level']==='intermediate'?'selected':''?>>متوسط</option><option value="advanced" <?=$lesson['level']==='advanced'?'selected':''?>>پیشرفته</option></select><label class="form-label">ترتیب</label><input class="form-control mb-3" type="number" name="sort_order" value="<?= (int)$lesson['sort_order']?>"><button class="btn btn-success w-100">ذخیره تغییرات</button></div></section></aside></div></form>
+</div><aside class="col-lg-4">
+<?php
+$lessonMediaPref = jhd_get_featured_media_pref('lesson', $id);
+$lessonTopicIds = array_map(static fn(array $r): int => (int)$r['id'], getLessonTopics($id));
+$allTopicsForLesson = getTopics();
+?>
+<section class="admin-card mb-3"><div class="admin-card-header">انتشار</div><div class="admin-card-body"><label class="form-label">وضعیت</label><select class="form-select mb-3" name="status"><option value="draft" <?=$lesson['status']==='draft'?'selected':''?>>پیش‌نویس</option><option value="published" <?=$lesson['status']==='published'?'selected':''?>>منتشرشده</option></select><label class="form-label">سطح</label><select class="form-select mb-3" name="level"><option value="beginner" <?=$lesson['level']==='beginner'?'selected':''?>>مبتدی</option><option value="intermediate" <?=$lesson['level']==='intermediate'?'selected':''?>>متوسط</option><option value="advanced" <?=$lesson['level']==='advanced'?'selected':''?>>پیشرفته</option></select><label class="form-label">ترتیب</label><input class="form-control mb-3" type="number" name="sort_order" value="<?= (int)$lesson['sort_order']?>"><button class="btn btn-success w-100">ذخیره تغییرات</button></div></section>
+<section class="admin-card mb-3">
+  <div class="admin-card-header"><i class="bi bi-stars ms-1"></i>انتخاب رسانه شاخص</div>
+  <div class="admin-card-body">
+    <select name="featured_media_pref" class="form-select form-select-sm">
+      <?php foreach (jhd_featured_media_pref_options() as $pmKey => $pmLabel): ?>
+        <option value="<?= sanitize($pmKey) ?>" <?= (($lessonMediaPref['mode'] ?? 'auto') === $pmKey) ? 'selected' : '' ?>><?= sanitize($pmLabel) ?></option>
+      <?php endforeach; ?>
+    </select>
+    <div class="form-text">در صورت نبود تصویر، ویدیو، صوت یا PDF درس به عنوان رسانه شاخص کارت استفاده می‌شود.</div>
+  </div>
+</section>
+<section class="admin-card">
+  <div class="admin-card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-diagram-3 ms-1"></i>موضوعات علمی درس</span>
+    <a href="<?= sanitize(adminUrl('topics')) ?>" target="_blank" class="small text-decoration-none">+ مدیریت</a>
+  </div>
+  <div class="admin-card-body">
+    <input type="hidden" name="topics_form_present" value="1">
+    <?php if (!$allTopicsForLesson): ?>
+      <div class="text-muted small">هنوز موضوعی ثبت نشده است.</div>
+    <?php else: ?>
+      <div style="max-height:220px;overflow-y:auto;border:1px solid var(--admin-border);border-radius:8px;padding:8px">
+        <?php foreach (getTopicFlatTree(null, 5) as $tp):
+          $tpId = (int)$tp['id'];
+        ?>
+          <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" name="topic_ids[]" id="eltp_<?= $tpId ?>" value="<?= $tpId ?>" <?= in_array($tpId, $lessonTopicIds, true) ? 'checked' : '' ?>>
+            <label class="form-check-label small" for="eltp_<?= $tpId ?>"><?= str_repeat('— ', (int)($tp['depth'] ?? 0)) . sanitize($tp['name']) ?></label>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    <?php endif; ?>
+  </div>
+</section>
+</aside></div></form>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

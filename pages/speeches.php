@@ -10,12 +10,13 @@ require_once __DIR__ . '/../includes/header.php';
 $db = jhd_db(); // null → the page renders with its own empty state
 
 // ─── پارامترهای فیلتر ────────────────────────────────────────────
+$pageCfg  = jhd_internal_page_config('speeches');
 $search   = trim($_GET['q']       ?? '');
 $speaker  = trim($_GET['speaker'] ?? '');
 $category = trim($_GET['cat']     ?? '');
 $year     = (int)($_GET['year']   ?? 0);
 $page     = max(1, (int)($_GET['page'] ?? 1));
-$limit    = POSTS_PER_PAGE;
+$limit    = (int)($pageCfg['per_page'] ?? POSTS_PER_PAGE);
 $offset   = ($page - 1) * $limit;
 
 // ─── ساخت کوئری پویا ─────────────────────────────────────────────
@@ -228,15 +229,22 @@ function speechPageUrl(int $p): string {
                         // سخنرانی هم دقیقاً همان کارت استاندارد سایت است؛ نشانه‌های
                         // صوت/ویدیو روی تصویر شاخص و دسته در متادیتا نمایش داده می‌شود.
                         echo renderPostCard($sp, [
-                            'type'  => 'speech',
-                            'url'   => speechUrl($sp),
-                            'badge' => 'سخنرانی',
-                            'cta'   => 'مشاهده',
-                            'col'   => 'col-12 col-sm-6 col-xl-4',
-                            'eager' => $i < 3,
-                            'topics' => [],
-                            'meta'  => !empty($sp['cat_name']) ? [['icon' => 'bi-folder2', 'text' => (string)$sp['cat_name']]] : [],
-                            'has_audio' => !empty($sp['has_audio']),
+                            'type'          => 'speech',
+                            'url'           => speechUrl($sp),
+                            'badge'         => 'سخنرانی',
+                            'cta'           => 'مشاهده',
+                            'col'           => in_array(($pageCfg['mode'] ?? 'grid'), ['list', 'rows', 'horizontal', 'minimal'], true) ? 'col-12' : 'col-12 col-sm-6 col-xl-4',
+                            'row'           => ($pageCfg['mode'] ?? 'grid') === 'horizontal',
+                            'compact'       => in_array(($pageCfg['mode'] ?? 'grid'), ['rows', 'minimal'], true),
+                            'minimal_title' => ($pageCfg['mode'] ?? 'grid') === 'minimal',
+                            'show_media'    => $pageCfg['show_media'] ?? true,
+                            'show_excerpt'  => $pageCfg['show_excerpt'] ?? true,
+                            'show_date'     => $pageCfg['show_date'] ?? true,
+                            'show_meta'     => $pageCfg['show_meta'] ?? true,
+                            'eager'         => $i < 3,
+                            'topics'        => [],
+                            'meta'          => !empty($sp['cat_name']) ? [['icon' => 'bi-folder2', 'text' => (string)$sp['cat_name']]] : [],
+                            'has_audio'     => !empty($sp['has_audio']),
                         ]);
                     endforeach; ?>
                 <?= jhd_grid_close() ?>

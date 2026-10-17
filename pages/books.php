@@ -11,12 +11,15 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 startPublicSession();
 
+$pageCfg = jhd_internal_page_config('books');
 $search = trim($_GET['q'] ?? '');
+$sort = (string)($_GET['sort'] ?? ($pageCfg['sort'] ?? 'newest'));
+if (!in_array($sort, ['newest', 'oldest', 'popular', 'featured'], true)) $sort = 'newest';
 $page = max(1, (int)($_GET['page'] ?? 1));
-$limit = 12;
+$limit = (int)($pageCfg['per_page'] ?? 12);
 $offset = ($page - 1) * $limit;
 
-$opts = ['limit' => $limit, 'offset' => $offset];
+$opts = ['limit' => $limit, 'offset' => $offset, 'sort' => $sort];
 if ($search) $opts['search'] = $search;
 
 $books = getBooks($opts);
@@ -49,7 +52,7 @@ require_once __DIR__ . '/../includes/header.php';
   </div>
 </div>
 
-<div class="jhd-section">
+<div class="jhd-section" data-display-mode="<?= sanitize((string)($pageCfg['mode'] ?? 'grid')) ?>">
   <div class="container">
     <?= jhd_page_head([
         'eyebrow' => 'مرجع اسناد و نشر آثار اسلامی',
@@ -70,9 +73,13 @@ require_once __DIR__ . '/../includes/header.php';
     <?php if (empty($books)): ?>
     <?= renderEmptyState('bi-book', $search ? 'کتابی با این مشخصات یافت نشد.' : 'هنوز کتابی در این بخش ثبت نشده است.', url('books'), 'مشاهده همه کتاب‌ها') ?>
     <?php else: ?>
+    <?php if (($pageCfg['mode'] ?? 'grid') === 'grid'): ?>
     <?= jhd_grid_open() ?>
-      <?php foreach ($books as $b): ?><?= renderBookCard($b) ?><?php endforeach; ?>
+      <?php foreach ($books as $b): ?><?= renderBookCard($b, $pageCfg) ?><?php endforeach; ?>
     <?= jhd_grid_close() ?>
+    <?php else: ?>
+    <?= jhd_render_section_items($books, 'book', (string)($pageCfg['mode'] ?? 'grid'), $pageCfg) ?>
+    <?php endif; ?>
 
     <?= jhd_discovery_band([
         'latest'  => getLatestPosts(5),

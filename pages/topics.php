@@ -16,9 +16,27 @@ require_once __DIR__ . '/../includes/auth.php';
 startPublicSession();
 
 $search = trim((string)($_GET['q'] ?? ''));
-$topics = getTopics(['active' => 1]);
-// موضوعات ویژه اول
-usort($topics, static function (array $a, array $b): int {
+$topicsPageCfg = jhd_internal_page_config('topics');
+$topicsMode = (string)($topicsPageCfg['mode'] ?? 'grid');
+$topicsSort = isset($_GET['sort']) && is_string($_GET['sort']) ? trim($_GET['sort']) : (string)($topicsPageCfg['sort'] ?? 'featured');
+
+$rawTopics = getTopics(['active' => 1]);
+$topics = [];
+foreach ($rawTopics as $rt) {
+    $tid = (int)$rt['id'];
+    $disp = jhd_topic_display($tid);
+    if (($disp['visibility'] ?? 'public') !== 'public') continue;
+    if (!in_array('topics_archive', $disp['placements'] ?? ['topics_archive'], true)) continue;
+    $topics[] = $rt;
+}
+
+usort($topics, static function (array $a, array $b) use ($topicsSort): int {
+    if ($topicsSort === 'newest') {
+        return (int)($b['id'] ?? 0) <=> (int)($a['id'] ?? 0);
+    }
+    if ($topicsSort === 'oldest') {
+        return (int)($a['id'] ?? 0) <=> (int)($b['id'] ?? 0);
+    }
     $fa = (int)($a['is_featured'] ?? 0);
     $fb = (int)($b['is_featured'] ?? 0);
     if ($fa !== $fb) return $fb <=> $fa;
@@ -67,7 +85,7 @@ require_once __DIR__ . '/../includes/header.php';
   </div>
 </div>
 
-<div class="jhd-section">
+<div class="jhd-section" data-display-mode="<?= sanitize($topicsMode) ?>">
   <div class="container">
     <?= jhd_page_head([
         'eyebrow' => 'هاب علمی',
@@ -91,7 +109,7 @@ require_once __DIR__ . '/../includes/header.php';
     <?php if (empty($topics)): ?>
       <?= renderEmptyState('bi-diagram-3', $search ? 'موضوعی مطابق با جستجوی شما یافت نشد.' : 'هنوز موضوع فعالی ثبت نشده است.', url(), 'صفحه اصلی') ?>
     <?php else: ?>
-      <div class="row g-2">
+      <div class="row <?= $topicsMode === 'slider' ? 'jhd-home-slider' : 'g-2' ?>"<?= $topicsMode === 'slider' ? ' tabindex="0" aria-label="فهرست موضوعات قابل پیمایش"' : '' ?>>
         <?php foreach ($topics as $t):
             $id = (int)$t['id'];
             $counts = [
@@ -99,9 +117,22 @@ require_once __DIR__ . '/../includes/header.php';
                 ['icon' => 'bi-book', 'label' => 'کتاب', 'value' => countBooksByTopic($id)],
                 ['icon' => 'bi-mortarboard', 'label' => 'درس', 'value' => countLessonsByTopic($id)],
             ];
-            // only show non-zero counts
             $counts = array_values(array_filter($counts, static fn($c) => (int)$c['value'] > 0));
-            echo renderTopicCard($t, ['compact' => true, 'counts' => $counts, 'col' => 'col-12 col-sm-6 col-lg-3']);
+            $colClass = match ($topicsMode) {
+                'list', 'rows', 'horizontal', 'minimal' => 'col-12',
+                'slider' => 'jhd-home-slide',
+                default  => 'col-12 col-sm-6 col-lg-3',
+            };
+            echo renderTopicCard($t, [
+                'compact'       => in_array($topicsMode, ['grid', 'rows', 'auto', 'minimal', 'slider'], true),
+                'row'           => $topicsMode === 'horizontal',
+                'minimal_title' => $topicsMode === 'minimal',
+                'counts'        => $counts,
+                'col'           => $colClass,
+                'show_media'    => $topicsPageCfg['show_media'] ?? true,
+                'show_excerpt'  => $topicsPageCfg['show_excerpt'] ?? true,
+                'show_counts'   => $topicsPageCfg['show_counts'] ?? true,
+            ]);
         endforeach; ?>
       </div>
     <?php endif; ?>

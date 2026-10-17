@@ -195,6 +195,9 @@ function jhd_card_image_set(array $post): array {
     }
 
     $featured = trim((string)($post['featured_image'] ?? ''));
+    if ($featured !== '' && function_exists('jhd_is_usable_media_path') && !jhd_is_usable_media_path($featured, 'image')) {
+        $featured = '';
+    }
     $hasFeatured = false;
     foreach ($rows as $row) {
         if ($featured !== '' && (string)($row['path'] ?? '') === $featured) {
@@ -211,6 +214,7 @@ function jhd_card_image_set(array $post): array {
     foreach ($rows as $row) {
         $path = trim((string)($row['path'] ?? ''));
         if ($path === '' || isset($seen[$path])) continue;
+        if (function_exists('jhd_is_usable_media_path') && !jhd_is_usable_media_path($path, 'image')) continue;
         $seen[$path] = true;
         $out[] = ['path' => $path, 'alt' => (string)($row['alt'] ?? $post['title'] ?? '')];
     }
@@ -321,6 +325,7 @@ function jhd_topic_chips(array $topics): string {
  * کتاب با گونهٔ «contain» و پس‌زمینهٔ محو نمایش داده می‌شود تا کامل دیده شود.
  */
 function jhd_card_media(array $card, array $opts = []): string {
+    if (!empty($opts['hide_media'])) return '';
     $href    = (string)($card['url'] ?? '');
     $title   = (string)($card['title'] ?? '');
     $image   = trim((string)($card['image'] ?? ''));
@@ -332,23 +337,55 @@ function jhd_card_media(array $card, array $opts = []): string {
     $ratio   = (string)($opts['ratio'] ?? '');
     $icon    = (string)($card['icon'] ?? jhd_type_icon($type));
     $gallery = (array)($card['gallery'] ?? []);
+    $resolved = is_array($card['resolved_media'] ?? null) ? $card['resolved_media'] : null;
+    $resolvedKind = (string)($resolved['kind'] ?? ($card['featured_media_kind'] ?? ''));
 
     $classes = ['jhd-card-media'];
     if ($ratio !== '') $classes[] = 'jhd-card-media--' . $ratio;
     if ($fit === 'contain') $classes[] = 'jhd-card-media--contain';
 
     // Archive cards navigate to the content; galleries belong only inside it.
-    if ($image === '' && !empty($gallery[0]['path'])) $image = (string)$gallery[0]['path'];
+    if ($image === '' && $resolvedKind !== 'video' && $resolvedKind !== 'audio' && $resolvedKind !== 'document' && $resolvedKind !== 'none' && !empty($gallery[0]['path'])) {
+        $image = (string)$gallery[0]['path'];
+    }
 
     $src = $image !== '' ? imgUrl($image) : '';
     $inner = '';
-    if ($src !== '') {
+    if ($resolvedKind === 'video' && !empty($resolved['url'])) {
+        $classes[] = 'jhd-card-media--video';
+        $posterAttr = !empty($resolved['poster']) ? ' poster="' . sanitize((string)$resolved['poster']) . '"' : '';
+        $inner .= '<video class="jhd-card-media__video" preload="metadata" muted playsinline' . $posterAttr
+            . ' onerror="var m=this.closest(\'.jhd-card-media\');if(m)m.classList.add(\'jhd-card-media--video-fallback\');this.remove();">'
+            . '<source src="' . sanitize((string)$resolved['url']) . '" type="video/mp4">'
+            . '</video>'
+            . '<span class="jhd-card-media__plate jhd-card-media__video-plate" aria-hidden="true">'
+            . '<i class="bi bi-camera-video"></i>'
+            . '<span class="jhd-card-media__kind-label">ویدیو</span>'
+            . '</span>';
+        $card['play'] = true;
+    } elseif ($resolvedKind === 'audio' && !empty($resolved['url'])) {
+        $classes[] = 'jhd-card-media--audio';
+        $inner .= '<span class="jhd-card-media__plate jhd-card-media__audio-plate" aria-hidden="true">'
+            . '<i class="bi bi-headphones"></i>'
+            . '<span class="jhd-card-media__kind-label">فایل صوتی</span>'
+            . '</span>';
+        $card['play'] = true;
+    } elseif ($resolvedKind === 'document' && !empty($resolved['url'])) {
+        $classes[] = 'jhd-card-media--document';
+        $docTypeLabel = (string)($resolved['doc_type'] ?? 'PDF');
+        $docIcon = $docTypeLabel === 'Word' ? 'bi-file-earmark-word' : 'bi-file-earmark-pdf';
+        $inner .= '<span class="jhd-card-media__plate jhd-card-media__doc-plate" aria-hidden="true">'
+            . '<i class="bi ' . $docIcon . '"></i>'
+            . '<span class="jhd-card-media__kind-label">سند ' . sanitize($docTypeLabel) . '</span>'
+            . '</span>';
+    } elseif ($src !== '' && $resolvedKind !== 'none') {
         if ($fit === 'contain') {
             $inner .= '<span class="jhd-card-media__bg" style="background-image:url(\'' . sanitize($src) . '\')" aria-hidden="true"></span>';
         }
         $inner .= '<img src="' . sanitize($src) . '" alt="' . sanitize($alt) . '"'
             . ($eager ? ' loading="eager" fetchpriority="high"' : ' loading="lazy"')
-            . ' decoding="async" width="800" height="500">';
+            . ' decoding="async" width="800" height="500"'
+            . ' onerror="var m=this.closest(\'.jhd-card-media\');if(m){m.classList.add(\'jhd-card-media--empty\');var b=m.querySelector(\'.jhd-card-media__bg\');if(b)b.remove();}var p=document.createElement(\'span\');p.className=\'jhd-card-media__plate\';p.setAttribute(\'aria-hidden\',\'true\');p.innerHTML=\'<i class=&quot;bi ' . sanitize($icon) . '&quot;></i><span class=&quot;jhd-card-media__mark&quot;>۞</span>\';this.replaceWith(p);">';
     } else {
         $classes[] = 'jhd-card-media--empty';
         $inner .= '<span class="jhd-card-media__plate" aria-hidden="true">'
@@ -406,32 +443,39 @@ function jhd_card_meta_line(array $card): string {
  * $card: url, title, summary, image, image_alt, badge, type, icon, chips,
  *        meta[], date_label, date_raw, author, author_icon, cta, duration,
  *        has_video/has_audio/has_pdf, play, media_fit, index, foot_extra
- * $opts: variant (default|featured|compact), col, eager, ratio, media, class
+ * $opts: variant (default|featured|compact|video), col, eager, ratio, media, class, hide_media, hide_summary
  */
 function jhd_card(array $card, array $opts = []): string {
     if (!empty($opts['minimal_title'])) {
-        $link='<a href="'.sanitize((string)($card['url'] ?? '')).'">'.sanitize((string)($card['title'] ?? '')).'</a>';
-        return '<div class="col-12"><article class="jhd-home-minimal">'.$link.'</article></div>';
+        $link = '<a href="' . sanitize((string)($card['url'] ?? '')) . '">' . sanitize((string)($card['title'] ?? '')) . '</a>';
+        return '<div class="col-12"><article class="jhd-home-minimal">' . $link . '</article></div>';
     }
     $variant = !empty($opts['featured']) ? 'featured' : (!empty($opts['row']) ? 'row' : (string)($opts['variant'] ?? 'default'));
     $type    = (string)($card['type'] ?? 'post');
     $href    = (string)($card['url'] ?? '');
     $title   = (string)($card['title'] ?? '');
-    $summary = trim((string)($card['summary'] ?? ''));
+    $summary = !empty($opts['hide_summary']) ? '' : trim((string)($card['summary'] ?? ''));
     $cta     = (string)($card['cta'] ?? 'ادامه مطلب');
     $author  = trim((string)($card['author'] ?? ''));
     $authorIcon = (string)($card['author_icon'] ?? 'bi-person');
     $index   = isset($card['index']) ? (int)$card['index'] : null;
+    $resolvedKind = (string)($card['featured_media_kind'] ?? ($card['resolved_media']['kind'] ?? ''));
 
     $classes = ['jhd-card', 'jhd-card--' . jhd_type_class($type)];
     if ($variant === 'featured') $classes[] = 'jhd-card--featured';
     if ($variant === 'compact')  $classes[] = 'jhd-card--compact';
-    if ($variant === 'row') $classes[] = 'jhd-card--row';
-    if (trim((string)($card['image'] ?? '')) === '') $classes[] = 'jhd-card--noimage';
+    if ($variant === 'row')      $classes[] = 'jhd-card--row';
+    if ($variant === 'video')    $classes[] = 'jhd-card--video';
+    if (!empty($opts['hide_media'])) {
+        $classes[] = 'jhd-card--noimage';
+        $classes[] = 'jhd-card--nomedia';
+    } elseif (trim((string)($card['image'] ?? '')) === '' && !in_array($resolvedKind, ['video', 'audio', 'document'], true)) {
+        $classes[] = 'jhd-card--noimage';
+    }
     if (!empty($opts['class'])) $classes[] = (string)$opts['class'];
 
     $mediaOpts = $opts;
-    if ($variant === 'featured' && empty($opts['ratio'])) $mediaOpts['ratio'] = 'wide';
+    if (($variant === 'featured' || $variant === 'video') && empty($opts['ratio'])) $mediaOpts['ratio'] = 'wide';
     if ($variant === 'compact' && empty($opts['ratio'])) $mediaOpts['ratio'] = 'thumb';
 
     $body  = jhd_card_meta_line($card);
@@ -451,7 +495,8 @@ function jhd_card(array $card, array $opts = []): string {
         : '';
     $body .= '<div class="jhd-card-foot">' . $footLeft . $footRight . '</div>';
 
-    $article = '<article class="' . implode(' ', $classes) . '">'
+    $mediaAttr = $resolvedKind !== '' ? ' data-featured-media="' . sanitize($resolvedKind) . '"' : '';
+    $article = '<article class="' . implode(' ', $classes) . '"' . $mediaAttr . '>'
         . jhd_card_media($card, $mediaOpts)
         . '<div class="jhd-card-body">' . $body . '</div>'
         . ($index !== null ? '<span class="jhd-card-index" aria-hidden="true">' . str_pad((string)$index, 2, '0', STR_PAD_LEFT) . '</span>' : '')
@@ -487,63 +532,122 @@ function jhd_card_list(array $items, callable $mapper, array $opts = []): string
  */
 function renderPostCard(array $post, array $opts = []): string {
     $type = (string)($opts['type'] ?? ($post['post_type'] ?? 'post'));
-    $variant = !empty($opts['featured']) ? 'featured' : (!empty($opts['compact']) ? 'compact' : (!empty($opts['row']) ? 'row' : 'default'));
+    $variant = !empty($opts['featured']) ? 'featured' : (!empty($opts['compact']) ? 'compact' : (!empty($opts['row']) ? 'row' : (string)($opts['variant'] ?? 'default')));
     $rawDate = (string)($post['published_at'] ?? $post['created_at'] ?? '');
     $topics = []; // Public topic chips are retired; taxonomy data remains stored.
-    $author = trim((string)($post['author_name'] ?? '')) ?: trim((string)($post['speaker'] ?? ''));
+    $showMedia = !array_key_exists('show_media', $opts) || !empty($opts['show_media']);
+    $showExcerpt = !array_key_exists('show_excerpt', $opts) || !empty($opts['show_excerpt']);
+    $showDate = !array_key_exists('show_date', $opts) || !empty($opts['show_date']);
+    $showMeta = !array_key_exists('show_meta', $opts) || !empty($opts['show_meta']);
+    $topics = !empty($opts['show_topics']) ? jhd_card_topics($post, 3) : [];
+    $author = $showMeta ? (trim((string)($post['author_name'] ?? '')) ?: trim((string)($post['speaker'] ?? ''))) : '';
 
     $meta = [];
-    $location = trim((string)($post['location'] ?? ''));
-    if ($location !== '') $meta[] = ['icon' => 'bi-geo-alt', 'text' => $location];
-    $eventTime = trim((string)($post['event_time'] ?? ''));
-    if ($eventTime !== '') $meta[] = ['icon' => 'bi-clock', 'text' => $eventTime];
-    $field = trim((string)($post['research_field'] ?? ''));
-    if ($field !== '') $meta[] = ['icon' => 'bi-journal-check', 'text' => $field];
-    foreach ((array)($opts['meta'] ?? []) as $extraMeta) {
-        if (is_array($extraMeta) && !empty($extraMeta['text'])) $meta[] = $extraMeta;
+    if ($showMeta) {
+        $location = trim((string)($post['location'] ?? ''));
+        if ($location !== '') $meta[] = ['icon' => 'bi-geo-alt', 'text' => $location];
+        $eventTime = trim((string)($post['event_time'] ?? ''));
+        if ($eventTime !== '') $meta[] = ['icon' => 'bi-clock', 'text' => $eventTime];
+        $field = trim((string)($post['research_field'] ?? ''));
+        if ($field !== '') $meta[] = ['icon' => 'bi-journal-check', 'text' => $field];
+        foreach ((array)($opts['meta'] ?? []) as $extraMeta) {
+            if (is_array($extraMeta) && !empty($extraMeta['text'])) $meta[] = $extraMeta;
+        }
     }
 
+    $resolved = function_exists('jhd_resolve_featured_media')
+        ? jhd_resolve_featured_media($post, 'post')
+        : ['kind' => !empty($post['featured_image']) ? 'image' : 'none', 'url' => !empty($post['featured_image']) ? imgUrl((string)$post['featured_image']) : '', 'path' => (string)($post['featured_image'] ?? ''), 'poster' => '', 'doc_type' => '', 'has_image' => !empty($post['featured_image']), 'has_video' => !empty($post['featured_video']), 'has_audio' => false, 'has_document' => false, 'pref_mode' => 'auto'];
+    if ($variant === 'video' && $resolved['has_video'] && $resolved['kind'] !== 'none') {
+        $vidCandidates = function_exists('getPostFeaturedVideos') ? getPostFeaturedVideos((int)($post['id'] ?? 0)) : [];
+        $vPath = trim((string)($post['featured_video'] ?? ($vidCandidates[0]['file_path'] ?? '')));
+        if ($vPath === '' && function_exists('getMediaFor') && !empty($post['id'])) {
+            $mVideos = getMediaFor('post', (int)$post['id'], 'video');
+            $vPath = trim((string)($mVideos[0]['file_path'] ?? ''));
+        }
+        if ($vPath !== '') {
+            $resolved['kind'] = 'video';
+            $resolved['path'] = $vPath;
+            $resolved['url'] = imgUrl($vPath);
+        }
+    }
+
+    $summaryText = $showExcerpt
+        ? excerpt((string)($post['summary'] ?? $post['content'] ?? ''), (int)($opts['excerpt'] ?? ($variant === 'featured' ? 170 : 118)))
+        : '';
+
     $card = [
-        'type'        => $type,
-        'url'         => $opts['url'] ?? postUrl($post),
-        'title'       => (string)($post['title'] ?? ''),
-        'summary'     => excerpt((string)($post['summary'] ?? $post['content'] ?? ''), (int)($opts['excerpt'] ?? ($variant === 'featured' ? 170 : 118))),
-        'image'       => (string)($post['featured_image'] ?? ''),
-        'image_alt'   => (string)($post['featured_image_alt'] ?? $post['title'] ?? ''),
-        'badge'       => (string)($opts['badge'] ?? postTypeLabel($type)),
-        'chips'       => jhd_topic_chips($topics),
-        'meta'        => $meta,
-        'date_label'  => persianDate($rawDate),
-        'date_raw'    => $rawDate,
-        'author'      => $author,
-        'author_icon' => !empty($post['speaker']) ? 'bi-mic' : 'bi-person',
-        'cta'         => (string)($opts['cta'] ?? 'ادامه مطلب'),
-        'has_video'   => !empty($post['featured_video']) || !empty($post['has_video']) || !empty($opts['has_video']),
-        'has_audio'   => !empty($post['has_audio']) || !empty($opts['has_audio']),
-        'has_pdf'     => !empty($post['pdf_file']) || !empty($opts['has_pdf']),
-        'gallery'     => empty($post['featured_image']) ? jhd_card_image_set($post) : [],
+        'type'                => $type,
+        'url'                 => $opts['url'] ?? postUrl($post),
+        'title'               => (string)($post['title'] ?? ''),
+        'summary'             => $summaryText,
+        'image'               => $resolved['kind'] === 'image' ? (string)$resolved['path'] : '',
+        'image_alt'           => (string)($post['featured_image_alt'] ?? $post['title'] ?? ''),
+        'badge'               => (string)($opts['badge'] ?? postTypeLabel($type)),
+        'chips'               => $showMeta ? jhd_topic_chips($topics) : '',
+        'meta'                => $meta,
+        'date_label'          => $showDate ? persianDate($rawDate) : '',
+        'date_raw'            => $showDate ? $rawDate : '',
+        'author'              => $author,
+        'author_icon'         => !empty($post['speaker']) ? 'bi-mic' : 'bi-person',
+        'cta'                 => (string)($opts['cta'] ?? 'ادامه مطلب'),
+        'has_video'           => $resolved['has_video'] || !empty($post['featured_video']) || !empty($post['has_video']) || !empty($opts['has_video']),
+        'has_audio'           => $resolved['has_audio'] || !empty($post['has_audio']) || !empty($opts['has_audio']),
+        'has_pdf'             => $resolved['has_document'] || !empty($post['pdf_file']) || !empty($opts['has_pdf']),
+        'gallery'             => ($resolved['kind'] === 'image' && empty($post['featured_image'])) ? jhd_card_image_set($post) : [],
+        'resolved_media'      => $resolved,
+        'featured_media_kind' => $resolved['kind'],
     ];
     if (isset($opts['index'])) $card['index'] = (int)$opts['index'];
 
     return jhd_card($card, [
         'minimal_title' => !empty($opts['minimal_title']),
-        'variant'   => $variant,
-        'col'       => array_key_exists('col', $opts) ? (string)$opts['col'] : ($variant === 'featured' ? 'col-12' : JHD_CARD_COL),
-        'eager'     => !empty($opts['eager']),
-        'no_gallery'=> !empty($opts['no_gallery']),
+        'variant'       => $variant,
+        'col'           => array_key_exists('col', $opts) ? (string)$opts['col'] : ($variant === 'featured' ? 'col-12' : JHD_CARD_COL),
+        'eager'         => !empty($opts['eager']),
+        'no_gallery'    => !empty($opts['no_gallery']),
+        'hide_media'    => !$showMedia || !empty($opts['hide_media']),
+        'hide_summary'  => !$showExcerpt || !empty($opts['hide_summary']),
+        'class'         => (string)($opts['class'] ?? ''),
     ]);
 }
 
-/** Shared archive rhythm: one lead on page one, then small image/text rows.
+/** Shared archive rhythm: one lead on page one, then small image/text rows or configured display mode.
  * Input order is preserved so category/search/sort and pagination stay truthful.
  */
 function jhd_post_archive(array $posts, array $opts = []): string {
     if (!$posts) return '';
-    $html = '<div class="jhd-post-archive">';
+    $mode = (string)($opts['mode'] ?? 'rows');
+    $showMedia = !array_key_exists('show_media', $opts) || !empty($opts['show_media']);
+    $showExcerpt = !array_key_exists('show_excerpt', $opts) || !empty($opts['show_excerpt']);
+    $showDate = !array_key_exists('show_date', $opts) || !empty($opts['show_date']);
+    $showMeta = !array_key_exists('show_meta', $opts) || !empty($opts['show_meta']);
+    $showTopics = !empty($opts['show_topics']);
+
+    if (!in_array($mode, ['auto', 'rows'], true)) {
+        jhd_preload_post_topics($posts);
+        return '<div class="jhd-post-archive" data-display-mode="' . sanitize($mode) . '">'
+            . jhd_render_section_items($posts, 'post', $mode, [
+                'show_media'   => $showMedia,
+                'show_excerpt' => $showExcerpt,
+                'show_date'    => $showDate,
+                'show_meta'    => $showMeta,
+                'show_topics'  => $showTopics,
+                'cta'          => (string)($opts['cta'] ?? 'ادامه مطلب'),
+            ])
+            . '</div>';
+    }
+
+    $html = '<div class="jhd-post-archive" data-display-mode="rows">';
     if ((int)($opts['page'] ?? 1) === 1 && trim((string)($opts['search'] ?? '')) === '') {
+        $resolvedLead = function_exists('jhd_resolve_featured_media') ? jhd_resolve_featured_media($posts[0], 'post') : ['kind' => 'none'];
         $html .= jhd_lead_story($posts[0], [
-            'eyebrow' => jhd_listing_lead_eyebrow((string)($opts['sort'] ?? 'newest'), 'مطلب'),
-            'class' => empty($posts[0]['featured_image']) ? 'jhd-lead--text-only' : '',
+            'eyebrow'      => jhd_listing_lead_eyebrow((string)($opts['sort'] ?? 'newest'), 'مطلب'),
+            'class'        => (!$showMedia || $resolvedLead['kind'] === 'none') ? 'jhd-lead--text-only' : '',
+            'hide_media'   => !$showMedia,
+            'show_excerpt' => $showExcerpt,
+            'show_date'    => $showDate,
+            'show_meta'    => $showMeta,
         ]);
         $posts = array_slice($posts, 1);
     }
@@ -552,8 +656,15 @@ function jhd_post_archive(array $posts, array $opts = []): string {
         $html .= jhd_grid_open('jhd-archive-rows');
         foreach ($posts as $post) {
             $html .= renderPostCard($post, [
-                'row' => true, 'col' => 'col-12',
-                'excerpt' => 130, 'cta' => (string)($opts['cta'] ?? 'ادامه مطلب'),
+                'row'          => true,
+                'col'          => 'col-12',
+                'excerpt'      => 130,
+                'cta'          => (string)($opts['cta'] ?? 'ادامه مطلب'),
+                'show_media'   => $showMedia,
+                'show_excerpt' => $showExcerpt,
+                'show_date'    => $showDate,
+                'show_meta'    => $showMeta,
+                'show_topics'  => $showTopics,
             ]);
         }
         $html .= jhd_grid_close();
@@ -580,18 +691,26 @@ function renderMiniItem(array $post, array $opts = []): string {
 function renderEditorialRow(array $post, array $opts = []): string {
     $href = (string)($opts['url'] ?? postUrl($post));
     $title = (string)($post['title'] ?? '');
+    $showMedia = !array_key_exists('show_media', $opts) || !empty($opts['show_media']);
+    $showExcerpt = !array_key_exists('show_excerpt', $opts) || !empty($opts['show_excerpt']);
+    $showDate = !array_key_exists('show_date', $opts) || !empty($opts['show_date']);
+    $showMeta = !array_key_exists('show_meta', $opts) || !empty($opts['show_meta']);
     $summaryText = trim((string)($post['summary'] ?? '')) ?: (string)($post['content'] ?? '');
-    $summary = excerpt($summaryText, (int)($opts['excerpt'] ?? 220));
+    $summary = $showExcerpt ? excerpt($summaryText, (int)($opts['excerpt'] ?? 220)) : '';
     $rawDate = (string)($post['published_at'] ?? $post['created_at'] ?? '');
     $type = (string)($post['post_type'] ?? 'article');
     $badge = (string)($opts['badge'] ?? postTypeLabel($type));
-    $images = jhd_card_image_set($post);
+    $images = $showMedia ? jhd_card_image_set($post) : [];
     $image = $images[0] ?? null;
-    $src = $image ? imgUrl((string)$image['path']) : '';
-    $author = trim((string)($post['author_name'] ?? ''));
+    $src = ($image && (!function_exists('jhd_is_usable_media_path') || jhd_is_usable_media_path((string)$image['path'], 'image')))
+        ? imgUrl((string)$image['path'])
+        : '';
+    $author = $showMeta ? trim((string)($post['author_name'] ?? '')) : '';
+    $topics = (!empty($opts['show_topics']) && $showMeta) ? jhd_card_topics($post, 3) : [];
     $meta = jhd_card_meta_line([
-        'date_label' => $rawDate !== '' ? persianDate($rawDate) : '',
-        'date_raw' => $rawDate,
+        'chips'      => jhd_topic_chips($topics),
+        'date_label' => ($showDate && $rawDate !== '') ? persianDate($rawDate) : '',
+        'date_raw'   => $showDate ? $rawDate : '',
     ]);
 
     $thumb = $src !== ''
@@ -628,68 +747,95 @@ function renderEventRow(array $post, array $opts = []): string {
 
 /** کاشی کتاب — همان کارت با قاب «contain» تا جلد کامل و بدون کشیدگی دیده شود. */
 function renderBookCard(array $book, array $opts = []): string {
+    $showMedia = !array_key_exists('show_media', $opts) || !empty($opts['show_media']);
+    $showExcerpt = !array_key_exists('show_excerpt', $opts) || !empty($opts['show_excerpt']);
+    $showMeta = !array_key_exists('show_meta', $opts) || !empty($opts['show_meta']);
     $meta = [];
-    if (!empty($book['publish_year'])) $meta[] = ['icon' => 'bi-calendar3', 'text' => 'سال ' . (string)$book['publish_year']];
-    if (!empty($book['pages'])) $meta[] = ['icon' => 'bi-file-earmark-text', 'text' => number_format((int)$book['pages']) . ' صفحه'];
-    $fileType = strtoupper(trim((string)($book['file_type'] ?? '')));
-    if ($fileType !== '') $meta[] = ['icon' => 'bi-filetype-pdf', 'text' => $fileType];
+    if ($showMeta) {
+        if (!empty($book['publish_year'])) $meta[] = ['icon' => 'bi-calendar3', 'text' => 'سال ' . (string)$book['publish_year']];
+        if (!empty($book['pages'])) $meta[] = ['icon' => 'bi-file-earmark-text', 'text' => number_format((int)$book['pages']) . ' صفحه'];
+        $fileType = strtoupper(trim((string)($book['file_type'] ?? '')));
+        if ($fileType !== '') $meta[] = ['icon' => 'bi-filetype-pdf', 'text' => $fileType];
+    }
+
+    $resolved = function_exists('jhd_resolve_featured_media')
+        ? jhd_resolve_featured_media($book, 'book')
+        : ['kind' => !empty($book['cover_image']) ? 'image' : 'none', 'url' => !empty($book['cover_image']) ? imgUrl((string)$book['cover_image']) : '', 'path' => (string)($book['cover_image'] ?? ''), 'poster' => '', 'doc_type' => '', 'has_image' => !empty($book['cover_image']), 'has_video' => false, 'has_audio' => false, 'has_document' => !empty($book['pdf_file']) || !empty($book['word_file']), 'pref_mode' => 'auto'];
 
     $card = [
-        'type'        => 'book',
-        'url'         => bookUrl($book),
-        'title'       => (string)($book['title'] ?? ''),
-        'summary'     => excerpt((string)($book['description'] ?? ''), (int)($opts['excerpt'] ?? 96)),
-        'image'       => (string)($book['cover_image'] ?? ''),
-        'image_alt'   => 'جلد ' . (string)($book['title'] ?? ''),
-        'badge'       => 'کتاب',
-        'meta'        => $meta,
-        'author'      => trim((string)($book['author'] ?? '')),
-        'author_icon' => 'bi-pen',
-        'cta'         => (string)($opts['cta'] ?? 'مشاهده کتاب'),
-        'media_fit'   => 'contain',
-        'has_pdf'     => !empty($book['file_path']) || $fileType === 'PDF',
+        'type'                => 'book',
+        'url'                 => bookUrl($book),
+        'title'               => (string)($book['title'] ?? ''),
+        'summary'             => $showExcerpt ? excerpt((string)($book['description'] ?? ''), (int)($opts['excerpt'] ?? 96)) : '',
+        'image'               => $resolved['kind'] === 'image' ? (string)$resolved['path'] : '',
+        'image_alt'           => 'جلد ' . (string)($book['title'] ?? ''),
+        'badge'               => 'کتاب',
+        'meta'                => $meta,
+        'author'              => $showMeta ? trim((string)($book['author'] ?? '')) : '',
+        'author_icon'         => 'bi-pen',
+        'cta'                 => (string)($opts['cta'] ?? 'مشاهده کتاب'),
+        'media_fit'           => 'contain',
+        'has_pdf'             => $resolved['has_document'] || !empty($book['pdf_file']) || !empty($book['file_path']),
+        'resolved_media'      => $resolved,
+        'featured_media_kind' => $resolved['kind'],
     ];
     return jhd_card($card, [
         'minimal_title' => !empty($opts['minimal_title']), 'row' => !empty($opts['row']), 'featured' => !empty($opts['featured']),
-        'variant' => !empty($opts['compact']) ? 'compact' : 'default',
-        'col'   => array_key_exists('col', $opts) ? (string)$opts['col'] : JHD_CARD_COL,
-        'media' => 'contain',
-        'eager' => !empty($opts['eager']),
+        'variant'       => !empty($opts['compact']) ? 'compact' : (string)($opts['variant'] ?? 'default'),
+        'col'           => array_key_exists('col', $opts) ? (string)$opts['col'] : JHD_CARD_COL,
+        'media'         => 'contain',
+        'eager'         => !empty($opts['eager']),
+        'hide_media'    => !$showMedia || !empty($opts['hide_media']),
+        'hide_summary'  => !$showExcerpt || !empty($opts['hide_summary']),
+        'class'         => (string)($opts['class'] ?? ''),
     ]);
 }
 
 /** کارت درس — همان کارت استاندارد. */
 function renderLessonCard(array $lesson, array $opts = []): string {
+    $showMedia = !array_key_exists('show_media', $opts) || !empty($opts['show_media']);
+    $showExcerpt = !array_key_exists('show_excerpt', $opts) || !empty($opts['show_excerpt']);
+    $showMeta = !array_key_exists('show_meta', $opts) || !empty($opts['show_meta']);
     $lessonNo = (int)($lesson['lesson_number'] ?? 0);
     $collection = trim((string)($lesson['collection_title'] ?? $lesson['subject'] ?? ''));
     $meta = [];
-    if ($collection !== '') $meta[] = ['icon' => 'bi-collection', 'text' => $collection];
-    $level = trim((string)($lesson['level'] ?? ''));
-    if ($level !== '') $meta[] = ['icon' => 'bi-bar-chart', 'text' => $level];
-    $sessions = (int)($lesson['session_count'] ?? 0);
-    if ($sessions > 0) $meta[] = ['icon' => 'bi-list-ol', 'text' => number_format($sessions) . ' جلسه'];
+    if ($showMeta) {
+        if ($collection !== '') $meta[] = ['icon' => 'bi-collection', 'text' => $collection];
+        $level = trim((string)($lesson['level'] ?? ''));
+        if ($level !== '') $meta[] = ['icon' => 'bi-bar-chart', 'text' => $level];
+        $sessions = (int)($lesson['session_count'] ?? 0);
+        if ($sessions > 0) $meta[] = ['icon' => 'bi-list-ol', 'text' => number_format($sessions) . ' جلسه'];
+    }
+
+    $resolved = function_exists('jhd_resolve_featured_media')
+        ? jhd_resolve_featured_media($lesson, 'lesson')
+        : ['kind' => !empty($lesson['featured_image']) ? 'image' : 'none', 'url' => !empty($lesson['featured_image']) ? imgUrl((string)$lesson['featured_image']) : '', 'path' => (string)($lesson['featured_image'] ?? ''), 'poster' => '', 'doc_type' => '', 'has_image' => !empty($lesson['featured_image']), 'has_video' => !empty($lesson['video_file']), 'has_audio' => !empty($lesson['audio_file']), 'has_document' => !empty($lesson['pdf_file']), 'pref_mode' => 'auto'];
 
     $card = [
-        'type'        => 'lesson',
-        'url'         => $opts['url'] ?? lessonUrl($lesson),
-        'title'       => (string)($lesson['title'] ?? ''),
-        'summary'     => excerpt((string)($lesson['summary'] ?? $lesson['content'] ?? ''), (int)($opts['excerpt'] ?? 96)),
-        'image'       => (string)($lesson['featured_image'] ?? ''),
-        'badge'       => $lessonNo > 0 ? 'جلسه ' . number_format($lessonNo) : 'درس',
-        'meta'        => $meta,
-        'author'      => trim((string)($lesson['teacher'] ?? '')) !== '' ? 'استاد: ' . trim((string)$lesson['teacher']) : '',
-        'author_icon' => 'bi-person-video3',
-        'cta'         => (string)($opts['cta'] ?? 'مشاهده درس'),
-        'has_audio'   => !empty($lesson['has_audio']) || !empty($lesson['audio_file']) || !empty($lesson['audio_path']),
-        'has_video'   => !empty($lesson['has_video']) || !empty($lesson['video_file']) || !empty($lesson['video_path']),
-        'has_pdf'     => !empty($lesson['pdf_file']) || !empty($lesson['pdf_path']) || !empty($lesson['attachment']),
+        'type'                => 'lesson',
+        'url'                 => $opts['url'] ?? lessonUrl($lesson),
+        'title'               => (string)($lesson['title'] ?? ''),
+        'summary'             => $showExcerpt ? excerpt((string)($lesson['summary'] ?? $lesson['content'] ?? ''), (int)($opts['excerpt'] ?? 96)) : '',
+        'image'               => $resolved['kind'] === 'image' ? (string)$resolved['path'] : '',
+        'badge'               => $lessonNo > 0 ? 'جلسه ' . number_format($lessonNo) : 'درس',
+        'meta'                => $meta,
+        'author'              => ($showMeta && trim((string)($lesson['teacher'] ?? '')) !== '') ? 'استاد: ' . trim((string)$lesson['teacher']) : '',
+        'author_icon'         => 'bi-person-video3',
+        'cta'                 => (string)($opts['cta'] ?? 'مشاهده درس'),
+        'has_audio'           => $resolved['has_audio'] || !empty($lesson['has_audio']) || !empty($lesson['audio_file']) || !empty($lesson['audio_path']),
+        'has_video'           => $resolved['has_video'] || !empty($lesson['has_video']) || !empty($lesson['video_file']) || !empty($lesson['video_path']),
+        'has_pdf'             => $resolved['has_document'] || !empty($lesson['pdf_file']) || !empty($lesson['pdf_path']) || !empty($lesson['attachment']),
+        'resolved_media'      => $resolved,
+        'featured_media_kind' => $resolved['kind'],
     ];
     return jhd_card($card, [
         'minimal_title' => !empty($opts['minimal_title']), 'row' => !empty($opts['row']), 'featured' => !empty($opts['featured']),
-        'variant' => !empty($opts['compact']) ? 'compact' : 'default',
-        'col'    => array_key_exists('col', $opts) ? (string)$opts['col'] : 'col-12 col-sm-6 col-lg-3',
-        'class'  => trim((string)($opts['class'] ?? '')),
-        'eager'  => !empty($opts['eager']),
+        'variant'       => !empty($opts['compact']) ? 'compact' : (string)($opts['variant'] ?? 'default'),
+        'col'           => array_key_exists('col', $opts) ? (string)$opts['col'] : 'col-12 col-sm-6 col-lg-3',
+        'class'         => trim((string)($opts['class'] ?? '')),
+        'eager'         => !empty($opts['eager']),
+        'hide_media'    => !$showMedia || !empty($opts['hide_media']),
+        'hide_summary'  => !$showExcerpt || !empty($opts['hide_summary']),
     ]);
 }
 
@@ -700,7 +846,10 @@ function renderLessonRow(array $lesson, array $opts = []): string {
 
 /** کاشی موضوع (اطلس) — همان کارت با نشان موضوع و شمارش محتوا. */
 function renderTopicCard(array $topic, array $opts = []): string {
-    $counts = (array)($opts['counts'] ?? []);
+    $showMedia = !array_key_exists('show_media', $opts) || !empty($opts['show_media']);
+    $showExcerpt = !array_key_exists('show_excerpt', $opts) || !empty($opts['show_excerpt']);
+    $showCounts = !array_key_exists('show_counts', $opts) || !empty($opts['show_counts']);
+    $counts = $showCounts ? (array)($opts['counts'] ?? []) : [];
     $meta = [];
     foreach ($counts as $c) {
         if (empty($c['label'])) continue;
@@ -715,35 +864,44 @@ function renderTopicCard(array $topic, array $opts = []): string {
             $kids .= '<a class="jhd-chip jhd-chip--soft" href="' . sanitize(topicUrl($ch)) . '">' . sanitize((string)$ch['name']) . '</a>';
         }
     }
-    $summary = $minimal
+    $summary = ($minimal || !$showExcerpt)
         ? ''
         : excerpt((string)($topic['intro'] ?? $topic['description'] ?? ''), (int)($opts['excerpt'] ?? 90));
+    $resolved = function_exists('jhd_resolve_featured_media')
+        ? jhd_resolve_featured_media($topic, 'topic')
+        : ['kind' => !empty($topic['cover_image']) ? 'image' : 'none', 'url' => !empty($topic['cover_image']) ? imgUrl((string)$topic['cover_image']) : '', 'path' => (string)($topic['cover_image'] ?? ''), 'poster' => '', 'doc_type' => '', 'has_image' => !empty($topic['cover_image']), 'has_video' => false, 'has_audio' => false, 'has_document' => false, 'pref_mode' => 'auto'];
     $card = [
-        'type'       => 'topic',
-        'url'        => topicUrl($topic),
-        'title'      => (string)($topic['name'] ?? ''),
-        'summary'    => $summary,
-        'image'      => (string)($topic['cover_image'] ?? ''),
-        'badge'      => 'موضوع',
-        'meta'       => $meta,
-        'cta'        => (string)($opts['cta'] ?? ($minimal ? 'مشاهده موضوع' : 'ورود به موضوع')),
-        'body_extra' => $kids !== '' ? '<div class="jhd-card-kids">' . $kids . '</div>' : '',
+        'type'                => 'topic',
+        'url'                 => topicUrl($topic),
+        'title'               => (string)($topic['name'] ?? ''),
+        'summary'             => $summary,
+        'image'               => $resolved['kind'] === 'image' ? (string)$resolved['path'] : '',
+        'badge'               => 'موضوع',
+        'meta'                => $meta,
+        'cta'                 => (string)($opts['cta'] ?? ($minimal ? 'مشاهده موضوع' : 'ورود به موضوع')),
+        'body_extra'          => $kids !== '' ? '<div class="jhd-card-kids">' . $kids . '</div>' : '',
+        'resolved_media'      => $resolved,
+        'featured_media_kind' => $resolved['kind'],
     ];
     return jhd_card($card, [
         'minimal_title' => !empty($opts['minimal_title']), 'row' => !empty($opts['row']), 'featured' => !empty($opts['featured']),
-        'variant' => !empty($opts['compact']) ? 'compact' : 'default',
-        'col'    => array_key_exists('col', $opts) ? (string)$opts['col'] : 'col-12 col-sm-6 col-lg-3',
-        'class'  => 'jhd-card--topic'
+        'variant'       => !empty($opts['compact']) ? 'compact' : (string)($opts['variant'] ?? 'default'),
+        'col'           => array_key_exists('col', $opts) ? (string)$opts['col'] : 'col-12 col-sm-6 col-lg-3',
+        'class'         => 'jhd-card--topic'
             . ($minimal ? ' jhd-card--topic-home' : '')
             . (!empty($opts['class']) ? ' ' . trim((string)$opts['class']) : ''),
-        'eager'  => !empty($opts['eager']),
+        'eager'         => !empty($opts['eager']),
+        'hide_media'    => !$showMedia || !empty($opts['hide_media']),
+        'hide_summary'  => !$showExcerpt || !empty($opts['hide_summary']),
     ]);
 }
 
 /** کارت ویدیو/صوت — همان کارت با دکمهٔ پخش روی قاب رسانه. */
 function renderMediaCard(array $media, array $opts = []): string {
-    $kind = (string)($media['kind'] ?? 'video');
-    $id = (int)($media['id'] ?? 0);
+    $showMedia = !array_key_exists('show_media', $opts) || !empty($opts['show_media']);
+    $showDate = !array_key_exists('show_date', $opts) || !empty($opts['show_date']);
+    $kind = (string)($media['kind'] ?? ($media['media_kind'] ?? 'video'));
+    $id = (int)($media['id'] ?? ($media['media_id'] ?? 0));
     $title = (string)($media['title'] ?? ($media['post_title'] ?? ($kind === 'audio' ? 'صوت' : 'ویدیو')));
     // A media file can hang from a post, from a lesson or from nothing at all.
     // The link must follow the owner: a lesson that was filed as "audio" has
@@ -759,7 +917,7 @@ function renderMediaCard(array $media, array $opts = []): string {
             : (!empty($media['post_slug'])
                 ? postUrl([
                     'slug' => (string)$media['post_slug'],
-                    'post_type' => (string)($media['post_type'] ?? ''),
+                    'post_type' => (string)$media['post_type'] ?? '',
                 ])
                 : mediaUrl($kind, $id)))
     );
@@ -767,29 +925,35 @@ function renderMediaCard(array $media, array $opts = []): string {
     $meta = [];
     if ($parent !== '' && $parent !== $title) $meta[] = ['icon' => 'bi-link-45deg', 'text' => $parent];
     $raw = (string)($media['published_at'] ?? $media['created_at'] ?? '');
+    $resolved = function_exists('jhd_resolve_featured_media')
+        ? jhd_resolve_featured_media($media, 'media')
+        : ['kind' => !empty($media['thumbnail']) ? 'image' : $kind, 'url' => !empty($media['thumbnail']) ? imgUrl((string)$media['thumbnail']) : '', 'path' => (string)($media['thumbnail'] ?? ($media['file_path'] ?? '')), 'poster' => '', 'doc_type' => '', 'has_image' => !empty($media['thumbnail']), 'has_video' => $kind === 'video', 'has_audio' => $kind === 'audio', 'has_document' => false, 'pref_mode' => 'auto'];
 
     $card = [
-        'type'        => $kind === 'audio' ? 'audio' : 'video',
-        'url'         => $href,
-        'title'       => $title,
-        'summary'     => excerpt((string)($media['description'] ?? ''), 90),
-        'image'       => (string)($media['thumbnail'] ?? $media['poster'] ?? ''),
-        'badge'       => $kind === 'audio' ? 'صوت' : 'ویدیو',
-        'meta'        => $meta,
-        'date_label'  => $raw !== '' ? persianDate($raw) : '',
-        'date_raw'    => $raw,
-        'author'      => trim((string)($media['speaker'] ?? '')),
-        'author_icon' => $kind === 'audio' ? 'bi-mic' : 'bi-camera-reels',
-        'cta'         => (string)($opts['cta'] ?? 'پخش و دریافت'),
-        'duration'    => trim((string)($media['duration'] ?? '')),
-        'play'        => true,
-        'body_extra'  => (string)($media['body_extra'] ?? ''),
+        'type'                => $kind === 'audio' ? 'audio' : 'video',
+        'url'                 => $href,
+        'title'               => $title,
+        'summary'             => excerpt((string)($media['description'] ?? ''), 90),
+        'image'               => $resolved['kind'] === 'image' ? (string)$resolved['path'] : '',
+        'badge'               => $kind === 'audio' ? 'صوت' : 'ویدیو',
+        'meta'                => $meta,
+        'date_label'          => ($showDate && $raw !== '') ? persianDate($raw) : '',
+        'date_raw'            => $showDate ? $raw : '',
+        'author'              => trim((string)($media['speaker'] ?? '')),
+        'author_icon'         => $kind === 'audio' ? 'bi-mic' : 'bi-camera-reels',
+        'cta'                 => (string)($opts['cta'] ?? 'پخش و دریافت'),
+        'duration'            => trim((string)($media['duration'] ?? '')),
+        'play'                => true,
+        'body_extra'          => (string)($media['body_extra'] ?? ''),
+        'resolved_media'      => $resolved,
+        'featured_media_kind' => $resolved['kind'],
     ];
     return jhd_card($card, [
         'minimal_title' => !empty($opts['minimal_title']), 'row' => !empty($opts['row']), 'featured' => !empty($opts['featured']),
-        'variant' => !empty($opts['compact']) ? 'compact' : 'default',
-        'col'   => array_key_exists('col', $opts) ? (string)$opts['col'] : JHD_CARD_COL,
-        'eager' => !empty($opts['eager']),
+        'variant'       => !empty($opts['compact']) ? 'compact' : (string)($opts['variant'] ?? 'default'),
+        'col'           => array_key_exists('col', $opts) ? (string)$opts['col'] : JHD_CARD_COL,
+        'eager'         => !empty($opts['eager']),
+        'hide_media'    => !$showMedia || !empty($opts['hide_media']),
     ]);
 }
 
@@ -1077,23 +1241,68 @@ function jhd_lead_story(array $post, array $opts = []): string {
     $title   = trim((string)($post['title'] ?? ''));
     if ($title === '') return '';
     $type    = (string)($post['post_type'] ?? 'news');
-    $image   = trim((string)($post['featured_image'] ?? ''));
-    $imageUrl = $image !== '' ? imgUrl($image) : '';
-    $summary = trim((string)($post['summary'] ?? ''));
-    if ($summary === '') $summary = excerpt((string)($post['content'] ?? ''), 220);
-    $date    = trim((string)($post['published_at'] ?? $post['created_at'] ?? ''));
+    $entityType = in_array($type, ['book', 'lesson'], true) ? $type : 'post';
+    $showMedia   = empty($opts['hide_media']) && (!array_key_exists('show_media', $opts) || !empty($opts['show_media']));
+    $showExcerpt = !array_key_exists('show_excerpt', $opts) || !empty($opts['show_excerpt']);
+    $showDate    = !array_key_exists('show_date', $opts) || !empty($opts['show_date']);
+    $showMeta    = !array_key_exists('show_meta', $opts) || !empty($opts['show_meta']);
+
+    $resolved = function_exists('jhd_resolve_featured_media')
+        ? jhd_resolve_featured_media($post, $entityType)
+        : ['kind' => !empty($post['featured_image']) ? 'image' : 'none', 'url' => !empty($post['featured_image']) ? imgUrl((string)$post['featured_image']) : '', 'path' => (string)($post['featured_image'] ?? ''), 'poster' => '', 'doc_type' => '', 'has_image' => !empty($post['featured_image']), 'has_video' => !empty($post['featured_video']), 'has_audio' => false, 'has_document' => false, 'pref_mode' => 'auto'];
+
+    $summary = '';
+    if ($showExcerpt) {
+        $summary = trim((string)($post['summary'] ?? ''));
+        if ($summary === '') $summary = excerpt((string)($post['content'] ?? ''), 220);
+    }
+    $date    = $showDate ? trim((string)($post['published_at'] ?? $post['created_at'] ?? '')) : '';
     $parts   = $date !== '' ? persianDateParts($date) : null;
-    $author  = trim((string)($post['author_name'] ?? $post['speaker'] ?? ''));
-    $cat     = trim((string)($post['cat_name'] ?? ''));
+    $author  = $showMeta ? trim((string)($post['author_name'] ?? $post['speaker'] ?? '')) : '';
+    $cat     = $showMeta ? trim((string)($post['cat_name'] ?? '')) : '';
     $eyebrow = trim((string)($opts['eyebrow'] ?? 'مطلب شاخص'));
 
     $media = '';
-    if ($imageUrl !== '') {
-        $media = '<a class="jhd-lead__media" href="' . sanitize($href) . '" tabindex="-1" aria-hidden="true">'
-            . '<img src="' . sanitize($imageUrl) . '" alt="" loading="eager" fetchpriority="high"'
-            . ' decoding="async" width="880" height="550">'
-            . '<span class="jhd-lead__tag">' . sanitize(postTypeLabel($type)) . '</span>'
-            . '</a>';
+    if ($showMedia) {
+        if ($resolved['kind'] === 'video' && $resolved['url'] !== '') {
+            $posterAttr = !empty($resolved['poster']) ? ' poster="' . sanitize((string)$resolved['poster']) . '"' : '';
+            $media = '<div class="jhd-lead__media jhd-lead__media--video" data-featured-media="video">'
+                . '<video class="jhd-lead__video" controls playsinline preload="metadata"' . $posterAttr
+                . ' onerror="var p=this.closest(\'.jhd-lead__media\');if(p)p.classList.add(\'jhd-lead__media--fallback\');this.remove();">'
+                . '<source src="' . sanitize((string)$resolved['url']) . '" type="video/mp4">'
+                . '</video>'
+                . '<a class="jhd-lead__video-fallback" href="' . sanitize($href) . '" tabindex="-1">'
+                . '<i class="bi bi-camera-video" aria-hidden="true"></i><span>مشاهده ویدیو شاخص</span></a>'
+                . '<span class="jhd-lead__tag">' . sanitize(postTypeLabel($type)) . ' · ویدیو</span>'
+                . '</div>';
+        } elseif ($resolved['kind'] === 'audio' && $resolved['url'] !== '') {
+            $media = '<div class="jhd-lead__media jhd-lead__media--audio" data-featured-media="audio">'
+                . '<div class="jhd-lead__audio-box">'
+                . '<i class="bi bi-headphones" aria-hidden="true"></i>'
+                . '<strong>فایل صوتی شاخص</strong>'
+                . '<audio controls preload="none" class="w-100 mt-2"><source src="' . sanitize((string)$resolved['url']) . '"></audio>'
+                . '</div>'
+                . '<span class="jhd-lead__tag">' . sanitize(postTypeLabel($type)) . ' · صوت</span>'
+                . '</div>';
+        } elseif ($resolved['kind'] === 'document' && $resolved['url'] !== '') {
+            $docTypeLabel = (string)($resolved['doc_type'] ?: 'PDF');
+            $docIcon = $docTypeLabel === 'Word' ? 'bi-file-earmark-word' : 'bi-file-earmark-pdf';
+            $media = '<a class="jhd-lead__media jhd-lead__media--document" data-featured-media="document" href="' . sanitize($href) . '" tabindex="-1" aria-hidden="true">'
+                . '<div class="jhd-lead__doc-box">'
+                . '<i class="bi ' . $docIcon . '" aria-hidden="true"></i>'
+                . '<strong>سند ' . sanitize($docTypeLabel) . '</strong>'
+                . '<span>مطالعه و دریافت فایل</span>'
+                . '</div>'
+                . '<span class="jhd-lead__tag">' . sanitize(postTypeLabel($type)) . ' · ' . sanitize($docTypeLabel) . '</span>'
+                . '</a>';
+        } elseif ($resolved['kind'] === 'image' && $resolved['url'] !== '') {
+            $media = '<a class="jhd-lead__media" data-featured-media="image" href="' . sanitize($href) . '" tabindex="-1" aria-hidden="true">'
+                . '<img src="' . sanitize((string)$resolved['url']) . '" alt="" loading="eager" fetchpriority="high"'
+                . ' decoding="async" width="880" height="550"'
+                . ' onerror="var p=this.closest(\'.jhd-lead__media\');if(p)p.remove();">'
+                . '<span class="jhd-lead__tag">' . sanitize(postTypeLabel($type)) . '</span>'
+                . '</a>';
+        }
     }
 
     $meta = '<div class="jhd-lead__meta">';
@@ -1109,7 +1318,7 @@ function jhd_lead_story(array $post, array $opts = []): string {
     }
     $meta .= '</div>';
 
-    $body = '<div class="jhd-lead__body">';
+    $body = '<div class="jhd-lead__body" data-featured-media="' . sanitize((string)$resolved['kind']) . '">';
     $body .= '<span class="jhd-chip">' . sanitize(postTypeLabel($type)) . '</span>';
     if ($eyebrow !== '') $body .= '<span class="jhd-eyebrow">' . sanitize($eyebrow) . '</span>';
     $body .= '<h2 class="jhd-lead__title"><a href="' . sanitize($href) . '">' . sanitize($title) . '</a></h2>';
@@ -1124,6 +1333,154 @@ function jhd_lead_story(array $post, array $opts = []): string {
 }
 
 /**
+ * رندر یکپارچهٔ آیتم‌های یک بخش در همهٔ حالت‌های نمایش (auto, rows, grid, list,
+ * horizontal, featured, video, slider, minimal, combined) برای صفحهٔ اصلی،
+ * صفحهٔ موضوعات علمی و صفحات داخلی.
+ */
+function jhd_render_section_items(array $rows, string $kind, string $mode = 'auto', array $sectionCfg = []): string {
+    if (!$rows) return '';
+    $allowedModes = ['auto', 'rows', 'grid', 'list', 'horizontal', 'featured', 'video', 'slider', 'minimal', 'combined'];
+    $mode = in_array($mode, $allowedModes, true) ? $mode : 'auto';
+    $showMedia   = !array_key_exists('show_media', $sectionCfg) || !empty($sectionCfg['show_media']);
+    $showExcerpt = !array_key_exists('show_excerpt', $sectionCfg) || !empty($sectionCfg['show_excerpt']);
+    $showDate    = !array_key_exists('show_date', $sectionCfg) || !empty($sectionCfg['show_date']);
+    $showMeta    = !array_key_exists('show_meta', $sectionCfg) || !empty($sectionCfg['show_meta']);
+    $showTopics  = !empty($sectionCfg['show_topics']);
+    $showCounts  = !array_key_exists('show_counts', $sectionCfg) || !empty($sectionCfg['show_counts']);
+
+    $baseCardOpts = [
+        'show_media'   => $showMedia,
+        'show_excerpt' => $showExcerpt,
+        'show_date'    => $showDate,
+        'show_meta'    => $showMeta,
+        'show_topics'  => $showTopics,
+        'show_counts'  => $showCounts,
+    ];
+    if (!empty($sectionCfg['cta'])) {
+        $baseCardOpts['cta'] = (string)$sectionCfg['cta'];
+    }
+
+    $renderSingle = static function (array $row, array $cardOpts) use ($kind): string {
+        return match ($kind) {
+            'book', 'books'     => renderBookCard($row, $cardOpts),
+            'lesson', 'lessons' => renderLessonCard($row, $cardOpts),
+            'topic', 'topics'   => renderTopicCard($row, $cardOpts + ['minimal' => $cardOpts['minimal'] ?? true]),
+            'media'             => renderMediaCard([
+                'kind'         => $row['media_kind'] ?? ($row['kind'] ?? 'video'),
+                'id'           => $row['media_id'] ?? ($row['id'] ?? 0),
+                'title'        => $row['title'] ?? '',
+                'slug'         => $row['slug'] ?? ($row['post_slug'] ?? ''),
+                'target'       => $row['target'] ?? '',
+                'post_type'    => $row['post_type'] ?? '',
+                'published_at' => $row['published_at'] ?? ($row['created_at'] ?? ''),
+                'thumbnail'    => $row['featured_image'] ?? ($row['thumbnail'] ?? ''),
+                'file_path'    => $row['path'] ?? ($row['file_path'] ?? ''),
+                'speaker'      => $row['speaker'] ?? '',
+            ], $cardOpts),
+            default             => renderPostCard($row, $cardOpts),
+        };
+    };
+
+    if ($mode === 'combined') {
+        $leadRow = $rows[0];
+        $subRows = array_slice($rows, 1);
+        $html = '<div class="row g-3 jhd-home-combined">';
+        $html .= '<div class="col-12 ' . ($subRows ? 'col-lg-7' : 'col-lg-12') . ' jhd-home-combined__lead">';
+        $html .= $renderSingle($leadRow, $baseCardOpts + ['featured' => true, 'col' => '', 'minimal' => false]);
+        $html .= '</div>';
+        if ($subRows) {
+            $html .= '<div class="col-12 col-lg-5 jhd-home-combined__side"><div class="row g-2">';
+            foreach ($subRows as $subRow) {
+                $html .= $renderSingle($subRow, $baseCardOpts + ['compact' => true, 'col' => 'col-12']);
+            }
+            $html .= '</div></div>';
+        }
+        $html .= '</div>';
+        return $html;
+    }
+
+    $rowClass = match ($mode) {
+        'slider' => 'jhd-home-slider',
+        'grid'   => 'g-3',
+        'video'  => 'g-3 jhd-home-video',
+        'list'   => 'g-2 jhd-home-list',
+        default  => 'g-2',
+    };
+    $sliderAttrs = $mode === 'slider' ? ' tabindex="0" aria-label="فهرست قابل پیمایش"' : '';
+    $html = '<div class="row ' . $rowClass . '"' . $sliderAttrs . '>';
+
+    foreach ($rows as $rowIndex => $row) {
+        $cardOpts = $baseCardOpts;
+        if (in_array($mode, ['auto', 'rows', 'minimal', 'slider'], true)) {
+            $cardOpts['compact'] = true;
+        }
+        if ($mode === 'auto') {
+            $cardOpts['col'] = 'col-12 col-md-6';
+        } elseif (in_array($mode, ['rows', 'list', 'horizontal', 'minimal'], true)) {
+            $cardOpts['col'] = 'col-12';
+        } elseif ($mode === 'grid') {
+            $cardOpts['col'] = JHD_CARD_COL;
+            $cardOpts['minimal'] = false;
+        } elseif ($mode === 'video') {
+            $cardOpts['variant'] = 'video';
+            $cardOpts['col'] = 'col-12 col-md-6 col-lg-4';
+            $cardOpts['minimal'] = false;
+        }
+        if ($mode === 'horizontal') {
+            $cardOpts['row'] = true;
+        }
+        if ($mode === 'minimal') {
+            $cardOpts['minimal_title'] = true;
+        }
+        if ($mode === 'slider') {
+            $cardOpts['col'] = 'jhd-home-slide';
+        }
+        if ($mode === 'featured') {
+            $cardOpts['featured'] = ($rowIndex === 0);
+            $cardOpts['col'] = $rowIndex === 0 ? 'col-12 col-lg-6' : 'col-12 col-md-6 col-lg-3';
+            $cardOpts['minimal'] = false;
+        }
+        if (!empty($row['_counts']) && $kind === 'topic') {
+            $cardOpts['counts'] = [
+                ['icon' => 'bi-file-text', 'label' => 'مطلب', 'value' => (int)($row['_counts']['posts'] ?? 0)],
+                ['icon' => 'bi-book', 'label' => 'کتاب', 'value' => (int)($row['_counts']['books'] ?? 0)],
+                ['icon' => 'bi-mortarboard', 'label' => 'درس', 'value' => (int)($row['_counts']['lessons'] ?? 0)],
+            ];
+        }
+        $html .= $renderSingle($row, $cardOpts);
+    }
+    $html .= '</div>';
+    return $html;
+}
+
+/**
+ * نوار موضوعات علمی مرتبط برای نمایش در بالای صفحات داخلی (در صورتی که موضوع برای آن صفحه فعال شده باشد).
+ */
+function jhd_render_placement_topics_bar(string $placement, ?int $activeTopicId = null, string $filterRoute = '', array $routeParams = []): string {
+    if (!function_exists('getTopicsForPlacement')) return '';
+    $topics = getTopicsForPlacement($placement, 12, false);
+    if (!$topics) return '';
+    $html = '<nav class="jhd-cat-strip jhd-placement-topics mb-3" aria-label="موضوعات علمی مرتبط">';
+    $html .= '<span class="jhd-chip jhd-chip--label"><i class="bi bi-diagram-3 ms-1" aria-hidden="true"></i>موضوعات علمی:</span>';
+    if ($filterRoute !== '' && $activeTopicId !== null && $activeTopicId > 0) {
+        $clearParams = $routeParams;
+        unset($clearParams['topic']);
+        $html .= '<a class="jhd-chip" href="' . sanitize(url($filterRoute, $clearParams)) . '">همه</a>';
+    }
+    foreach ($topics as $t) {
+        $tid = (int)($t['id'] ?? 0);
+        $isActive = ($activeTopicId !== null && $activeTopicId === $tid);
+        $href = $filterRoute !== ''
+            ? url($filterRoute, array_merge($routeParams, ['topic' => (string)$t['slug']]))
+            : topicUrl($t);
+        $html .= '<a class="jhd-chip' . ($isActive ? ' active' : '') . '" href="' . sanitize($href) . '">'
+            . sanitize((string)$t['name']) . '</a>';
+    }
+    $html .= '</nav>';
+    return $html;
+}
+
+/**
  * مطالب فرعی: شبکه‌ای از خبرهای کوتاه با تصویر کوچک.
  */
 function jhd_secondary_stories(array $items, array $opts = []): string {
@@ -1135,6 +1492,9 @@ function jhd_secondary_stories(array $items, array $opts = []): string {
         if ($title === '') continue;
         $type  = (string)($item['post_type'] ?? 'news');
         $image = trim((string)($item['featured_image'] ?? ''));
+        if ($image !== '' && function_exists('jhd_is_usable_media_path') && !jhd_is_usable_media_path($image, 'image')) {
+            $image = '';
+        }
         $imageUrl = $image !== '' ? imgUrl($image) : '';
         $date  = trim((string)($item['published_at'] ?? $item['created_at'] ?? ''));
         $parts = $date !== '' ? persianDateParts($date) : null;
@@ -1191,6 +1551,9 @@ function jhd_rail_list(array $items, array $opts = []): string {
         if ($title === '') continue;
         $type  = (string)($item['post_type'] ?? 'news');
         $image = trim((string)($item['featured_image'] ?? ''));
+        if ($image !== '' && function_exists('jhd_is_usable_media_path') && !jhd_is_usable_media_path($image, 'image')) {
+            $image = '';
+        }
         $imageUrl = $image !== '' ? imgUrl($image) : '';
         $views = isset($item['view_count']) ? (int)$item['view_count'] : 0;
         $date  = trim((string)($item['published_at'] ?? $item['created_at'] ?? ''));

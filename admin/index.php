@@ -123,6 +123,7 @@ $quickActionGroups = [
         'title' => 'سازمان‌دهی و پیگیری',
         'icon' => 'bi-sliders',
         'actions' => [
+            ['label' => 'موضوعات علمی', 'href' => url('admin/topics'), 'icon' => 'bi-diagram-3', 'class' => 'btn-outline-primary'],
             ['label' => 'مدیریت رسانه', 'href' => url('admin/uploads'), 'icon' => 'bi-upload', 'class' => 'btn-outline-secondary'],
             ['label' => 'پیام‌ها', 'href' => url('admin/messages'), 'icon' => 'bi-envelope', 'class' => 'btn-outline-secondary', 'badge' => $unreadMsgs],
         ],

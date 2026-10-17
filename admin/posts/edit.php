@@ -74,7 +74,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$title) {
             $error = 'عنوان مطلب الزامی است.';
         } else {
-            $slug    = uniqueSlug('posts', $title, $id);
+            $slug    = ($title === (string)($post['title'] ?? '') && !empty($post['slug']))
+                       ? (string)$post['slug']
+                       : uniqueSlug('posts', $title, $id);
             $featImg = $post['featured_image'];
             $featVid = $post['featured_video'] ?? '';
 
@@ -107,12 +109,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$error && !empty($_POST['remove_featured'])) {
                 if ($featImg) scheduleFileDeletion($featImg);
                 $featImg = '';
-            }
-
-            // تولید خودکار Thumbnail از ویدیو (اگر هیچ تصویر شاخصی وجود ندارد)
-            if (!$error && !$featImg && !empty($_POST['auto_thumbnail'])) {
-                $thumbPath = saveBase64Thumbnail($_POST['auto_thumbnail'], contentStorageFolder($storageEntity, $id));
-                if ($thumbPath) $featImg = $thumbPath;
             }
 
             // آپلود ویدیو شاخص جدید
@@ -219,6 +215,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     setPostFeaturedVideos($id, $sel);
                 }
                 syncPostFeaturedPointers($id);
+
+                if (!empty($_POST['topics_form_present']) || isset($_POST['topic_ids'])) {
+                    $topicIds = jhd_parse_id_list($_POST['topic_ids'] ?? []);
+                    $primaryTopicId = !empty($_POST['primary_topic_id']) ? (int)$_POST['primary_topic_id'] : ($topicIds[0] ?? null);
+                    setTopicsFor('post', $id, $topicIds, $primaryTopicId);
+                }
+
+                if (isset($_POST['featured_media_pref'])) {
+                    jhd_save_featured_media_pref('post', $id, ['mode' => (string)$_POST['featured_media_pref']]);
+                }
 
                 // رفرش داده‌های پست
                 $post = getPost($id);
@@ -637,6 +643,65 @@ $csrfToken        = generateCsrfToken();
                             <?php endforeach; ?>
                         </select>
                     </div>
+                </div>
+            </div>
+
+            <!-- انتخاب اولویت رسانه شاخص -->
+            <?php
+            $postMediaPref = jhd_get_featured_media_pref('post', $id);
+            $postTopicsRows = getTopicsFor('post', $id);
+            $postTopicIds = array_map(static fn(array $r): int => (int)$r['id'], $postTopicsRows);
+            $primaryTopicRow = array_values(array_filter($postTopicsRows, static fn(array $r): bool => !empty($r['is_primary'])));
+            $currentPrimaryTopicId = (int)($primaryTopicRow[0]['id'] ?? ($postTopicIds[0] ?? 0));
+            $allTopicsForEdit = getTopics();
+            ?>
+            <div class="admin-card mb-3">
+                <div class="admin-card-header"><i class="bi bi-stars ms-2"></i>انتخاب رسانه شاخص</div>
+                <div class="admin-card-body">
+                    <label class="form-label small fw-bold">اولویت رسانه شاخص در کارت‌ها و بخش‌های ویژه</label>
+                    <select name="featured_media_pref" class="form-select form-select-sm">
+                        <?php foreach (jhd_featured_media_pref_options() as $pmKey => $pmLabel): ?>
+                        <option value="<?= sanitize($pmKey) ?>" <?= (($postMediaPref['mode'] ?? 'auto') === $pmKey) ? 'selected' : '' ?>><?= sanitize($pmLabel) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <div class="form-text">اگر این مطلب هم تصویر معتبر و هم ویدیوی معتبر دارد، انتخاب شما در اینجا تعیین می‌کند کدام رسانه روی کارت‌های شاخص و صفحه اصلی نمایش یابد.</div>
+                </div>
+            </div>
+
+            <!-- موضوعات علمی مرتبط -->
+            <div class="admin-card mb-3">
+                <div class="admin-card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-diagram-3 ms-2"></i>موضوعات علمی مرتبط</span>
+                    <a href="<?= sanitize(adminUrl('topics')) ?>" target="_blank" class="small text-decoration-none">+ مدیریت موضوعات</a>
+                </div>
+                <div class="admin-card-body">
+                    <input type="hidden" name="topics_form_present" value="1">
+                    <?php if (empty($allTopicsForEdit)): ?>
+                        <div class="text-muted small">هنوز موضوعی ثبت نشده است.</div>
+                    <?php else: ?>
+                        <div class="mb-2" style="max-height:190px;overflow-y:auto;border:1px solid var(--admin-border);border-radius:8px;padding:8px">
+                            <?php foreach (getTopicFlatTree(null, 5) as $tp):
+                                $tpId = (int)$tp['id'];
+                                $checkedTp = in_array($tpId, $postTopicIds, true) ? 'checked' : '';
+                            ?>
+                            <div class="form-check mb-1">
+                                <input class="form-check-input" type="checkbox" name="topic_ids[]" id="etp_<?= $tpId ?>" value="<?= $tpId ?>" <?= $checkedTp ?>>
+                                <label class="form-check-label small" for="etp_<?= $tpId ?>">
+                                    <?= str_repeat('— ', (int)($tp['depth'] ?? 0)) . sanitize($tp['name']) ?>
+                                </label>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <div>
+                            <label class="form-label small mb-1">موضوع اصلی (اختیاری)</label>
+                            <select name="primary_topic_id" class="form-select form-select-sm">
+                                <option value="">— نخستین موضوع انتخاب‌شده —</option>
+                                <?php foreach ($allTopicsForEdit as $tp): ?>
+                                <option value="<?= (int)$tp['id'] ?>" <?= ($currentPrimaryTopicId === (int)$tp['id']) ? 'selected' : '' ?>><?= sanitize($tp['name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -1294,77 +1359,6 @@ html[data-theme="dark"] .jhd-gallery-picker { background: #101a14; }
 
 <script>
 (function() {
-    var videoInput     = document.getElementById('videoFilesInputEdit');
-    var imageInput     = document.getElementById('featuredImageInput');
-    var removeFeatChk  = document.getElementById('remove_featured');
-    var thumbDataInput = document.getElementById('autoThumbnailDataEdit');
-    var thumbNotice    = document.getElementById('autoThumbNoticeEdit');
-    var thumbProgress  = document.getElementById('videoThumbProgressEdit');
-    var hasFeatImg     = <?= !empty($post['featured_image']) ? 'true' : 'false' ?>;
-
-    if (!videoInput) return;
-
-    function shouldGenerateThumb() {
-        if (imageInput && imageInput.files.length > 0) return false;
-        if (hasFeatImg && (!removeFeatChk || !removeFeatChk.checked)) return false;
-        return true;
-    }
-
-    videoInput.addEventListener('change', function() {
-        var file = this.files[0];
-        if (!file || !shouldGenerateThumb()) return;
-
-        if (thumbProgress) thumbProgress.style.display = 'block';
-        if (thumbNotice)   thumbNotice.style.display   = 'none';
-
-        var objectUrl = URL.createObjectURL(file);
-        var videoEl   = document.createElement('video');
-        videoEl.muted    = true;
-        videoEl.preload  = 'metadata';
-        videoEl.playsInline = true;
-        videoEl.style.display = 'none';
-
-        videoEl.addEventListener('loadedmetadata', function() {
-            var seekTime = Math.min(1, videoEl.duration * 0.1);
-            videoEl.currentTime = seekTime;
-        });
-
-        videoEl.addEventListener('seeked', function() {
-            var w = videoEl.videoWidth  || 640;
-            var h = videoEl.videoHeight || 360;
-            var maxW = 1280;
-            if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
-
-            var canvas = document.createElement('canvas');
-            canvas.width  = w;
-            canvas.height = h;
-            canvas.getContext('2d').drawImage(videoEl, 0, 0, w, h);
-
-            var dataUrl = canvas.toDataURL('image/jpeg', 0.82);
-            if (thumbDataInput) thumbDataInput.value = dataUrl;
-            if (thumbProgress) thumbProgress.style.display = 'none';
-            if (thumbNotice)   thumbNotice.style.display   = 'flex';
-
-            URL.revokeObjectURL(objectUrl);
-            videoEl.remove();
-        });
-
-        videoEl.addEventListener('error', function() {
-            if (thumbProgress) thumbProgress.style.display = 'none';
-            URL.revokeObjectURL(objectUrl);
-            videoEl.remove();
-        });
-
-        document.body.appendChild(videoEl);
-        videoEl.src = objectUrl;
-    });
-
-    if (imageInput) {
-        imageInput.addEventListener('change', function() {
-            if (this.files.length > 0 && thumbDataInput) thumbDataInput.value = '';
-        });
-    }
-
     var featVidInput = document.getElementById('featuredVideoInputEdit');
     var featVidPrev  = document.getElementById('featVideoPreviewEdit');
     if (featVidInput && featVidPrev) {

@@ -8,6 +8,7 @@ require_once __DIR__ . '/../includes/header.php';
 $db     = getDB();
 $search = trim($_GET['q']     ?? '');
 $level  = trim($_GET['level'] ?? '');
+$topic  = (int)($_GET['topic'] ?? 0);
 $page   = max(1, (int)($_GET['page'] ?? 1));
 $per    = 15;
 $offset = ($page - 1) * $per;
@@ -23,7 +24,12 @@ if ($level) {
     $where[]  = "l.level = ?";
     $params[] = $level;
 }
+if ($topic > 0) {
+    $where[]  = "EXISTS (SELECT 1 FROM lesson_topics lt WHERE lt.lesson_id = l.id AND lt.topic_id = ?)";
+    $params[] = $topic;
+}
 $whereStr = implode(' AND ', $where);
+$allLessonTopics = getTopicFlatTree();
 
 // تعداد کل
 $countStmt = $db->prepare("SELECT COUNT(*) FROM lessons l WHERE $whereStr");
@@ -90,10 +96,20 @@ $withAudio  = (int)$db->query("SELECT COUNT(*) FROM lessons WHERE audio_file IS 
   </div>
   <div class="admin-card-body">
     <form method="get" class="row g-2 align-items-end">
-      <div class="col-md-5">
+      <div class="col-md-4">
         <input type="search" name="q" class="form-control form-control-sm" placeholder="جستجو در عنوان، توضیح یا استاد..." value="<?= sanitize($search) ?>">
       </div>
       <div class="col-md-3">
+        <select name="topic" class="form-select form-select-sm">
+          <option value="0">همه موضوعات علمی</option>
+          <?php foreach ($allLessonTopics as $tp): ?>
+            <option value="<?= (int)$tp['id'] ?>" <?= $topic === (int)$tp['id'] ? 'selected' : '' ?>>
+              <?= str_repeat('— ', (int)($tp['depth'] ?? 0)) . sanitize($tp['name']) ?>
+            </option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="col-md-2">
         <select name="level" class="form-select form-select-sm">
           <option value="">همه سطوح</option>
           <option value="beginner"     <?= $level==='beginner'    ?'selected':'' ?>>مبتدی</option>
@@ -104,9 +120,9 @@ $withAudio  = (int)$db->query("SELECT COUNT(*) FROM lessons WHERE audio_file IS 
       <div class="col-md-2">
         <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-search ms-1"></i>فیلتر</button>
       </div>
-      <?php if ($search || $level): ?>
-      <div class="col-md-2">
-        <a href="<?= siteUrl('admin/lessons/') ?>" class="btn btn-outline-secondary btn-sm w-100">پاک کردن</a>
+      <?php if ($search || $level || $topic > 0): ?>
+      <div class="col-md-1">
+        <a href="<?= siteUrl('admin/lessons/') ?>" class="btn btn-outline-secondary btn-sm w-100" title="پاک کردن"><i class="bi bi-x"></i></a>
       </div>
       <?php endif; ?>
     </form>
@@ -155,7 +171,20 @@ $withAudio  = (int)$db->query("SELECT COUNT(*) FROM lessons WHERE audio_file IS 
               </a>
             </td>
             <td class="small"><?= sanitize($l['teacher'] ?: '—') ?></td>
-            <td class="small"><?= sanitize($l['subject'] ?: '—') ?></td>
+            <td class="small">
+              <?php
+              $lTopics = getLessonTopics((int)$l['id']);
+              if ($lTopics):
+                foreach ($lTopics as $lt):
+              ?>
+                <a href="<?= sanitize(adminUrl('topics', ['edit' => (int)$lt['id']])) ?>" class="badge bg-light text-dark border text-decoration-none me-1"><?= sanitize($lt['name']) ?></a>
+              <?php
+                endforeach;
+              else:
+                echo sanitize($l['subject'] ?: '—');
+              endif;
+              ?>
+            </td>
             <td><?php if ($lLevel): ?><span class="badge bg-<?= $levelBg ?>"><?= $levelLbl ?></span><?php else: ?><span class="text-muted">—</span><?php endif; ?></td>
             <td class="text-center">
               <?php if ($l['audio_file']): ?>

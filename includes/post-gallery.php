@@ -416,6 +416,16 @@ function syncPostFeaturedPointers(int $postId): void {
             // بدون تصویر شاخصِ صریح، نخستین تصویر گالری معیار است (رفتار قبلی).
             $gallery = getPostImages($postId);
             $primary = $gallery[0]['image_path'] ?? null;
+            if ($primary === null && !$gallery) {
+                $existingStmt = $db->prepare('SELECT featured_image FROM posts WHERE id = ? LIMIT 1');
+                $existingStmt->execute([$postId]);
+                $existingImg = trim((string)($existingStmt->fetchColumn() ?: ''));
+                $existingStmt->closeCursor();
+                if ($existingImg !== '') {
+                    addPostImageUnique($postId, $existingImg, '', true);
+                    $primary = $existingImg;
+                }
+            }
         }
         $db->prepare('UPDATE posts SET featured_image = ?, updated_at = NOW() WHERE id = ?')
            ->execute([$primary !== null && $primary !== '' ? $primary : null, $postId]);
@@ -552,16 +562,25 @@ function addPostImageUnique(int $postId, string $imagePath, string $alt = '', bo
  * @return list<array{type:string,src:string,alt:string,poster:string,id:int}>
  */
 function getPostFeaturedMedia(int $postId): array {
-    $out = [];
+    $pref = function_exists('jhd_get_featured_media_pref')
+        ? jhd_get_featured_media_pref('post', $postId)
+        : ['mode' => 'auto'];
+    if (($pref['mode'] ?? 'auto') === 'none') return [];
+
+    $images = [];
     foreach (getPostFeaturedImages($postId) as $image) {
         $path = (string)($image['image_path'] ?? '');
-        if ($path === '') continue;
-        $out[] = ['type' => 'image', 'id' => (int)($image['id'] ?? 0), 'src' => $path, 'alt' => (string)($image['alt_text'] ?? ''), 'poster' => ''];
+        if ($path === '' || (function_exists('jhd_is_usable_media_path') && !jhd_is_usable_media_path($path, 'image'))) continue;
+        $images[] = ['type' => 'image', 'id' => (int)($image['id'] ?? 0), 'src' => $path, 'alt' => (string)($image['alt_text'] ?? ''), 'poster' => ''];
     }
+    $videos = [];
     foreach (getPostFeaturedVideos($postId) as $video) {
         $path = (string)($video['file_path'] ?? '');
-        if ($path === '') continue;
-        $out[] = ['type' => 'video', 'id' => (int)($video['id'] ?? 0), 'src' => $path, 'alt' => (string)($video['title'] ?? ''), 'poster' => ''];
+        if ($path === '' || (function_exists('jhd_is_usable_media_path') && !jhd_is_usable_media_path($path, 'video'))) continue;
+        $videos[] = ['type' => 'video', 'id' => (int)($video['id'] ?? 0), 'src' => $path, 'alt' => (string)($video['title'] ?? ''), 'poster' => $images[0]['src'] ?? ''];
     }
-    return $out;
+    if (($pref['mode'] ?? 'auto') === 'video' && $videos) {
+        return array_merge($videos, $images);
+    }
+    return array_merge($images, $videos);
 }

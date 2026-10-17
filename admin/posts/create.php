@@ -102,12 +102,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $featImg = uploadContentImage($_FILES['featured_image'], $post_type, $postId);
                     if (!$featImg) throw new RuntimeException('تصویر شاخص معتبر نیست یا آپلود نشد (فرمت JPG/PNG/GIF/WebP و حداکثر ۲۰ مگابایت).' . storageFailureHint());
                 }
-                if (!$featImg && !empty($_POST['auto_thumbnail'])) {
-                    // Browser thumbnail data is kept for backwards compatibility;
-                    // it still ends up under the entity folder after the record exists.
-                    $raw = saveBase64Thumbnail($_POST['auto_thumbnail'], contentStorageFolder($post_type, $postId));
-                    if ($raw) $featImg = $raw;
-                }
                 $directFeaturedVideo = jhdDirectUploadPath('featured_video');
                 if ($directFeaturedVideo !== '') {
                     $featVid = adoptDirectUpload($directFeaturedVideo, 'video', contentStorageFolder($post_type, $postId));
@@ -167,9 +161,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ];
                 requireMediaUploads(...$mediaUploadResults);
 
-                // ── ۵) انتشار کامل: اشاره‌گرهای شاخص با رسانه‌های واقعی هم‌گام
-                //    می‌شوند، بنابراین همان لحظهٔ انتشار، تصویر/ویدیوی انتخاب‌شده
-                //    در کارت‌ها و صفحهٔ مطلب دیده می‌شود.
+                // ── ۵) انتشار کامل: اشاره‌گرهای شاخص و موضوعات علمی ─────────
+                $topicIds = jhd_parse_id_list($_POST['topic_ids'] ?? []);
+                $primaryTopicId = !empty($_POST['primary_topic_id']) ? (int)$_POST['primary_topic_id'] : ($topicIds[0] ?? null);
+                setTopicsFor('post', $postId, $topicIds, $primaryTopicId);
+
+                $prefMode = (string)($_POST['featured_media_pref'] ?? 'auto');
+                jhd_save_featured_media_pref('post', $postId, ['mode' => $prefMode]);
+
                 syncPostFeaturedPointers($postId);
                 jhd_forget_auto_draft($postId);
                 jhd_purge_stale_auto_drafts($postId);
@@ -403,6 +402,54 @@ $formPostType = $fixedPostType !== '' ? $fixedPostType : (string)($_POST['post_t
                 </div>
             </div>
 
+            <div class="admin-card mb-3">
+                <div class="admin-card-header"><i class="bi bi-stars ms-2"></i>انتخاب رسانه شاخص</div>
+                <div class="admin-card-body">
+                    <label class="form-label small fw-bold">اولویت رسانه شاخص در کارت‌ها و بخش‌های ویژه</label>
+                    <select name="featured_media_pref" class="form-select form-select-sm">
+                        <?php foreach (jhd_featured_media_pref_options() as $pmKey => $pmLabel): ?>
+                        <option value="<?= sanitize($pmKey) ?>" <?= (($_POST['featured_media_pref'] ?? 'auto') === $pmKey) ? 'selected' : '' ?>><?= sanitize($pmLabel) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <div class="form-text">اگر مطلب هم تصویر و هم ویدیو دارد، می‌توانید مشخص کنید کدام‌یک به عنوان رسانه شاخص نمایش داده شود. در صورت نبود تصویر، ویدیو یا صوت/سند معتبر بدون برش فریم جعلی نمایش داده می‌شود.</div>
+                </div>
+            </div>
+
+            <div class="admin-card mb-3">
+                <div class="admin-card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-diagram-3 ms-2"></i>موضوعات علمی مرتبط</span>
+                    <a href="<?= sanitize(adminUrl('topics')) ?>" target="_blank" class="small text-decoration-none">+ مدیریت موضوعات</a>
+                </div>
+                <div class="admin-card-body">
+                    <?php if (empty($allTopics)): ?>
+                        <div class="text-muted small">هنوز موضوعی ثبت نشده است.</div>
+                    <?php else: ?>
+                        <div class="mb-2" style="max-height:190px;overflow-y:auto;border:1px solid var(--admin-border);border-radius:8px;padding:8px">
+                            <?php foreach (getTopicFlatTree(null, 5) as $tp):
+                                $tpId = (int)$tp['id'];
+                                $checkedTp = in_array($tpId, array_map('intval', $selectedTopicIds), true) ? 'checked' : '';
+                            ?>
+                            <div class="form-check mb-1">
+                                <input class="form-check-input" type="checkbox" name="topic_ids[]" id="tp_<?= $tpId ?>" value="<?= $tpId ?>" <?= $checkedTp ?>>
+                                <label class="form-check-label small" for="tp_<?= $tpId ?>">
+                                    <?= str_repeat('— ', (int)($tp['depth'] ?? 0)) . sanitize($tp['name']) ?>
+                                </label>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <div>
+                            <label class="form-label small mb-1">موضوع اصلی (اختیاری)</label>
+                            <select name="primary_topic_id" class="form-select form-select-sm">
+                                <option value="">— نخستین موضوع انتخاب‌شده —</option>
+                                <?php foreach ($allTopics as $tp): ?>
+                                <option value="<?= (int)$tp['id'] ?>" <?= ((int)($_POST['primary_topic_id'] ?? 0) === (int)$tp['id']) ? 'selected' : '' ?>><?= sanitize($tp['name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
             <div class="admin-card">
                 <div class="admin-card-header"><i class="bi bi-layout-text-window ms-2"></i>نمایش در کدام بخش‌ها؟</div>
                 <div class="admin-card-body">
@@ -506,64 +553,6 @@ html[data-theme="dark"] .jhd-upload-zone { background: #101a14; }
 
 <script>
 (function() {
-    var videoInput     = document.getElementById('videoFilesInput');
-    var imageInput     = document.getElementById('featuredImageInput');
-    var thumbDataInput = document.getElementById('autoThumbnailData');
-    var featPreview    = document.getElementById('featPreview');
-    var thumbNotice    = document.getElementById('autoThumbNotice');
-    var thumbProgress  = document.getElementById('videoThumbProgress');
-    if (!videoInput) return;
-    videoInput.addEventListener('change', function() {
-        var file = this.files[0];
-        if (!file) return;
-        if (imageInput && imageInput.files.length > 0) return;
-        if (thumbDataInput && thumbDataInput.value) return;
-        if (thumbProgress) thumbProgress.style.display = 'block';
-        if (thumbNotice)   thumbNotice.style.display   = 'none';
-        var objectUrl = URL.createObjectURL(file);
-        var videoEl   = document.createElement('video');
-        videoEl.muted    = true;
-        videoEl.preload  = 'metadata';
-        videoEl.playsInline = true;
-        videoEl.style.display = 'none';
-        videoEl.addEventListener('loadedmetadata', function() {
-            var seekTime = Math.min(1, videoEl.duration * 0.1);
-            videoEl.currentTime = seekTime;
-        });
-        videoEl.addEventListener('seeked', function() {
-            var w = videoEl.videoWidth  || 640;
-            var h = videoEl.videoHeight || 360;
-            var maxW = 1280;
-            if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
-            var canvas = document.createElement('canvas');
-            canvas.width  = w;
-            canvas.height = h;
-            var ctx = canvas.getContext('2d');
-            ctx.drawImage(videoEl, 0, 0, w, h);
-            var dataUrl = canvas.toDataURL('image/jpeg', 0.82);
-            if (thumbDataInput) thumbDataInput.value = dataUrl;
-            if (featPreview) { featPreview.src = dataUrl; featPreview.style.display = 'block'; }
-            if (thumbProgress) thumbProgress.style.display = 'none';
-            if (thumbNotice)   thumbNotice.style.display   = 'flex';
-            URL.revokeObjectURL(objectUrl);
-            videoEl.remove();
-        });
-        videoEl.addEventListener('error', function() {
-            if (thumbProgress) thumbProgress.style.display = 'none';
-            URL.revokeObjectURL(objectUrl);
-            videoEl.remove();
-        });
-        document.body.appendChild(videoEl);
-        videoEl.src = objectUrl;
-    });
-    if (imageInput) {
-        imageInput.addEventListener('change', function() {
-            if (this.files.length > 0) {
-                if (thumbDataInput) thumbDataInput.value = '';
-                if (thumbNotice)    thumbNotice.style.display = 'none';
-            }
-        });
-    }
     var featVidInput = document.getElementById('featuredVideoInput');
     var featVidPrev  = document.getElementById('featVideoPreview');
     if (featVidInput && featVidPrev) {

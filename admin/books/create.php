@@ -66,6 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $db->prepare('UPDATE books SET cover_image=?,pdf_file=?,word_file=? WHERE id=?')->execute([$cover ?: null,$pdf ?: null,$word ?: null,$bookId]);
             setBookTopics($bookId, $selectedTopics);
+            jhd_save_featured_media_pref('book', $bookId, ['mode' => (string)($_POST['featured_media_pref'] ?? 'auto')]);
             requireMediaUploads(handleMediaUploads('book', $bookId, $_FILES['attachment_files'] ?? [], 'document'));
 
             $_SESSION['flash_msg'] = 'کتاب و پوشهٔ اختصاصی آن با موفقیت ایجاد شد.';
@@ -95,6 +96,41 @@ $allTopics = getTopics();
     <div class="row g-3"><div class="col-md-4"><label class="form-label">جلد</label><input type="file" class="form-control" name="cover_image" accept="image/jpeg,image/png,image/gif,image/webp"></div><div class="col-md-4"><label class="form-label">PDF</label><input type="file" class="form-control" name="pdf_file" accept="application/pdf,.pdf"></div><div class="col-md-4"><label class="form-label">Word</label><input type="file" class="form-control" name="word_file" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"></div></div>
     <div class="mt-3"><label class="form-label">فایل‌های تکمیلی</label><input type="file" class="form-control" name="attachment_files[]" multiple accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"><div class="form-text">PDF/DOC/DOCX؛ همه در پوشهٔ این کتاب ذخیره می‌شوند.</div></div>
   </div></section>
-</div><aside class="col-lg-4"><section class="admin-card"><div class="admin-card-header">انتشار</div><div class="admin-card-body"><label class="form-label">وضعیت</label><select class="form-select mb-3" name="status"><option value="draft" <?= $values['status']==='draft'?'selected':'' ?>>پیش‌نویس</option><option value="published" <?= $values['status']==='published'?'selected':'' ?>>منتشرشده</option></select><label class="form-check mb-3"><input class="form-check-input" type="checkbox" name="is_featured" value="1"><span class="form-check-label">نمایش ویژه</span></label><button class="btn btn-success w-100" type="submit">ایجاد کتاب و پوشهٔ اختصاصی</button></div></section></aside></div>
+</div><aside class="col-lg-4">
+  <section class="admin-card mb-3"><div class="admin-card-header">انتشار</div><div class="admin-card-body"><label class="form-label">وضعیت</label><select class="form-select mb-3" name="status"><option value="draft" <?= $values['status']==='draft'?'selected':'' ?>>پیش‌نویس</option><option value="published" <?= $values['status']==='published'?'selected':'' ?>>منتشرشده</option></select><label class="form-check mb-3"><input class="form-check-input" type="checkbox" name="is_featured" value="1"><span class="form-check-label">نمایش ویژه</span></label><button class="btn btn-success w-100" type="submit">ایجاد کتاب و پوشهٔ اختصاصی</button></div></section>
+  <section class="admin-card mb-3">
+    <div class="admin-card-header"><i class="bi bi-stars ms-1"></i>انتخاب رسانه شاخص</div>
+    <div class="admin-card-body">
+      <select name="featured_media_pref" class="form-select form-select-sm">
+        <?php foreach (jhd_featured_media_pref_options() as $pmKey => $pmLabel): ?>
+          <option value="<?= sanitize($pmKey) ?>" <?= (($_POST['featured_media_pref'] ?? 'auto') === $pmKey) ? 'selected' : '' ?>><?= sanitize($pmLabel) ?></option>
+        <?php endforeach; ?>
+      </select>
+      <div class="form-text">در صورت نداشتن تصویر جلد، کارت سند PDF/Word بدون تصویر جعلی نمایش داده می‌شود.</div>
+    </div>
+  </section>
+  <section class="admin-card">
+    <div class="admin-card-header d-flex justify-content-between align-items-center">
+      <span><i class="bi bi-diagram-3 ms-1"></i>موضوعات علمی کتاب</span>
+      <a href="<?= sanitize(adminUrl('topics')) ?>" target="_blank" class="small text-decoration-none">+ مدیریت</a>
+    </div>
+    <div class="admin-card-body">
+      <?php if (!$allTopics): ?>
+        <div class="text-muted small">هنوز موضوعی ثبت نشده است.</div>
+      <?php else: ?>
+        <div style="max-height:220px;overflow-y:auto;border:1px solid var(--admin-border);border-radius:8px;padding:8px">
+          <?php foreach (getTopicFlatTree(null, 5) as $tp):
+            $tpId = (int)$tp['id'];
+          ?>
+            <div class="form-check mb-1">
+              <input class="form-check-input" type="checkbox" name="topic_ids[]" id="btp_<?= $tpId ?>" value="<?= $tpId ?>" <?= in_array($tpId, $selectedTopics, true) ? 'checked' : '' ?>>
+              <label class="form-check-label small" for="btp_<?= $tpId ?>"><?= str_repeat('— ', (int)($tp['depth'] ?? 0)) . sanitize($tp['name']) ?></label>
+            </div>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
+    </div>
+  </section>
+</aside></div>
 </form>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
