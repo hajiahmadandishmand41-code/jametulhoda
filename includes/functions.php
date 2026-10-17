@@ -1961,7 +1961,7 @@ function jhd_normalize_home_config(array $cfg): array {
             'category' => max(0, (int)($item['category'] ?? 0)),
             // «خودکار»: در موبایل ردیف فشرده و در صفحه‌های بزرگ‌تر کاشی کوچک؛
             // «ردیف‌ها»: همیشه ردیف افقی فشرده؛ «کاشی‌ها»: کارت بزرگ‌تر شبکه‌ای.
-            'mode' => in_array($itemMode, ['auto', 'rows', 'grid'], true) ? $itemMode : 'auto',
+            'mode' => in_array($itemMode, ['auto', 'rows', 'grid', 'list', 'horizontal', 'featured', 'slider', 'minimal'], true) ? $itemMode : 'auto',
         ];
     }
     $out['hero_post_id'] = max(0, (int)($cfg['hero_post_id'] ?? 0));
@@ -2097,22 +2097,13 @@ function jhd_home_lesson_collections(int $limit = 4): array {
 }
 
 /**
- * موضوعات علمی منتخب صفحهٔ اصلی — نخست موضوعات «ویژه» و در نبودِ آن‌ها
- * بقیهٔ موضوعات فعال با همان ترتیب مدیریتی. فقط دادهٔ واقعی جدول topics؛
+ * موضوعات علمی منتخب صفحهٔ اصلی — فقط موضوعات «ویژه» با همان ترتیب مدیریتی. فقط دادهٔ واقعی جدول topics؛
  * اگر هیچ موضوع فعالی نباشد، فهرست خالی برمی‌گردد و بخش رندر نمی‌شود.
  */
 function jhd_home_topics(int $limit = 6): array {
     $limit = max(1, min(12, $limit));
     if (!jhd_db_ready()) return [];
-    $topics = getTopics(['active' => 1, 'featured' => 1, 'limit' => $limit]);
-    if (count($topics) < $limit) {
-        $have = array_map('intval', array_column($topics, 'id'));
-        foreach (getTopics(['active' => 1]) as $row) {
-            if (count($topics) >= $limit) break;
-            if (!in_array((int)$row['id'], $have, true)) $topics[] = $row;
-        }
-    }
-    return $topics;
+    return getTopics(['active' => 1, 'featured' => 1, 'limit' => $limit]);
 }
 
 /**
@@ -2175,28 +2166,84 @@ function getPostsByIds(array $ids): array {
 
 // ─── Banners ──────────────────────────────────────────────────────────────────
 
-function getActiveBanners(int $limit=3): array {
-    // Prefer featured_banners (new dynamic announcement) then fallback to site_banners
-    try{
+/** Per-topic related-content controls, stored additively in settings. */
+function jhd_topic_display(int $id): array {
+    $raw=json_decode(getSetting('topic_display_'.$id,''),true);
+    $raw=is_array($raw)?$raw:[];
+    return ['mode'=>in_array($raw['mode'] ?? '',['grid','list','horizontal','minimal','featured','slider'],true)?$raw['mode']:'featured',
+        'limit'=>max(1,min(24,(int)($raw['limit'] ?? 12)))];
+}
+
+/** Banner placement/scheduling lives in settings; no live schema mutation. */
+function jhd_banner_time(string $value): ?int {
+    if($value==='') return null;
+    $date=DateTimeImmutable::createFromFormat('!Y-m-d\TH:i',$value,new DateTimeZone('UTC'));
+    return $date && $date->format('Y-m-d\TH:i')===$value ? $date->getTimestamp() : null;
+}
+
+function jhd_banner_display(int $id): array {
+    $raw = json_decode(getSetting('banner_display_' . $id, ''), true);
+    $raw = is_array($raw) ? $raw : [];
+    $placements = array_merge(['main'], array_keys(jhd_home_section_labels()));
+    return [
+        'placement'=>in_array($raw['placement'] ?? 'main', $placements, true) ? ($raw['placement'] ?? 'main') : 'main',
+        'starts_at'=>(string)($raw['starts_at'] ?? ''),
+        'ends_at'=>(string)($raw['ends_at'] ?? ''),
+    ];
+}
+
+function getActiveBanners(int $limit=3, string $placement='main'): array {
+    $limit=max(1,min(100,$limit));
+    try {
         $db=getDB();
-        try{
-            $stmt=$db->prepare("SELECT id, title, description AS content, image, link_url AS link, button_text AS link_text, is_active, sort_order, created_at FROM featured_banners WHERE is_active=1 ORDER BY sort_order ASC, id DESC LIMIT $limit");
-            $stmt->execute(); $rows=$stmt->fetchAll();
-            if($rows) return $rows;
-        }catch(PDOException $e){}
-        $stmt=$db->prepare("SELECT * FROM site_banners WHERE is_active=1 AND (starts_at IS NULL OR starts_at <= NOW()) AND (ends_at IS NULL OR ends_at >= NOW()) ORDER BY sort_order ASC, id DESC LIMIT $limit");
-        $stmt->execute();
-        $rows = $stmt->fetchAll();
-        // Both legacy site_banners and featured_banners feed the same public
-        // component. Normalize their historical link column names here.
-        foreach ($rows as &$row) {
-            $row['link'] = (string)($row['link'] ?? $row['link_url'] ?? '');
-            $row['link_text'] = (string)($row['link_text'] ?? '');
+        $hasFeatured=false;
+        try {
+            // Do not resurrect legacy banners just because all managed banners
+            // were disabled or scheduled for later by the administrator.
+            $hasFeatured=(bool)$db->query('SELECT COUNT(*) FROM featured_banners')->fetchColumn();
+            $rows=$db->query("SELECT id, title, description AS content, image, link_url AS link, button_text AS link_text, is_active, sort_order, created_at FROM featured_banners WHERE is_active=1 ORDER BY sort_order ASC, id DESC")->fetchAll();
+            $rows=array_values(array_filter($rows, static function(array $row) use ($placement): bool {
+                $cfg=jhd_banner_display((int)$row['id']);
+                if($cfg['placement']!==$placement) return false;
+                foreach(['starts_at','ends_at'] as $key) {
+                    if($cfg[$key]==='') continue;
+                    $at=jhd_banner_time($cfg[$key]);
+                    if($at===null || ($key==='starts_at' ? $at>time() : $at<time())) return false;
+                }
+                return true;
+            }));
+            if($hasFeatured) return array_slice($rows,0,$limit);
+        } catch(PDOException) {}
+        if($placement!=='main') return [];
+        $rows=$db->query("SELECT * FROM site_banners WHERE is_active=1 AND (starts_at IS NULL OR starts_at <= NOW()) AND (ends_at IS NULL OR ends_at >= NOW()) ORDER BY sort_order ASC, id DESC LIMIT $limit")->fetchAll();
+        foreach($rows as &$row) {
+            $row['link']=(string)($row['link'] ?? $row['link_url'] ?? '');
+            $row['link_text']=(string)($row['link_text'] ?? '');
         }
         unset($row);
         return $rows;
-    }catch(PDOException $e){ return []; }
+    } catch(PDOException) { return []; }
 }
+
+function jhd_render_home_banners(string $placement='main'): string {
+    $rows=getActiveBanners(100,$placement);
+    if(!$rows) return '';
+    $html='<aside class="container jhd-home-banners my-3" aria-label="اعلان‌ها">';
+    foreach($rows as $row) {
+        $link=trim((string)($row['link'] ?? ''));
+        $href=str_starts_with($link,'/') && !str_starts_with($link,'//') && !str_contains($link,'\\') && !preg_match('/[\x00-\x20]/',$link)
+            ? jhd_web_path(ltrim($link,'/')) : safeExternalUrl($link);
+        $html.='<article class="jhd-home-banner" data-banner-id="'.(int)$row['id'].'">';
+        $image=trim((string)($row['image'] ?? ''));
+        if($image!=='') $html.='<img loading="lazy" src="'.sanitize(imgUrl($image)).'" alt="'.sanitize($row['title']).'">';
+        $html.='<div><h2 class="h4">'.sanitize($row['title']).'</h2>';
+        if(!empty($row['content'])) $html.='<p>'.sanitize($row['content']).'</p>';
+        if($href!=='') $html.='<a class="btn btn-outline-primary" href="'.sanitize($href).'">'.sanitize($row['link_text'] ?: 'مشاهده').'</a>';
+        $html.='</div></article>';
+    }
+    return $html.'</aside>';
+}
+
 function getActiveBanner(): ?array {
     $banners=getActiveBanners(1);
     return $banners[0] ?? null;

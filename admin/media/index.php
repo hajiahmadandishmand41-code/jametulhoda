@@ -9,7 +9,7 @@ require_once __DIR__ . '/../includes/header.php';
 $error = $success = '';
 
 // آپلود تصاویر
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['jhd_direct']['images'] ?? false || !empty($_FILES['images']['name'][0]))) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['jhd_direct']['images']) || !empty($_FILES['images']['name'][0]))) {
     if (!verifyCsrfToken($_POST[CSRF_TOKEN_NAME] ?? '')) {
         $error = 'خطای امنیتی.';
     } else {
@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['jhd_direct']['images'] ?? 
             $stored = adoptDirectUpload($directPath, 'image', 'media');
             if ($stored) $uploaded++; else $failed++;
         }
-        foreach ($_FILES['images']['name'] as $k => $name) {
+        foreach (($_FILES['images']['name'] ?? []) as $k => $name) {
             if ($name === '') continue;
             if (($_FILES['images']['error'][$k] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
                 $failed++;

@@ -5,28 +5,28 @@
   // Leave enough room for the multipart boundary and ordinary form fields on Vercel.
   var DIRECT_THRESHOLD = 3.5 * 1024 * 1024;
   var CHUNK_SIZE = 6 * 1024 * 1024;
+  var verifiedFiles = new WeakMap();
   var csrfSelector = 'input[type="hidden"][name="csrf_token"], input[type="hidden"][name="_token"]';
 
   function csrfValue(formData) {
-    var input = document.querySelector(csrfSelector);
-    if (input && input.value) return input.value;
     if (formData) {
       var found = '';
       formData.forEach(function (value, key) {
         if (!found && typeof value === 'string' && /token|csrf/i.test(key) && value.length >= 20) found = value;
       });
-      return found;
+      if (found) return found;
     }
-    return '';
+    var input = document.querySelector(csrfSelector);
+    return input && input.value ? input.value : '';
   }
 
   function kindForInput(input, file) {
     var s = ((input && (input.name + ' ' + input.accept)) || '').toLowerCase();
     var ext = (file.name.split('.').pop() || '').toLowerCase();
-    if (s.indexOf('image') >= 0 || ['jpg','jpeg','png','gif','webp'].indexOf(ext) >= 0) return 'image';
-    if (s.indexOf('audio') >= 0 || ['mp3','ogg','wav','m4a'].indexOf(ext) >= 0) return 'audio';
-    if (s.indexOf('video') >= 0 || ['mp4','webm','mov','mkv'].indexOf(ext) >= 0) return 'video';
-    if (s.indexOf('word') >= 0 || ['doc','docx'].indexOf(ext) >= 0) return 'word';
+    if (['jpg','jpeg','png','gif','webp'].indexOf(ext) >= 0) return 'image';
+    if (['mp3','ogg','wav','m4a'].indexOf(ext) >= 0) return 'audio';
+    if (['mp4','webm','mov','mkv'].indexOf(ext) >= 0) return 'video';
+    if (['doc','docx'].indexOf(ext) >= 0) return 'word';
     return 'pdf';
   }
 
@@ -34,6 +34,7 @@
     var entries = [];
     var total = 0;
     form.querySelectorAll('input[type="file"]').forEach(function (input) {
+      if (input.disabled || !input.name) return;
       Array.prototype.forEach.call(input.files || [], function (file) {
         if (!file || !file.name || file.size < 1) return;
         entries.push({ input: input, file: file });
@@ -92,9 +93,9 @@
     var put = await fetch(grant.signed_url, {
       method: 'PUT',
       headers: {
-        'Content-Type': file.type || 'application/octet-stream',
+        'Content-Type': grant.mime || file.type || 'application/octet-stream',
         'x-upsert': 'false',
-        'cache-control': '3600'
+        'cache-control': 'max-age=3600'
       },
       body: file
     });
@@ -128,7 +129,7 @@
     var meta = [
       'bucketName ' + b64(grant.bucket),
       'objectName ' + b64(absolutePath(grant.path)),
-      'contentType ' + b64(file.type || 'application/octet-stream')
+      'contentType ' + b64(grant.mime || file.type || 'application/octet-stream')
     ].join(',');
     var create = await fetch(grant.tus_endpoint, {
       method: 'POST',
@@ -143,11 +144,15 @@
     if (!create.ok) {
       var msg = await create.text().catch(function(){ return ''; });
       var detail = storageErrorMessage(create.status, msg);
-      throw new Error(detail || 'شروع آپلود resumable ناموفق بود.');
+      var failure = new Error(detail || 'شروع آپلود resumable ناموفق بود.');
+      failure.fallbackAllowed = [404,405,501].indexOf(create.status) >= 0;
+      throw failure;
     }
     var location = create.headers.get('Location');
     if (!location) throw new Error('Storage نشانی ادامهٔ آپلود را برنگرداند.');
     location = new URL(location, grant.tus_endpoint).toString();
+    if (new URL(location).origin !== new URL(grant.tus_endpoint).origin) throw new Error('مبدأ ادامهٔ آپلود معتبر نیست.');
+    grant.tusCreated = true;
 
     var offset = 0;
     var retries = 0;
@@ -165,7 +170,7 @@
           'x-signature': grant.token
         },
         body: chunk
-      });
+      }).catch(function(){ return {ok:false,status:0,text:async function(){return '';}}; });
 
       if (!patch.ok) {
         // Ask the TUS server how many bytes it accepted before retrying.
@@ -220,7 +225,7 @@
       // Only a protocol/endpoint level failure justifies the fallback; a
       // rejected file (wrong type, quota, existing object) must not be
       // uploaded a second time.
-      var resumableBroken = /Invalid Compact JWS|نتوانست|ناموفق|بازگرداند|آفست/i.test(message);
+      var resumableBroken = error.fallbackAllowed || (error instanceof TypeError && !grant.tusCreated);
       if (!resumableBroken || !grant.signed_url) throw error;
       if (status) status.textContent = 'آپلود resumable در دسترس نبود؛ آپلود امضاشدهٔ مستقیم…';
       await signedPutUpload(file, grant, status);
@@ -248,7 +253,11 @@
   }
 
   function addHidden(form, field, value) {
+    var name = 'jhd_direct[' + field + '][]';
+    var existing = Array.prototype.slice.call(form.querySelectorAll('input[type="hidden"]'));
+    if (existing.some(function(item){ return item.name === name && item.value === value; })) return;
     var input = document.createElement('input');
+    input.dataset.jhdDirectReference = field;
     input.type = 'hidden';
     input.name = 'jhd_direct[' + field + '][]';
     input.value = value;
@@ -375,6 +384,7 @@
       var inputs = Array.prototype.slice.call(form.querySelectorAll('input[type="file"]'));
       for (var i = 0; i < inputs.length; i++) {
         var input = inputs[i];
+        if (input.disabled || !input.name) continue;
         var files = Array.prototype.slice.call(input.files || []);
         var directFiles = files.filter(function(file) {
           return file && file.name && file.size > 0 && (directAll || file.size > DIRECT_THRESHOLD);
@@ -383,9 +393,14 @@
           var file = directFiles[j];
           var kind = kindForInput(input, file);
           status.textContent = 'در حال آپلود مستقیم «' + file.name + '»…';
-          var grant = await sign(file, kind);
-          await uploadToStorage(file, grant, status);
-          var path = await finalizeUpload(grant, file.size, csrfValue(), false);
+          var path = verifiedFiles.get(file);
+          if (!path) {
+            var csrf = csrfValue(new FormData(form));
+            var grant = await sign(file, kind, csrf);
+            await uploadToStorage(file, grant, status);
+            path = await finalizeUpload(grant, file.size, csrf, false);
+            verifiedFiles.set(file, path);
+          }
           addHidden(form, input.name.replace(/\[\]$/, ''), path);
         }
         var keep = files.filter(function(file) { return directFiles.indexOf(file) === -1; });
@@ -440,7 +455,10 @@
     }).catch(function (err) {
       form.dataset.jhdDirectBusy = '0';
       setSubmitControlsDisabled(submitControls, false);
-      setStatus(status, err && err.message ? err.message : 'آپلود مستقیم ناموفق بود؛ فرم ارسال نشد.', true);
+      var message = err instanceof TypeError
+        ? 'ارتباط با Storage برقرار نشد یا قطع شد (شبکه/CORS). ذخیرهٔ مطلب انجام نشد؛ اطلاعات فرم حفظ است. دوباره تلاش کنید.'
+        : (err && err.message ? err.message : 'آپلود مستقیم ناموفق بود؛ فرم ارسال نشد.');
+      setStatus(status, message, true);
     });
   }
 
@@ -449,6 +467,8 @@
   var nativeFetch = window.fetch.bind(window);
   window.fetch = async function (input, init) {
     var body = init && init.body;
+    var targetUrl = new URL(typeof input === 'string' || input instanceof URL ? input : input.url, window.location.href);
+    if (targetUrl.origin !== window.location.origin || !targetUrl.pathname.startsWith('/admin/')) return nativeFetch(input, init);
     if (!(body instanceof FormData)) return nativeFetch(input, init);
 
     var originalEntries = [];
@@ -531,5 +551,19 @@
     return data;
   }
 
+  document.addEventListener('change', function(event) {
+    var input = event.target;
+    if (!input || input.type !== 'file' || !input.form) return;
+    var form = input.form;
+    form.dataset.jhdDirectReady = '0';
+    var field = input.name.replace(/\[\]$/, '');
+    form.querySelectorAll('[data-jhd-direct-reference]').forEach(function(item) {
+      if (item.dataset.jhdDirectReference === field) item.remove();
+    });
+    if (input.dataset.jhdDirectSatisfiedRequired === '1') {
+      input.required = true;
+      delete input.dataset.jhdDirectSatisfiedRequired;
+    }
+  }, true);
   document.addEventListener('submit', formHandler, true);
 })();

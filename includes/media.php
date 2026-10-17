@@ -91,6 +91,7 @@ function handleMediaUploads(string $refType, int $refId, array $files, string $k
             $fieldKind = str_contains($field, 'audio') ? 'audio'
                 : (str_contains($field, 'video') ? 'video'
                 : ((str_contains($field, 'document') || str_contains($field, 'attachment') || ($field === 'files' && strtolower((string)($_POST['kind'] ?? '')) === 'document')) ? 'document' : ''));
+            if ($field === 'files') $fieldKind = strtolower((string)($_POST['kind'] ?? ''));
             if ($fieldKind !== $kind) continue;
             $list = is_array($paths) ? $paths : [$paths];
             foreach ($list as $path) if (is_string($path) && $path !== '') $directPaths[] = $path;

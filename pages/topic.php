@@ -41,9 +41,15 @@ $breadcrumbsJsonLd = breadcrumbsJsonLd($breadcrumbs);
 $children = getTopicChildren($topicId);
 $scope = getTopicScopeIds($topicId);
 
-$posts = getPostsByTopic($topicId, ['limit' => 12]);
-$books = getBooksByTopic($topicId, 8);
-$lessons = getLessonsByTopic($topicId, 8);
+$topicDisplay=jhd_topic_display($topicId);
+$displayMode=$topicDisplay['mode'];
+$relatedOpts=['compact'=>false,'minimal_title'=>$displayMode==='minimal','row'=>$displayMode==='horizontal'];
+if(in_array($displayMode,['list','horizontal','minimal'],true)) $relatedOpts['col']='col-12';
+if($displayMode==='slider') $relatedOpts['col']='jhd-home-slide';
+$posts = getPostsByTopic($topicId, ['limit' => $topicDisplay['limit']]);
+$books = getBooksByTopic($topicId, $topicDisplay['limit']);
+$lessons = getLessonsByTopic($topicId, $topicDisplay['limit']);
+$relatedGrid=$displayMode==='slider' ? '<div class="row jhd-home-slider" tabindex="0" aria-label="مطالب قابل پیمایش">' : jhd_grid_open();
 
 require __DIR__ . '/../includes/header.php';
 ?>
@@ -59,7 +65,7 @@ require __DIR__ . '/../includes/header.php';
   </div>
 </div>
 
-<div class="jhd-section">
+<div class="jhd-section" data-display-mode="<?= sanitize($displayMode) ?>">
   <div class="container">
     <?= jhd_page_head([
         'eyebrow' => 'هاب علمی',
@@ -81,13 +87,13 @@ require __DIR__ . '/../includes/header.php';
 
     <?php if ($posts): ?>
       <?php
-      echo jhd_lead_story($posts[0]);
-      $rest = array_slice($posts, 1);
+      if($displayMode==='featured') echo jhd_lead_story($posts[0]);
+      $rest = $displayMode==='featured' ? array_slice($posts, 1) : $posts;
       ?>
       <?php if ($rest): ?>
       <div class="mt-4">
-        <?= jhd_grid_open() ?>
-        <?php foreach ($rest as $p) echo renderPostCard($p, ['compact' => true, 'cta' => 'ادامه مطلب', 'excerpt' => 110]); ?>
+        <?= $relatedGrid ?>
+        <?php foreach ($rest as $p) echo renderPostCard($p, $relatedOpts + ['cta'=>'ادامه مطلب','excerpt'=>110]); ?>
         <?= jhd_grid_close() ?>
       </div>
       <?php endif; ?>
@@ -96,8 +102,8 @@ require __DIR__ . '/../includes/header.php';
     <?php if ($books): ?>
     <section class="mt-5">
       <?= jhd_section_head(['title' => 'کتاب‌های مرتبط', 'icon' => 'bi-book']) ?>
-      <?= jhd_grid_open() ?>
-      <?php foreach ($books as $b) echo renderBookCard($b, ['compact' => true]); ?>
+      <?= $relatedGrid ?>
+      <?php foreach ($books as $b) echo renderBookCard($b, $relatedOpts); ?>
       <?= jhd_grid_close() ?>
     </section>
     <?php endif; ?>
@@ -105,8 +111,8 @@ require __DIR__ . '/../includes/header.php';
     <?php if ($lessons): ?>
     <section class="mt-5">
       <?= jhd_section_head(['title' => 'درس‌ها و مجموعه‌ها', 'icon' => 'bi-mortarboard']) ?>
-      <?= jhd_grid_open() ?>
-      <?php foreach ($lessons as $l) echo renderLessonCard($l, ['compact' => true]); ?>
+      <?= $relatedGrid ?>
+      <?php foreach ($lessons as $l) echo renderLessonCard($l, $relatedOpts); ?>
       <?= jhd_grid_close() ?>
     </section>
     <?php endif; ?>

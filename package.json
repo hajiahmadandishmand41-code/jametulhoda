@@ -12,7 +12,9 @@
     "test:editorial": "php tests/editorial.php",
     "test:homepage": "node tests/homepage-settings.mjs",
     "test:compact": "node tests/compact-design.mjs",
-    "test:editorial-browser": "node tests/editorial-browser.mjs"
+    "test:editorial-browser": "node tests/editorial-browser.mjs",
+    "test:media-display": "node tests/admin-media-display.mjs",
+    "test:upload-ownership": "php tests/upload-ownership.php"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

@@ -16,6 +16,8 @@ const appOrigin = 'http://jhd-upload.test';
 const storageOrigin = 'https://test-project.storage.supabase.co';
 const endpoint = storageOrigin + '/storage/v1/upload/resumable';
 let grantSequence = 0;
+let failureMode = '';
+let signedPutAttempts = 0;
 let uploadSequence = 0;
 const grants = new Map();
 const uploads = new Map();
@@ -54,7 +56,9 @@ try {
       return route.fulfill({ status: 204, headers: corsHeaders, body: '' });
     }
 
+    if (req.method()==='PUT') signedPutAttempts++;
     if (url.pathname === '/storage/v1/upload/resumable' && req.method() === 'POST') {
+      if(failureMode==='storage') return route.fulfill({status:403,headers:corsHeaders,body:'quota or policy rejected upload'});
       const metadata = {};
       for (const item of (headers['upload-metadata'] || '').split(',')) {
         const parts = item.split(' ');
@@ -144,10 +148,11 @@ try {
         return route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({ ok: true, ...grant, tus_endpoint: endpoint, public_url: 'https://test-project.supabase.co/storage/v1/object/public/site-media/' + path }),
+          body: JSON.stringify({ ok: true, ...grant, signed_url:storageOrigin+'/object/upload/sign/'+grant.path, tus_endpoint: endpoint, public_url: 'https://test-project.supabase.co/storage/v1/object/public/site-media/' + path }),
         });
       }
       if (form.get('action') === 'finalize') {
+        if(failureMode==='finalize') return route.fulfill({status:422,contentType:'application/json',body:JSON.stringify({ok:false,error:'remote file not confirmed'})});
         const path = form.get('path');
         const grant = grants.get(path);
         const upload = Array.from(uploads.values()).find((item) => item.path === path);
@@ -213,6 +218,18 @@ try {
   check('TUS actually transferred the full file lengths by chunks', Array.from(uploads.values()).every((item) => item.offset === item.size && item.bytes === item.size && item.patches.length > 0), JSON.stringify(Array.from(uploads.values()).map((u) => ({ path: u.path, size: u.size, chunks: u.patches }))));
   check('test covers multi-file input on a mobile viewport', wasMultipleInput && page.viewportSize()?.width === 390, 'multiple + 390px viewport');
   console.log('\nDirect upload regression: ' + storedObjects.size + '/' + expectedFileCount + ' files stored; final request ' + (appPosts[0] ? appPosts[0].bytes : 0) + ' bytes.');
+  for(const mode of ['storage','finalize']) {
+    failureMode=mode;
+    const postsBefore=appPosts.length;
+    await page.goto(appOrigin+'/admin/test');
+    await page.locator('input[type="file"]').setInputFiles([{name:'retry-video.mp4',mimeType:'video/mp4',buffer:largeVideo}]);
+    await page.locator('button[type="submit"]').click();
+    await page.locator('[data-jhd-direct-status-global].alert-danger').waitFor();
+    check(mode+' failure never submits content',appPosts.length===postsBefore);
+    check(mode+' failure retains selected file and permits retry',await page.locator('input[type="file"]').evaluate(el=>el.files.length===1) && await page.locator('button[type="submit"]').isEnabled());
+    check(mode+' failure never pretends file verification succeeded',await page.locator('input[name^="jhd_direct"]').count()===0);
+  }
+  check('policy/quota rejection never triggers duplicate signed PUT',signedPutAttempts===0);
   await context.close();
 } finally {
   await browser.close();

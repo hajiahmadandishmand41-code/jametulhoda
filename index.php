@@ -125,6 +125,7 @@ require_once __DIR__ . '/includes/header.php';
 <div class="jhd-homepage jhd-homepage--editorial" id="home-content" data-density="<?= sanitize($homeSettings['density']) ?>" data-thumb="<?= sanitize($homeSettings['thumb']) ?>">
 <div class="container jhd-home-titlebar"><h1 class="h3"><?= sanitize($siteName) ?>؛ پایگاه علمی و خبری</h1></div>
 <?php
+echo jhd_render_home_banners('main');
 $shown = false;
 foreach ($layout as $key => $section) {
     if (empty($homeSettings['sections'][$key])) continue;
@@ -164,6 +165,7 @@ foreach ($layout as $key => $section) {
             $rows = $mediaRows;
             break;
     }
+    echo jhd_render_home_banners($key);
     if (!$lead && !$rows) continue;
     $shown = true;
     if (in_array($key, $postKeys, true)) {
@@ -183,11 +185,14 @@ foreach ($layout as $key => $section) {
      */
     $mode = (string)($section['mode'] ?? 'auto');
     $cardOpts = [];
-    if ($mode !== 'grid') $cardOpts['compact'] = true;
+    if (in_array($mode,['auto','rows','minimal','slider'],true)) $cardOpts['compact'] = true;
     if ($mode === 'auto') $cardOpts['col'] = 'col-12 col-md-6';
-    elseif ($mode === 'rows') $cardOpts['col'] = 'col-12';
+    elseif (in_array($mode,['rows','list','horizontal','minimal'],true)) $cardOpts['col'] = 'col-12';
+    if ($mode==='horizontal') $cardOpts['row']=true;
+    if ($mode==='minimal') $cardOpts['minimal_title']=true;
+    if ($mode==='slider') $cardOpts['col']='jhd-home-slide';
     ?>
-    <section class="jhd-section" data-home-section="<?= sanitize($key) ?>" aria-labelledby="home-<?= sanitize($key) ?>-heading">
+    <section class="jhd-section" data-home-section="<?= sanitize($key) ?>" data-display-mode="<?= sanitize($mode) ?>" aria-labelledby="home-<?= sanitize($key) ?>-heading">
       <div class="container">
       <?php /* فهرست «همهٔ موضوعات» از پیش به آرشیو مقالات هدایت می‌شود؛ پس
              برای بخش موضوعات پیوند «مشاهدهٔ همه» نمی‌گذاریم — هر کاشی مستقیماً
@@ -199,8 +204,10 @@ foreach ($layout as $key => $section) {
       <?php if ($lead): ?>
         <?= jhd_lead_story($lead) ?>
       <?php else: ?>
-        <div class="row <?= $mode === 'grid' ? 'g-3' : 'g-2' ?>">
-        <?php foreach ($rows as $row) {
+        <div class="row <?= $mode === 'slider' ? 'jhd-home-slider' : ($mode === 'grid' ? 'g-3' : 'g-2') ?>" <?= $mode==='slider' ? 'tabindex="0" aria-label="فهرست قابل پیمایش"' : '' ?>>
+        <?php foreach ($rows as $rowIndex => $row) {
+            $cardOpts['featured'] = $mode==='featured' && $rowIndex===0;
+            if($mode==='featured') $cardOpts['col']=$rowIndex===0 ? 'col-12 col-lg-6' : 'col-12 col-md-6 col-lg-3';
             if ($key === 'books') echo renderBookCard($row, $cardOpts);
             elseif ($key === 'lessons') echo renderLessonCard($row, $cardOpts);
             elseif ($key === 'topics') echo renderTopicCard($row, $cardOpts + ['minimal' => true]);

@@ -41,6 +41,7 @@ jobs:
       - name: Signed resumable-upload contract (in-memory only)
         run: |
           php tests/storage-tus-endpoint.php
+          php tests/upload-ownership.php
       - name: Ensure the mobile feed has no social-network integration
         shell: bash
         run: |

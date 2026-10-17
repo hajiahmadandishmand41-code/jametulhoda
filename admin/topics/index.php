@@ -71,49 +71,39 @@ if($_SERVER['REQUEST_METHOD']==='POST' && !isset($_POST['delete'])){
                 $oldTopic=$editId ? getTopicById($editId) : null;
                 if ($editId && !$oldTopic) { $error='موضوع موردنظر برای ویرایش یافت نشد.'; }
                 if (!$error) {
-                $slug=uniqueSlug('topics',$requestedSlug !== '' ? $requestedSlug : $name,$editId);
-                if($editId){
+                try {
                     $cover=(string)($oldTopic['cover_image'] ?? '');
-                    if(!empty($_POST['remove_cover']) && $cover){ scheduleFileDeletion($cover); $cover=''; }
-                    $directCover = jhdDirectUploadPath('cover_image');
-                    if($directCover!==''){
-                        $up=adoptDirectUpload($directCover,'image',contentStorageFolder('topic',$editId));
-                    } elseif(!empty($_FILES['cover_image']['name'])){
-                        $up=uploadContentImage($_FILES['cover_image'],'topic',$editId);
-                        if(!$up) $error='خطا در آپلود کاور. فرمت‌های مجاز: JPG، PNG، GIF، WebP';
-                        else { if($cover) scheduleFileDeletion($cover); $cover=$up; }
-                    }
-                    if(!$error){
-                        $db->prepare("UPDATE topics SET parent_id=?, name=?, slug=?, description=?, intro=?, cover_image=?, sort_order=?, is_active=?, is_featured=?, updated_at=NOW() WHERE id=?")
+                    $previousCover=$cover;
+                    $directCover=jhdDirectUploadPath('cover_image');
+                    $folder=$editId ? contentStorageFolder('topic',$editId) : 'topics';
+                    if($directCover!=='' || !empty($_FILES['cover_image']['name'])) {
+                        $up=$directCover!=='' ? adoptDirectUpload($directCover,'image',$folder) : uploadImage($_FILES['cover_image'],$folder);
+                        if(!$up) throw new RuntimeException('آپلود یا تأیید کاور ناموفق بود؛ موضوع ذخیره نشد.');
+                        $cover=$up;
+                    } elseif(!empty($_POST['remove_cover'])) $cover='';
+                    $slug=uniqueSlug('topics',$requestedSlug !== '' ? $requestedSlug : $name,$editId);
+                    $db->beginTransaction();
+                    if($editId) {
+                        $db->prepare("UPDATE topics SET parent_id=?,name=?,slug=?,description=?,intro=?,cover_image=?,sort_order=?,is_active=?,is_featured=?,updated_at=NOW() WHERE id=?")
                            ->execute([$parent_id,$name,$slug,$desc,$intro,$cover ?: null,$sort,$is_active,$is_featured,$editId]);
                         $success='موضوع ویرایش شد.';
-                    }
-                } else {
-                    // Obtain the stable database ID before accepting a cover, so
-                    // every topic owns its media folder (topics/topic-{id}/).
-                    $topicId=0; $cover='';
-                    try {
-                        $insert=$db->prepare("INSERT INTO topics (parent_id,name,slug,description,intro,cover_image,sort_order,is_active,is_featured) VALUES (?,?,?,?,?,NULL,?,?,?) RETURNING id");
-                        $insert->execute([$parent_id,$name,$slug,$desc ?: null,$intro ?: null,$sort,$is_active,$is_featured]);
+                    } else {
+                        $insert=$db->prepare("INSERT INTO topics (parent_id,name,slug,description,intro,cover_image,sort_order,is_active,is_featured) VALUES (?,?,?,?,?,?,?,?,?) RETURNING id");
+                        $insert->execute([$parent_id,$name,$slug,$desc ?: null,$intro ?: null,$cover ?: null,$sort,$is_active,$is_featured]);
                         $topicId=(int)$insert->fetchColumn(); $insert->closeCursor();
                         if($topicId<1) throw new RuntimeException('شناسه موضوع ایجاد نشد.');
-                        $directCover = jhdDirectUploadPath('cover_image');
-                        if($directCover!==''){
-                            $cover=adoptDirectUpload($directCover,'image',contentStorageFolder('topic',$topicId));
-                        } elseif(!empty($_FILES['cover_image']['name'])){
-                            $cover=uploadContentImage($_FILES['cover_image'],'topic',$topicId);
-                            if(!$cover) throw new RuntimeException('خطا در آپلود کاور. فرمت‌های مجاز: JPG، PNG، GIF، WebP');
-                            $db->prepare('UPDATE topics SET cover_image=? WHERE id=?')->execute([$cover,$topicId]);
-                        }
                         $success='موضوع جدید ایجاد شد.';
-                    } catch(Throwable $e) {
-                        error_log('topic create failed: '.get_class($e));
-                        if($topicId>0) {
-                            $db->prepare('DELETE FROM topics WHERE id=?')->execute([$topicId]);
-                            if($cover) scheduleFileDeletion($cover);
-                        }
-                        $error=$e instanceof RuntimeException ? $e->getMessage() : 'خطا در ذخیره موضوع.';
                     }
+                    $topicDisplay=['mode'=>(string)($_POST['display_mode'] ?? 'featured'), 'limit'=>max(1,min(24,(int)($_POST['content_limit'] ?? 12)))];
+                    if(!in_array($topicDisplay['mode'],['grid','list','horizontal','minimal','featured','slider'],true)) $topicDisplay['mode']='featured';
+                    $db->prepare('INSERT INTO settings (setting_key,value) VALUES (?,?) ON CONFLICT (setting_key) DO UPDATE SET value=EXCLUDED.value')
+                       ->execute(['topic_display_'.($editId ?: $topicId),json_encode($topicDisplay)]);
+                    if($previousCover && $previousCover!==$cover) scheduleFileDeletion($previousCover);
+                    $db->commit();
+                } catch (Throwable $e) {
+                    if($db->inTransaction()) $db->rollBack();
+                    error_log('topic save failed: '.get_class($e));
+                    $error=($e instanceof RuntimeException && !($e instanceof PDOException)) ? $e->getMessage() : 'ثبت موضوع انجام نشد؛ اطلاعات فرم حفظ شده و فایل موقت برای بررسی قابل شناسایی است.';
                 }
                 if(!$error){
                     $_SESSION['flash_msg']=$success; $_SESSION['flash_type']='success';
@@ -129,6 +119,10 @@ $editTopic=null;
 if(!empty($_GET['edit'])){
     $editTopic=getTopicById((int)$_GET['edit']);
 }
+if ($error && $_SERVER['REQUEST_METHOD']==='POST') {
+    $editTopic = array_merge($editTopic ?: [], $_POST, ['id'=>(int)($_POST['edit_id'] ?? 0), 'is_active'=>isset($_POST['is_active']), 'is_featured'=>isset($_POST['is_featured'])]);
+}
+$topicDisplay=$error ? ['mode'=>$_POST['display_mode'] ?? 'featured','limit'=>(int)($_POST['content_limit'] ?? 12)] : jhd_topic_display((int)($editTopic['id'] ?? 0));
 $allTopics=getTopics();
 $tree=getTopicTree(['active'=>null]);
 
@@ -183,10 +177,13 @@ flattenTopics($tree,0,$flat);
 <div class="mb-3"><label class="form-label">معرفی کوتاه (intro)</label><textarea name="intro" class="form-control" rows="2" placeholder="توضیح کوتاه برای کارت موضوع"><?= sanitize($editTopic['intro'] ?? '') ?></textarea></div>
 <div class="mb-3"><label class="form-label">توضیح کامل</label><textarea name="description" class="form-control" rows="3" placeholder="معرفی موضوع برای صفحه لندینگ"><?= sanitize($editTopic['description'] ?? '') ?></textarea></div>
 <div class="mb-3"><label class="form-label">کاور / تصویر موضوع</label><input type="file" name="cover_image" class="form-control" accept="image/*" onchange="previewImg(this,'topicCoverPreview')"><div class="form-text">JPG/PNG/WebP — حداکثر 20MB — در کاشی اطلس سایت نمایش داده می‌شود</div>
-<img id="topicCoverPreview" class="admin-topic-cover-preview mt-2" alt="پیش‌نمایش کاور" <?= ($editTopic && $editTopic['cover_image']) ? 'src="'.sanitize(imgUrl($editTopic['cover_image'])).'"' : 'style="display:none"' ?>>
-<?php if($editTopic && $editTopic['cover_image']): ?><div class="mt-2"><label class="form-check small text-danger mt-1"><input class="form-check-input" type="checkbox" name="remove_cover" value="1"> حذف تصویر</label></div><?php endif; ?></div>
+<img id="topicCoverPreview" class="admin-topic-cover-preview mt-2" alt="پیش‌نمایش کاور" <?= !empty($editTopic['cover_image']) ? 'src="'.sanitize(imgUrl($editTopic['cover_image'])).'"' : 'style="display:none"' ?>>
+<?php if(!empty($editTopic['cover_image'])): ?><div class="mt-2"><label class="form-check small text-danger mt-1"><input class="form-check-input" type="checkbox" name="remove_cover" value="1"> حذف تصویر</label></div><?php endif; ?></div>
+<div class="mb-3"><label class="form-label">نمایش مطالب در صفحهٔ موضوع</label><select name="display_mode" class="form-select">
+<?php foreach(['featured'=>'شاخص و کارت‌ها','grid'=>'شبکه‌ای','list'=>'فهرستی','horizontal'=>'افقی','slider'=>'اسلایدی قابل پیمایش','minimal'=>'فقط تیتر'] as $value=>$label): ?><option value="<?= $value ?>" <?= $topicDisplay['mode']===$value?'selected':'' ?>><?= $label ?></option><?php endforeach; ?>
+</select></div><div class="mb-3"><label class="form-label">تعداد هر نوع محتوای مرتبط</label><input name="content_limit" type="number" min="1" max="24" class="form-control" value="<?= (int)$topicDisplay['limit'] ?>"></div>
 <div class="row g-2 mb-3">
-<div class="col-6"><label class="form-label">ترتیب نمایش</label><input type="number" name="sort_order" class="form-control" value="<?= $editTopic['sort_order'] ?? 0 ?>"></div>
+<div class="col-6"><label class="form-label">ترتیب نمایش</label><input type="number" name="sort_order" class="form-control" value="<?= (int)($editTopic['sort_order'] ?? 0) ?>"></div>
 <div class="col-6 d-flex flex-column gap-2 justify-content-end">
 <label class="form-check"><input type="checkbox" name="is_active" class="form-check-input" <?= ($editTopic['is_active']??1)?'checked':'' ?>> فعال</label>
 <label class="form-check"><input type="checkbox" name="is_featured" class="form-check-input" <?= ($editTopic['is_featured']??0)?'checked':'' ?>> ویژه در صفحه اصلی</label>

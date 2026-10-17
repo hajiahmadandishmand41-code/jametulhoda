@@ -59,7 +59,7 @@ if ($postId < 1) $fail('شناسهٔ مطلب در این درخواست معت�
 $db = getDB();
 $owner = $db->prepare('SELECT id, post_type FROM posts WHERE id = ? LIMIT 1');
 $owner->execute([$postId]);
-$ownerRow = $owner->fetch();
+$ownerRow = $owner->fetch(); $owner->closeCursor();
 if (!$ownerRow) $fail('مطلب مورد نظر یافت نشد.', 404);
 $postType = (string)($ownerRow['post_type'] ?? 'article');
 
@@ -141,13 +141,15 @@ try {
             $kind = strtolower(trim((string)($_POST['kind'] ?? '')));
             if (!in_array($kind, ['audio', 'video', 'document'], true)) $fail('نوع رسانه نامعتبر است.');
             $field = $_FILES['files'] ?? null;
-            if (!is_array($field)) $fail('فایلی برای افزودن ارسال نشده است.');
+            if (!is_array($field) && !jhdDirectUploadPaths('files')) $fail('فایلی برای افزودن ارسال نشده است.');
+            $field = is_array($field) ? $field : [];
             beginContentUploadScope();
             $upload = handleMediaUploads('post', $postId, $field, $kind, ['post_type' => $postType]);
             if (!empty($upload['errors'])) {
                 requireMediaUploadsSafely($upload);
                 $fail(implode(' ', array_slice($upload['errors'], 0, 3)), 422);
             }
+            if ((int)($upload['uploaded'] ?? 0)<1) $fail('هیچ فایل تأییدشده‌ای به مطلب افزوده نشد.',422);
             if (!empty($_POST['feature_added']) && $kind === 'video') {
                 $ids = array_map(static fn(array $row): int => (int)$row['id'], $mediaState($postId, 'video'));
                 setPostFeaturedVideos($postId, $ids);
