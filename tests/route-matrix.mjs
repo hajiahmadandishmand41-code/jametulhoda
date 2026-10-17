@@ -46,7 +46,7 @@ const listings = [
   ['research', '/research', 'پژوهش'],
   ['books', '/books', 'کتاب'],
   ['lessons', '/lessons', 'درس'],
-  ['topics', '/topics', 'مقالات'],
+  ['topics', '/topics', 'موضوع'],
   ['media', '/media', 'ویدیو'],
   ['videos', '/videos', 'ویدیو'],
   ['video', '/video', 'ویدیو'], // singular pretty path is a listing without an id

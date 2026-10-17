@@ -77,8 +77,8 @@ return [
         '/read'                 => 'pages/reader.php',
         '/speech'               => 'pages/speech.php',
         '/speeches'             => 'pages/speeches.php',
-        '/topic'                => 'pages/topic.php',
-        '/topics'               => 'pages/topics.php', // legacy route permanently redirects to the article archive
+        '/topic'                => 'pages/topics.php',
+        '/topics'               => 'pages/topics.php',
 
         // ─── احراز هویت عمومی (جدا از پنل مدیر) ──────────────────────────
         '/login'                => 'pages/login.php',
