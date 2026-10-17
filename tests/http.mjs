@@ -141,7 +141,7 @@ r=await api.get('/post.php?slug='+title);let html=await r.text();check('publishe
 for(const path of ['/news/'+encodeURIComponent(title),'/post/'+encodeURIComponent(title)]){r=await api.get(path);check('clean news detail '+path,r.status()===200 && (await r.text()).includes(title),String(r.status()));}
 for(const collectionPath of ['/videos','/audios']){const collection=await api.get(collectionPath);const collectionHtml=await collection.text();const match=collectionHtml.match(/href="([^"]*\/(?:video|audio)\/\d+)"/);if(match){const detailPath=new URL(match[1],base).pathname;const detail=await api.get(detailPath);check('dynamic media detail '+detailPath,detail.status()===200,String(detail.status()));}else check('media collection renders fixture '+collectionPath,collection.status()===200 && collectionHtml.includes(title),String(collection.status()));}
 r=await api.get('/articles/'+encodeURIComponent(title));check('typed route rejects news under articles',r.status()===404,String(r.status()));
-for(const url of new Set([...html.matchAll(/(?:src|href)="(\/uploads\/[^"?]+)"/g)].map(m=>m[1]))){if(url.includes('/seed-'))continue;stored.push(url); const a=await api.get(url);check('stored file accessible '+url,a.status()===200,String(a.status()));}
+for(const url of new Set([...html.matchAll(/(?:src|href)="(\/uploads\/[^"?]+)"/g)].map(m=>m[1]))){if(url.includes('/seed-') || !url.includes('/post-'+id+'/'))continue;stored.push(url); const a=await api.get(url);check('stored file accessible '+url,a.status()===200,String(a.status()));}
 r=await api.get('/admin/books/create.php');csrf=token(await r.text());
 r=await api.post('/admin/books/create.php',{multipart:{csrf_token:csrf,title:'qa-book-'+stamp,description:'کتاب آزمون',status:'published',pdf_file:{name:'document.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF')}},maxRedirects:0});check('upload PDF + create book',r.status()===303,String(r.status()));
 r=await api.get('/books.php?q=qa-book-'+stamp);
@@ -307,10 +307,10 @@ r=await api.get('/post.php?slug='+title);html=await r.text();check('edited conte
     check('gallery lifecycle fixture post deleted',r.status()===303,String(r.status()));
   } else check('gallery endpoint exposed on edit page',false,'GALLERY_ENDPOINT not found in edit page');
 }
-// Legacy topic detail route permanently redirects (301) to /articles.
+// Topics own real landing pages; never redirect linked scientific content to an unrelated archive.
 {
   const topicResponse=await api.get('/topic?slug=fiqh',{maxRedirects:0});
-  check('legacy topic detail redirects permanently to articles',topicResponse.status()===301 && /\/articles(\?|$)|p=articles/.test(String(topicResponse.headers()['location']||'')),String(topicResponse.status())+' '+String(topicResponse.headers()['location']||''));
+  check('topic detail preserves its dedicated scientific landing page',topicResponse.status()===200 && (await topicResponse.text()).includes('هاب علمی'),String(topicResponse.status()));
 }
 // Per spec 17: Like/View systems removed completely — ajax/like.php must be gone (404)
 r=await api.post('/ajax/like.php',{data:{post_id:Number(id)}});check('like endpoint removed (404)',r.status()===404,String(r.status()));

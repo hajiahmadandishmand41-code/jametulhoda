@@ -409,7 +409,11 @@ function jhd_card_meta_line(array $card): string {
  * $opts: variant (default|featured|compact), col, eager, ratio, media, class
  */
 function jhd_card(array $card, array $opts = []): string {
-    $variant = (string)($opts['variant'] ?? 'default');
+    if (!empty($opts['minimal_title'])) {
+        $link='<a href="'.sanitize((string)($card['url'] ?? '')).'">'.sanitize((string)($card['title'] ?? '')).'</a>';
+        return '<div class="col-12"><article class="jhd-home-minimal">'.$link.'</article></div>';
+    }
+    $variant = !empty($opts['featured']) ? 'featured' : (!empty($opts['row']) ? 'row' : (string)($opts['variant'] ?? 'default'));
     $type    = (string)($card['type'] ?? 'post');
     $href    = (string)($card['url'] ?? '');
     $title   = (string)($card['title'] ?? '');
@@ -522,6 +526,7 @@ function renderPostCard(array $post, array $opts = []): string {
     if (isset($opts['index'])) $card['index'] = (int)$opts['index'];
 
     return jhd_card($card, [
+        'minimal_title' => !empty($opts['minimal_title']),
         'variant'   => $variant,
         'col'       => array_key_exists('col', $opts) ? (string)$opts['col'] : ($variant === 'featured' ? 'col-12' : JHD_CARD_COL),
         'eager'     => !empty($opts['eager']),
@@ -645,6 +650,7 @@ function renderBookCard(array $book, array $opts = []): string {
         'has_pdf'     => !empty($book['file_path']) || $fileType === 'PDF',
     ];
     return jhd_card($card, [
+        'minimal_title' => !empty($opts['minimal_title']), 'row' => !empty($opts['row']), 'featured' => !empty($opts['featured']),
         'variant' => !empty($opts['compact']) ? 'compact' : 'default',
         'col'   => array_key_exists('col', $opts) ? (string)$opts['col'] : JHD_CARD_COL,
         'media' => 'contain',
@@ -679,6 +685,7 @@ function renderLessonCard(array $lesson, array $opts = []): string {
         'has_pdf'     => !empty($lesson['pdf_file']) || !empty($lesson['pdf_path']) || !empty($lesson['attachment']),
     ];
     return jhd_card($card, [
+        'minimal_title' => !empty($opts['minimal_title']), 'row' => !empty($opts['row']), 'featured' => !empty($opts['featured']),
         'variant' => !empty($opts['compact']) ? 'compact' : 'default',
         'col'    => array_key_exists('col', $opts) ? (string)$opts['col'] : 'col-12 col-sm-6 col-lg-3',
         'class'  => trim((string)($opts['class'] ?? '')),
@@ -723,6 +730,7 @@ function renderTopicCard(array $topic, array $opts = []): string {
         'body_extra' => $kids !== '' ? '<div class="jhd-card-kids">' . $kids . '</div>' : '',
     ];
     return jhd_card($card, [
+        'minimal_title' => !empty($opts['minimal_title']), 'row' => !empty($opts['row']), 'featured' => !empty($opts['featured']),
         'variant' => !empty($opts['compact']) ? 'compact' : 'default',
         'col'    => array_key_exists('col', $opts) ? (string)$opts['col'] : 'col-12 col-sm-6 col-lg-3',
         'class'  => 'jhd-card--topic'
@@ -778,6 +786,7 @@ function renderMediaCard(array $media, array $opts = []): string {
         'body_extra'  => (string)($media['body_extra'] ?? ''),
     ];
     return jhd_card($card, [
+        'minimal_title' => !empty($opts['minimal_title']), 'row' => !empty($opts['row']), 'featured' => !empty($opts['featured']),
         'variant' => !empty($opts['compact']) ? 'compact' : 'default',
         'col'   => array_key_exists('col', $opts) ? (string)$opts['col'] : JHD_CARD_COL,
         'eager' => !empty($opts['eager']),

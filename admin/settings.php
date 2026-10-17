@@ -320,7 +320,7 @@ $sets = array_merge($sets, $formValues);
                                 <?php if ($sectionKey !== 'feature'): ?>
                                 <label class="form-label">حالت کارت‌ها
                                   <select class="form-select" name="homepage_layout[<?= $sectionKey ?>][mode]">
-                                    <?php foreach (['auto' => 'خودکار: ردیف فشرده در موبایل، کاشی کوچک در دسکتاپ', 'rows' => 'همیشه ردیف افقی فشرده', 'grid' => 'کاشی بزرگ شبکه‌ای'] as $modeValue => $modeLabel): ?>
+                                    <?php foreach (['auto' => 'خودکار: ردیف فشرده در موبایل، کاشی کوچک در دسکتاپ', 'rows' => 'همیشه ردیف افقی فشرده', 'grid' => 'کاشی بزرگ شبکه‌ای', 'list'=>'فهرست با خلاصه', 'horizontal'=>'کارت افقی', 'featured'=>'مطلب شاخص و کارت‌های کناری', 'slider'=>'ردیف اسلایدی قابل پیمایش', 'minimal'=>'فقط تیتر و پیوند'] as $modeValue => $modeLabel): ?>
                                     <option value="<?= $modeValue ?>" <?= $homepageCfg['layout'][$sectionKey]['mode'] === $modeValue ? 'selected' : '' ?>><?= $modeLabel ?></option>
                                     <?php endforeach; ?>
                                   </select>

@@ -270,7 +270,17 @@ function supabaseCreateSignedUpload(string $key): array {
     if (!supabaseTokenIsCompactJws($token)) {
         return ['ok'=>false,'error'=>'Supabase returned a signed upload token in an unexpected format; the Storage API response could not be used for a resumable upload.'];
     }
+    $signed = supabaseSignedUploadUrl($signed);
+    if ($signed === '') return ['ok'=>false,'error'=>'Unexpected signed upload origin.'];
     return ['ok'=>true,'token'=>$token,'signed_url'=>$signed];
+}
+
+/** Resolve only signed upload URLs from this configured Storage origin. */
+function supabaseSignedUploadUrl(string $signed): string {
+    if (str_starts_with($signed, '/object/')) $signed = supabaseStorageApiBase() . $signed;
+    elseif (str_starts_with($signed, '/storage/v1/')) $signed = rtrim(trim(env_value('SUPABASE_URL')), '/') . $signed;
+    $expected = supabaseStorageApiBase() . '/object/upload/sign/';
+    return str_starts_with($signed, $expected) ? $signed : '';
 }
 
 function supabaseStorageUploadObject(string $key, string $filePath, string $mime): bool {
@@ -288,7 +298,8 @@ function supabaseStorageUploadObject(string $key, string $filePath, string $mime
         error_log('Supabase Storage upload failed with HTTP '.$status.($error!==''?' '.$error:''));
         return false;
     }
-    return !empty(supabaseStorageObjectInfo($safe)['ok']);
+    $info = supabaseStorageObjectInfo($safe);
+    return !empty($info['ok']) && (int)$info['size'] === filesize($filePath);
 }
 
 function supabaseStorageDeleteObject(string $key): bool {
@@ -311,8 +322,15 @@ function supabaseStorageObjectInfo(string $key): array {
     if ($status !== 200) return ['ok'=>false,'error'=>'Supabase object lookup failed (HTTP '.$status.').'.($error!==''?' '.$error:'')];
     $data = json_decode($body, true);
     if (!is_array($data)) return ['ok'=>false,'error'=>'Invalid Supabase object metadata.'];
+    return supabaseNormalizeObjectInfo($data);
+}
+
+/** REST uses snake_case; the JS SDK's info() camelizes it for its callers. */
+function supabaseNormalizeObjectInfo(array $data): array {
     $size = (int)($data['size'] ?? $data['metadata']['size'] ?? 0);
-    return ['ok'=>true,'size'=>$size,'mime'=>(string)($data['mimetype'] ?? $data['metadata']['mimetype'] ?? $data['contentType'] ?? '')];
+    $mime = (string)($data['content_type'] ?? $data['contentType'] ?? $data['mimetype'] ?? $data['metadata']['mimetype'] ?? '');
+    if ($size < 1 || $mime === '') return ['ok'=>false,'error'=>'Incomplete Supabase object metadata.'];
+    return ['ok'=>true,'size'=>$size,'mime'=>$mime];
 }
 
 function supabaseStorageMoveObject(string $sourceKey, string $destinationKey): bool {
@@ -335,12 +353,22 @@ function adoptDirectUpload(string $stagingReference, string $kind, string $folde
     $staging = storageKey($stagingReference);
     if ($staging === '' || !str_starts_with($staging, 'staging/') || !in_array($kind, ['image','audio','video','pdf','word'], true)) return '';
     if (!storageFolderIsAllowed($folder)) return '';
+    $claim = $_SESSION['direct_uploads'][$staging] ?? null;
+    if (!is_array($claim) || ($claim['expires'] ?? 0) < time()
+        || empty($claim['verified']) || ($claim['kind'] ?? '') !== $kind) return '';
+    // Retrying an adoption within the same session reuses the verified object.
+    if (!empty($claim['adopted'])) {
+        $existing = (string)$claim['adopted'];
+        $info = supabaseStorageObjectInfo($existing);
+        return !empty($info['ok']) && (int)$info['size'] === (int)$claim['size'] ? storageUrl($existing) : '';
+    }
     $pending = getDB()->prepare('SELECT 1 FROM pending_uploads WHERE reference=? LIMIT 1');
     $pending->execute([storageUrl($staging)]);
-    if (!$pending->fetchColumn()) return '';
+    $pendingExists = (bool)$pending->fetchColumn(); $pending->closeCursor();
+    if (!$pendingExists) return '';
 
     $info = supabaseStorageObjectInfo($staging);
-    if (empty($info['ok'])) return '';
+    if (empty($info['ok']) || (int)$info['size'] !== (int)$claim['size']) return '';
 
     $ext = strtolower(pathinfo($staging, PATHINFO_EXTENSION));
     $allowed = [
@@ -359,17 +387,26 @@ function adoptDirectUpload(string $stagingReference, string $kind, string $folde
         'pdf'=>['application/pdf'],
         'word'=>['application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
     ];
-    if ($mime === '') $mime = $mimeAllowed[$kind][0];
+    if ($mime === '') return '';
     if (!in_array($mime, $mimeAllowed[$kind], true)) return '';
 
     $finalKey = $folder . '/' . bin2hex(random_bytes(20)) . '.' . $ext;
-    if (!supabaseStorageMoveObject($staging, $finalKey)) return '';
     $url = storageUrl($finalKey);
+    // Durable write-ahead lease survives a content transaction rollback/crash.
+    // Never move bytes first and discover afterwards that journalling failed.
+    try {
+        uploadJournalDB()->prepare("INSERT INTO pending_uploads (reference,not_before) VALUES (?,NOW()+INTERVAL '24 hours') ON CONFLICT DO NOTHING")->execute([$url]);
+    } catch (Throwable) { return ''; }
+    if (!supabaseStorageMoveObject($staging, $finalKey)) return '';
+    $destination = supabaseStorageObjectInfo($finalKey);
+    if (empty($destination['ok']) || (int)$destination['size'] !== (int)$claim['size'] || !storageUrlIsPublic($url)) return '';
     try {
         getDB()->prepare('INSERT INTO stored_files (file_key,url,mime,size) VALUES (?,?,?,?)')->execute([$finalKey,$url,$mime,(int)$info['size']]);
         getDB()->prepare('DELETE FROM pending_uploads WHERE reference=?')->execute([storageUrl($staging)]);
         $scope =& contentUploadScope();
         if ($scope['active']) $scope['completed'][] = $url;
+        if (!$scope['active']) getDB()->prepare('DELETE FROM pending_uploads WHERE reference=?')->execute([$url]);
+        $_SESSION['direct_uploads'][$staging]['adopted'] = $finalKey;
         return $url;
     } catch (Throwable $e) {
         // The final object is now unreferenced; queue it for the ordinary storage GC.

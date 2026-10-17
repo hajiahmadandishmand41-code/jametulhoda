@@ -31,6 +31,8 @@ if (!verifyCsrfToken($_POST[CSRF_TOKEN_NAME] ?? '')) {
     $fail('نشست شما منقضی شده است؛ صفحه را تازه‌سازی کنید.', 403);
 }
 
+if (storageDriver() !== 'supabase') $fail('آپلود مستقیم نیازمند فعال‌بودن درایور Supabase است؛ فایل ارسال نشد.',409);
+
 $action = strtolower(trim((string)($_POST['action'] ?? 'sign')));
 if (!in_array($action, ['sign','finalize'], true)) $fail('عملیات نامعتبر است.');
 
@@ -58,6 +60,15 @@ try {
         if (!in_array($ext, $allowed[$kind], true)) $fail('پسوند فایل برای این نوع رسانه مجاز نیست.');
         if ($mime === '' || mb_strlen($mime) > 120) $fail('نوع MIME نامعتبر است.');
 
+        $mimes=['jpg'=>'image/jpeg','jpeg'=>'image/jpeg','png'=>'image/png','gif'=>'image/gif','webp'=>'image/webp',
+            'mp3'=>'audio/mpeg','ogg'=>'audio/ogg','wav'=>'audio/wav','m4a'=>'audio/mp4',
+            'mp4'=>'video/mp4','webm'=>'video/webm','mov'=>'video/quicktime','mkv'=>'video/x-matroska',
+            'pdf'=>'application/pdf','doc'=>'application/msword','docx'=>'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+        $mime=$mimes[$ext];
+        foreach ($_SESSION['direct_uploads'] ?? [] as $oldKey => $claim) {
+            if (($claim['expires'] ?? 0) < time()) unset($_SESSION['direct_uploads'][$oldKey]);
+        }
+        if(count($_SESSION['direct_uploads'] ?? []) >= 200) $fail('تعداد فایل‌های موقت این نشست زیاد است؛ ابتدا عملیات قبلی را تکمیل کنید.',429);
         $key = 'staging/' . bin2hex(random_bytes(24)) . '.' . $ext;
         $signed = supabaseCreateSignedUpload($key);
         if (empty($signed['ok'])) $fail((string)($signed['error'] ?? 'ایجاد مجوز آپلود مستقیم انجام نشد.'), 502);
@@ -69,7 +80,10 @@ try {
         getDB()->prepare("INSERT INTO pending_uploads (reference, not_before) VALUES (?, NOW()+INTERVAL '24 hours') ON CONFLICT DO NOTHING")
             ->execute([$public]);
 
+        $_SESSION['direct_uploads'][$key] = ['size'=>$size, 'kind'=>$kind, 'mime'=>$mime, 'expires'=>time()+7200, 'verified'=>false];
         echo json_encode([
+            'request_id' => basename($key),
+            'mime' => $mime,
             'ok' => true,
             'path' => $key,
             'token' => (string)$signed['token'],
@@ -89,13 +103,20 @@ try {
     $size = (int)($_POST['size'] ?? 0);
     if ($key === '' || !str_starts_with($key, 'staging/') || $size < 1) $fail('فایل مستقیم معتبر نیست.');
 
+    $claim = $_SESSION['direct_uploads'][$key] ?? null;
+    if (!is_array($claim) || ($claim['expires'] ?? 0) < time() || (int)$claim['size'] !== $size) {
+        $fail('مجوز این فایل متعلق به نشست جاری نیست یا منقضی شده است.', 403);
+    }
     $info = supabaseStorageObjectInfo($key);
     if (empty($info['ok'])) $fail((string)($info['error'] ?? 'فایل مستقیم در Storage پیدا نشد.'), 404);
 
     $remoteSize = (int)($info['size'] ?? 0);
+    if ((string)($info['mime'] ?? '') !== (string)$claim['mime']) $fail('نوع فایل ذخیره‌شده با مجوز آپلود برابر نیست.',422);
     if ($remoteSize !== $size) $fail('حجم فایل ذخیره‌شده با فایل اصلی برابر نیست.', 422);
 
-    echo json_encode(['ok'=>true,'path'=>$key,'size'=>$remoteSize], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (!storageUrlIsPublic(storageUrl($key))) $fail('فایل ذخیره شده، اما دسترسی عمومی آن تأیید نشد؛ نیاز به بررسی مجدد دارد.', 422);
+    $_SESSION['direct_uploads'][$key]['verified'] = true;
+    echo json_encode(['state'=>'uploaded','ok'=>true,'path'=>$key,'size'=>$remoteSize], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
     error_log('direct storage endpoint failed: ' . get_class($e));
     $fail('خطای غیرمنتظره در Storage مستقیم.', 500);
