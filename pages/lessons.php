@@ -8,12 +8,14 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 startPublicSession();
 
+$pageCfg = jhd_internal_page_config('lessons');
 $collectionSlug = trim($_GET['collection'] ?? '');
 $volumeSlug = trim($_GET['volume'] ?? '');
 $search = trim($_GET['q'] ?? '');
 $level = trim($_GET['level'] ?? '');
+$sort = (string)($_GET['sort'] ?? ($pageCfg['sort'] ?? 'newest'));
 $page = max(1, (int)($_GET['page'] ?? 1));
-$limit = 12;
+$limit = (int)($pageCfg['per_page'] ?? 12);
 $offset = ($page - 1) * $limit;
 
 $activeCollection = $collectionSlug ? getLessonCollectionBySlug($collectionSlug) : null;
@@ -61,9 +63,14 @@ if (jhd_db_ready()) {
         $cntStmt = getDB()->prepare("SELECT COUNT(*) FROM lessons l WHERE $whereStr");
         $cntStmt->execute($lessonParams);
         $total = (int)$cntStmt->fetchColumn();
+        $orderBySql = match ($sort) {
+            'popular' => 'l.views DESC, l.id DESC',
+            'oldest'  => 'l.id ASC',
+            default   => 'COALESCE(l.lesson_number, 9999), l.sort_order, l.id',
+        };
         $stmt = getDB()->prepare("SELECT l.*, lc.title AS collection_title FROM lessons l
             LEFT JOIN lesson_collections lc ON lc.id=l.collection_id
-            WHERE $whereStr ORDER BY COALESCE(l.lesson_number, 9999), l.sort_order, l.id LIMIT ? OFFSET ?");
+            WHERE $whereStr ORDER BY $orderBySql LIMIT ? OFFSET ?");
         $stmt->execute(array_merge($lessonParams, [$limit, $offset]));
         $lessons = $stmt->fetchAll();
     } catch (Throwable $e) {
@@ -178,10 +185,14 @@ require_once __DIR__ . '/../includes/header.php';
     <?php else: ?>
     <?php $lessonGroups = []; foreach ($lessons as $ls) { $lessonGroups[(string)($ls['collection_title'] ?? 'دروس متفرقه')][] = $ls; } ?>
     <?php foreach ($lessonGroups as $groupName => $groupLessons): ?>
-    <div class="jhd-lesson-group">
+    <div class="jhd-lesson-group" data-display-mode="<?= sanitize((string)($pageCfg['mode'] ?? 'rows')) ?>">
       <div class="jhd-lesson-group-head"><i class="bi bi-collection"></i> <?= sanitize($groupName) ?></div>
       <div class="jhd-lesson-group-body">
-        <?= jhd_grid_open() ?><?php foreach ($groupLessons as $ls): ?><?= renderLessonRow($ls) ?><?php endforeach; ?><?= jhd_grid_close() ?>
+        <?php if (in_array(($pageCfg['mode'] ?? 'rows'), ['rows', 'auto', 'horizontal'], true)): ?>
+          <?= jhd_grid_open() ?><?php foreach ($groupLessons as $ls): ?><?= renderLessonRow($ls, $pageCfg) ?><?php endforeach; ?><?= jhd_grid_close() ?>
+        <?php else: ?>
+          <?= jhd_render_section_items($groupLessons, 'lesson', (string)($pageCfg['mode'] ?? 'rows'), $pageCfg) ?>
+        <?php endif; ?>
       </div>
     </div>
     <?php endforeach; ?>
@@ -227,10 +238,14 @@ require_once __DIR__ . '/../includes/header.php';
     <?php else: ?>
     <?php $lessonGroups = []; foreach ($lessons as $ls) { $lessonGroups[(string)($ls['collection_title'] ?? 'دروس متفرقه')][] = $ls; } ?>
     <?php foreach ($lessonGroups as $groupName => $groupLessons): ?>
-    <div class="jhd-lesson-group">
+    <div class="jhd-lesson-group" data-display-mode="<?= sanitize((string)($pageCfg['mode'] ?? 'rows')) ?>">
       <div class="jhd-lesson-group-head"><i class="bi bi-collection"></i> <?= sanitize($groupName) ?></div>
       <div class="jhd-lesson-group-body">
-        <?= jhd_grid_open() ?><?php foreach ($groupLessons as $ls): ?><?= renderLessonRow($ls) ?><?php endforeach; ?><?= jhd_grid_close() ?>
+        <?php if (in_array(($pageCfg['mode'] ?? 'rows'), ['rows', 'auto', 'horizontal'], true)): ?>
+          <?= jhd_grid_open() ?><?php foreach ($groupLessons as $ls): ?><?= renderLessonRow($ls, $pageCfg) ?><?php endforeach; ?><?= jhd_grid_close() ?>
+        <?php else: ?>
+          <?= jhd_render_section_items($groupLessons, 'lesson', (string)($pageCfg['mode'] ?? 'rows'), $pageCfg) ?>
+        <?php endif; ?>
       </div>
     </div>
     <?php endforeach; ?>

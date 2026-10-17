@@ -10,6 +10,7 @@ ensureBooksTable();
 
 $db     = getDB();
 $search = trim($_GET['q'] ?? '');
+$topic  = (int)($_GET['topic'] ?? 0);
 $page   = max(1, (int)($_GET['page'] ?? 1));
 $limit  = 20;
 $offset = ($page - 1) * $limit;
@@ -20,6 +21,10 @@ if ($search) {
     $where[]  = "(title ILIKE ? OR description ILIKE ?)";
     $s        = '%' . $search . '%';
     $params   = array_merge($params, [$s, $s]);
+}
+if ($topic > 0) {
+    $where[]  = "EXISTS (SELECT 1 FROM book_topics bt WHERE bt.book_id = books.id AND bt.topic_id = ?)";
+    $params[] = $topic;
 }
 $whereStr = implode(' AND ', $where);
 
@@ -32,7 +37,8 @@ $stmt = $db->prepare("SELECT * FROM books WHERE $whereStr ORDER BY created_at DE
 $stmt->execute(array_merge($params, [$limit, $offset]));
 $books = $stmt->fetchAll();
 
-$urlBase = siteUrl('admin/books/') . '?q=' . urlencode($search) . '&page=';
+$urlBase = siteUrl('admin/books/') . '?q=' . urlencode($search) . '&topic=' . $topic . '&page=';
+$allBookTopics = getTopicFlatTree();
 ?>
 
 <div class="row g-3 mb-4">
@@ -71,15 +77,25 @@ $urlBase = siteUrl('admin/books/') . '?q=' . urlencode($search) . '&page=';
   </div>
   <div class="admin-card-body">
     <form method="get" class="row g-2 align-items-end mb-3">
-      <div class="col-md-6">
+      <div class="col-md-5">
         <input type="search" name="q" class="form-control form-control-sm"
                placeholder="جستجو در نام کتاب یا توضیحات..." value="<?= sanitize($search) ?>">
+      </div>
+      <div class="col-md-4">
+        <select name="topic" class="form-select form-select-sm">
+          <option value="0">همه موضوعات علمی</option>
+          <?php foreach ($allBookTopics as $tp): ?>
+            <option value="<?= (int)$tp['id'] ?>" <?= $topic === (int)$tp['id'] ? 'selected' : '' ?>>
+              <?= str_repeat('— ', (int)($tp['depth'] ?? 0)) . sanitize($tp['name']) ?>
+            </option>
+          <?php endforeach; ?>
+        </select>
       </div>
       <div class="col-auto">
         <button type="submit" class="btn btn-primary btn-sm">
           <i class="bi bi-search ms-1"></i>جستجو
         </button>
-        <?php if ($search): ?>
+        <?php if ($search || $topic > 0): ?>
         <a href="<?= siteUrl('admin/books/') ?>" class="btn btn-outline-secondary btn-sm">
           <i class="bi bi-x"></i>پاک
         </a>
@@ -121,6 +137,13 @@ $urlBase = siteUrl('admin/books/') . '?q=' . urlencode($search) . '&page=';
                 <div>
                   <div class="fw-bold"><?= sanitize(mb_strimwidth($b['title'], 0, 50, '...')) ?></div>
                   <div class="text-muted small">شناسه: <?= $b['id'] ?></div>
+                  <?php $bTopics = getBookTopics((int)$b['id']); if ($bTopics): ?>
+                  <div class="mt-1">
+                    <?php foreach ($bTopics as $bt): ?>
+                      <a href="<?= sanitize(adminUrl('topics', ['edit' => (int)$bt['id']])) ?>" class="badge bg-light text-dark border text-decoration-none me-1"><?= sanitize($bt['name']) ?></a>
+                    <?php endforeach; ?>
+                  </div>
+                  <?php endif; ?>
                 </div>
               </div>
             </td>

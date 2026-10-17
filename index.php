@@ -130,40 +130,86 @@ $shown = false;
 foreach ($layout as $key => $section) {
     if (empty($homeSettings['sections'][$key])) continue;
     $rows = []; $lead = null;
-    $opts = ['limit' => $section['limit'], 'sort' => 'newest'];
+    $secSort = (string)($section['sort'] ?? 'newest');
+    $secSelection = (string)($section['selection'] ?? 'auto');
+    $secTopicId = (int)($section['topic_id'] ?? 0);
+    $secManualIds = (array)($section['manual_ids'] ?? []);
+
+    $opts = ['limit' => $section['limit'], 'sort' => $secSort === 'manual' ? 'newest' : $secSort];
     if ($section['category']) $opts['cat'] = $section['category'];
+    if ($secSelection === 'featured') $opts['featured'] = 1;
     // مطلب‌هایی که بخش‌های بالاتر نشان داده‌اند، در این بخش دیده نمی‌شوند.
     $opts['exclude_ids'] = $shownIds('post');
     $postKeys = ['popular', 'latest', 'news', 'announcements', 'writing', 'research'];
-    switch ($key) {
-        case 'feature': $lead = $leadRow; break;
-        case 'popular':
-            // Popular is always ordered by the actual counter, regardless of editor input.
-            $rows = getPosts(array_replace($opts, ['sort' => 'popular', 'min_views' => $popularMinViews])); break;
-        case 'latest': $rows = getPosts($opts); break;
-        case 'news': $rows = getPosts($opts + ['types' => $announcementsOn ? ['news'] : ['news', 'announcement']]); break;
-        case 'announcements': $rows = getPosts($opts + ['type' => 'announcement']); break;
-        case 'writing': $rows = getPosts($opts + ['type' => 'article']); break;
-        case 'research': $rows = getPosts($opts + ['type' => 'research']); break;
-        case 'books':
-            $rows = array_slice($dropShown(getBooks(['limit' => min(100, $section['limit'] + count($shownIds('book')))]), 'book'), 0, $section['limit']);
-            break;
-        case 'lessons':
-            $rows = array_slice($dropShown(getLessons(['limit' => min(100, $section['limit'] + count($shownIds('lesson')))]), 'lesson'), 0, $section['limit']);
-            break;
-        case 'topics': $rows = jhd_home_topics($section['limit']); break;
-        case 'media':
-            // رسانهٔ متعلق به مطلب یا درسی که قبلاً نشان داده شده، تکرار نمی‌شود.
-            $mediaRows = [];
-            foreach (getLatestMediaItems(min(24, $section['limit'] * 3)) as $mediaRow) {
-                $ownerKey = !empty($mediaRow['post_id']) ? 'post:' . (int)$mediaRow['post_id']
-                    : (!empty($mediaRow['lesson_id']) ? 'lesson:' . (int)$mediaRow['lesson_id'] : '');
-                if ($ownerKey !== '' && isset($shownKeys[$ownerKey])) continue;
-                $mediaRows[] = $mediaRow;
-                if (count($mediaRows) >= $section['limit']) break;
-            }
-            $rows = $mediaRows;
-            break;
+
+    if ($secSelection === 'manual' && !empty($secManualIds)) {
+        if (in_array($key, $postKeys, true)) {
+            $mRows = getPostsByIds($secManualIds);
+            $rows = array_slice($dropShown($mRows, 'post') ?: $mRows, 0, $section['limit']);
+        } elseif ($key === 'books') {
+            $mRows = getBooksByIds($secManualIds);
+            $rows = array_slice($dropShown($mRows, 'book') ?: $mRows, 0, $section['limit']);
+        } elseif ($key === 'lessons') {
+            $mRows = getLessonsByIds($secManualIds);
+            $rows = array_slice($dropShown($mRows, 'lesson') ?: $mRows, 0, $section['limit']);
+        } elseif ($key === 'topics') {
+            $rows = array_slice(getTopicsByIds($secManualIds), 0, $section['limit']);
+        }
+    } elseif ($secTopicId > 0 && in_array($key, array_merge($postKeys, ['books', 'lessons', 'media']), true)) {
+        if (in_array($key, $postKeys, true)) {
+            $topicPostType = match ($key) {
+                'news'          => 'news',
+                'announcements' => 'announcement',
+                'writing'       => 'article',
+                'research'      => 'research',
+                default         => '',
+            };
+            $tRows = getPostsByTopic($secTopicId, [
+                'limit' => $section['limit'] * 3,
+                'type'  => $topicPostType ?: null,
+                'sort'  => $opts['sort'],
+            ]);
+            $rows = array_slice($dropShown($tRows, 'post') ?: $tRows, 0, $section['limit']);
+        } elseif ($key === 'books') {
+            $tRows = getBooksByTopic($secTopicId, ['limit' => $section['limit'] * 3, 'sort' => $opts['sort']]);
+            $rows = array_slice($dropShown($tRows, 'book') ?: $tRows, 0, $section['limit']);
+        } elseif ($key === 'lessons') {
+            $tRows = getLessonsByTopic($secTopicId, ['limit' => $section['limit'] * 3, 'sort' => $opts['sort']]);
+            $rows = array_slice($dropShown($tRows, 'lesson') ?: $tRows, 0, $section['limit']);
+        } elseif ($key === 'media') {
+            $rows = getMediaByTopic($secTopicId, ['limit' => $section['limit'], 'sort' => $opts['sort']]);
+        }
+    } else {
+        switch ($key) {
+            case 'feature': $lead = $leadRow; break;
+            case 'popular':
+                // Popular is ordered by the actual counter by default unless overridden.
+                $rows = getPosts(array_replace($opts, ['sort' => 'popular', 'min_views' => $popularMinViews])); break;
+            case 'latest': $rows = getPosts($opts); break;
+            case 'news': $rows = getPosts($opts + ['types' => $announcementsOn ? ['news'] : ['news', 'announcement']]); break;
+            case 'announcements': $rows = getPosts($opts + ['type' => 'announcement']); break;
+            case 'writing': $rows = getPosts($opts + ['type' => 'article']); break;
+            case 'research': $rows = getPosts($opts + ['type' => 'research']); break;
+            case 'books':
+                $rows = array_slice($dropShown(getBooks(['limit' => min(100, $section['limit'] + count($shownIds('book'))), 'sort' => $opts['sort']]), 'book'), 0, $section['limit']);
+                break;
+            case 'lessons':
+                $rows = array_slice($dropShown(getLessons(['limit' => min(100, $section['limit'] + count($shownIds('lesson'))), 'sort' => $opts['sort']]), 'lesson'), 0, $section['limit']);
+                break;
+            case 'topics': $rows = jhd_home_topics($section['limit']); break;
+            case 'media':
+                // رسانهٔ متعلق به مطلب یا درسی که قبلاً نشان داده شده، تکرار نمی‌شود.
+                $mediaRows = [];
+                foreach (getLatestMediaItems(min(24, $section['limit'] * 3)) as $mediaRow) {
+                    $ownerKey = !empty($mediaRow['post_id']) ? 'post:' . (int)$mediaRow['post_id']
+                        : (!empty($mediaRow['lesson_id']) ? 'lesson:' . (int)$mediaRow['lesson_id'] : '');
+                    if ($ownerKey !== '' && isset($shownKeys[$ownerKey])) continue;
+                    $mediaRows[] = $mediaRow;
+                    if (count($mediaRows) >= $section['limit']) break;
+                }
+                $rows = $mediaRows;
+                break;
+        }
     }
     echo jhd_render_home_banners($key);
     if (!$lead && !$rows) continue;
@@ -176,49 +222,37 @@ foreach ($layout as $key => $section) {
     } elseif ($key === 'lessons') {
         $markShown($rows, 'lesson');
     }
-    /*
-     * حالت چیدمان هر بخش از پنل مدیریت می‌آید:
-     *   auto → ردیف فشردهٔ افقی در موبایل، کاشی کوچک دوستونی از تبلت به بالا؛
-     *   rows → همیشه ردیف افقی تمام‌عرض (کم‌ارتفاع‌ترین حالت)؛
-     *   grid → کارت بزرگ‌تر شبکه‌ای (چیدمان پیشین).
-     * در همهٔ حالت‌ها تصویر کوچک یک طرف و عنوان طرف دیگر است.
-     */
     $mode = (string)($section['mode'] ?? 'auto');
-    $cardOpts = [];
-    if (in_array($mode,['auto','rows','minimal','slider'],true)) $cardOpts['compact'] = true;
-    if ($mode === 'auto') $cardOpts['col'] = 'col-12 col-md-6';
-    elseif (in_array($mode,['rows','list','horizontal','minimal'],true)) $cardOpts['col'] = 'col-12';
-    if ($mode==='horizontal') $cardOpts['row']=true;
-    if ($mode==='minimal') $cardOpts['minimal_title']=true;
-    if ($mode==='slider') $cardOpts['col']='jhd-home-slide';
+    $mobileMode = (string)($section['mobile_mode'] ?? 'inherit');
+    $sectionKind = match ($key) {
+        'books'   => 'book',
+        'lessons' => 'lesson',
+        'topics'  => 'topic',
+        'media'   => 'media',
+        default   => 'post',
+    };
+    $archive = ['news' => 'news', 'announcements' => 'announcements', 'writing' => 'articles', 'research' => 'articles', 'books' => 'books', 'lessons' => 'lessons', 'media' => 'media'][$key] ?? null;
+    $defaultMoreUrl = $archive ? url($archive, $key === 'research' ? ['type' => 'research'] : []) : '';
+    $customMoreUrl = trim((string)($section['more_url'] ?? ''));
+    $moreUrl = $customMoreUrl !== '' ? (str_starts_with($customMoreUrl, 'http') || str_starts_with($customMoreUrl, '/') ? $customMoreUrl : url($customMoreUrl)) : $defaultMoreUrl;
+    $defaultMoreLabel = $key === 'news' ? 'همهٔ اخبار' : ($key === 'announcements' ? 'همهٔ اطلاعیه‌ها' : 'مشاهدهٔ همه');
+    $customMoreLabel = trim((string)($section['more_label'] ?? ''));
+    $moreLabel = ($customMoreLabel !== '' && $customMoreLabel !== 'مشاهده همه') ? $customMoreLabel : $defaultMoreLabel;
     ?>
-    <section class="jhd-section" data-home-section="<?= sanitize($key) ?>" data-display-mode="<?= sanitize($mode) ?>" aria-labelledby="home-<?= sanitize($key) ?>-heading">
+    <section class="jhd-section" data-home-section="<?= sanitize($key) ?>" data-display-mode="<?= sanitize($mode) ?>"<?= $mobileMode !== 'inherit' ? ' data-mobile-mode="' . sanitize($mobileMode) . '"' : '' ?> aria-labelledby="home-<?= sanitize($key) ?>-heading">
       <div class="container">
-      <?php /* فهرست «همهٔ موضوعات» از پیش به آرشیو مقالات هدایت می‌شود؛ پس
-             برای بخش موضوعات پیوند «مشاهدهٔ همه» نمی‌گذاریم — هر کاشی مستقیماً
-             به هاب همان موضوع می‌رود. */ ?>
-      <?php $archive = ['news' => 'news', 'announcements' => 'announcements', 'writing' => 'articles', 'research' => 'articles', 'books' => 'books', 'lessons' => 'lessons', 'media' => 'media'][$key] ?? null; ?>
       <?= jhd_section_head(['title' => $section['title'], 'title_id' => 'home-' . $key . '-heading',
-          'url' => $archive ? url($archive, $key === 'research' ? ['type' => 'research'] : []) : '',
-          'link' => $key === 'news' ? 'همهٔ اخبار' : ($key === 'announcements' ? 'همهٔ اطلاعیه‌ها' : 'مشاهدهٔ همه')]) ?>
+          'url' => $moreUrl,
+          'link' => $moreLabel]) ?>
       <?php if ($lead): ?>
-        <?= jhd_lead_story($lead) ?>
+        <?= jhd_lead_story($lead, [
+            'show_media'   => $section['show_media'] ?? true,
+            'show_excerpt' => $section['show_excerpt'] ?? true,
+            'show_date'    => $section['show_date'] ?? true,
+            'show_meta'    => $section['show_meta'] ?? true,
+        ]) ?>
       <?php else: ?>
-        <div class="row <?= $mode === 'slider' ? 'jhd-home-slider' : ($mode === 'grid' ? 'g-3' : 'g-2') ?>" <?= $mode==='slider' ? 'tabindex="0" aria-label="فهرست قابل پیمایش"' : '' ?>>
-        <?php foreach ($rows as $rowIndex => $row) {
-            $cardOpts['featured'] = $mode==='featured' && $rowIndex===0;
-            if($mode==='featured') $cardOpts['col']=$rowIndex===0 ? 'col-12 col-lg-6' : 'col-12 col-md-6 col-lg-3';
-            if ($key === 'books') echo renderBookCard($row, $cardOpts);
-            elseif ($key === 'lessons') echo renderLessonCard($row, $cardOpts);
-            elseif ($key === 'topics') echo renderTopicCard($row, $cardOpts + ['minimal' => true]);
-            elseif ($key === 'media') echo renderMediaCard([
-                'kind' => $row['media_kind'], 'id' => $row['media_id'], 'title' => $row['title'],
-                'slug' => $row['slug'], 'target' => $row['target'], 'post_type' => $row['post_type'],
-                'published_at' => $row['published_at'], 'thumbnail' => $row['featured_image'],
-            ], $cardOpts);
-            else echo renderPostCard($row, $cardOpts);
-        } ?>
-        </div>
+        <?= jhd_render_section_items($rows, $sectionKind, $mode, $section) ?>
       <?php endif; ?>
       </div>
     </section>

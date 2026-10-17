@@ -133,11 +133,19 @@ function generateCsrfToken(): string {
     return $_SESSION[CSRF_TOKEN_NAME];
 }
 
+function csrfToken(): string {
+    return generateCsrfToken();
+}
+
 function verifyCsrfToken(mixed $token): bool {
     return is_string($token)
         && isset($_SESSION[CSRF_TOKEN_NAME])
         && is_string($_SESSION[CSRF_TOKEN_NAME])
         && hash_equals($_SESSION[CSRF_TOKEN_NAME], $token);
+}
+
+function verifyCsrf(mixed $token): bool {
+    return verifyCsrfToken($token);
 }
 
 /** Read a scalar string field without warnings or TypeErrors for array input. */
@@ -1538,9 +1546,15 @@ function getTopicBreadcrumbs(int $topicId): array {
 function getTopicsForPost(int $postId): array {
     try{
         $db=getDB();
-        $stmt=$db->prepare("SELECT t.* FROM topics t JOIN post_topics pt ON pt.topic_id=t.id WHERE pt.post_id=? ORDER BY t.sort_order, t.id");
+        $stmt=$db->prepare("SELECT t.*, pt.is_primary FROM topics t JOIN post_topics pt ON pt.topic_id=t.id WHERE pt.post_id=? ORDER BY pt.is_primary DESC, t.sort_order, t.id");
         $stmt->execute([$postId]); return $stmt->fetchAll();
-    }catch(PDOException $e){ return []; }
+    }catch(PDOException $e){
+        try {
+            $db=getDB();
+            $stmt=$db->prepare("SELECT t.* FROM topics t JOIN post_topics pt ON pt.topic_id=t.id WHERE pt.post_id=? ORDER BY t.sort_order, t.id");
+            $stmt->execute([$postId]); return $stmt->fetchAll();
+        } catch (PDOException) { return []; }
+    }
 }
 function getTopicsForLesson(int $lessonId): array {
     try{
@@ -1557,12 +1571,50 @@ function getTopicsForBook(int $bookId): array {
     }catch(PDOException $e){ return []; }
 }
 
+function getPostTopics(int $postId): array { return getTopicsForPost($postId); }
+function getLessonTopics(int $lessonId): array { return getTopicsForLesson($lessonId); }
+function getBookTopics(int $bookId): array { return getTopicsForBook($bookId); }
+
+function getTopicsFor(string $entityType, int $entityId): array {
+    if ($entityId < 1) return [];
+    return match ($entityType) {
+        'post'   => getTopicsForPost($entityId),
+        'lesson' => getTopicsForLesson($entityId),
+        'book'   => getTopicsForBook($entityId),
+        default  => [],
+    };
+}
+
+function jhd_parse_id_list(mixed $raw): array {
+    $items = is_array($raw) ? $raw : [$raw];
+    $ids = [];
+    foreach ($items as $item) {
+        if (is_array($item)) {
+            foreach ($item as $sub) {
+                foreach (preg_split('/[\s,،]+/', (string)$sub) ?: [] as $part) {
+                    $v = (int)$part;
+                    if ($v > 0) $ids[] = $v;
+                }
+            }
+        } else {
+            foreach (preg_split('/[\s,،]+/', (string)$item) ?: [] as $part) {
+                $v = (int)$part;
+                if ($v > 0) $ids[] = $v;
+            }
+        }
+    }
+    return array_values(array_unique($ids));
+}
+
 function setPostTopics(int $postId, array $topicIds, ?int $primaryId = null): void {
     $db=getDB();
     $db->prepare("DELETE FROM post_topics WHERE post_id=?")->execute([$postId]);
-    $ids = array_values(array_unique(array_filter(array_map('intval', $topicIds))));
-    if ($primaryId && $primaryId > 0 && !in_array($primaryId, $ids, true)) {
-        array_unshift($ids, $primaryId);
+    $ids = validatedTopicIds(jhd_parse_id_list($topicIds));
+    if ($primaryId && $primaryId > 0) {
+        $validPrimary = validatedTopicIds([$primaryId]);
+        if ($validPrimary && !in_array($validPrimary[0], $ids, true)) {
+            array_unshift($ids, $validPrimary[0]);
+        }
     }
     $first = true;
     foreach ($ids as $tid) {
@@ -1578,15 +1630,26 @@ function setPostTopics(int $postId, array $topicIds, ?int $primaryId = null): vo
 function setLessonTopics(int $lessonId, array $topicIds): void {
     $db=getDB();
     $db->prepare("DELETE FROM lesson_topics WHERE lesson_id=?")->execute([$lessonId]);
-    foreach(array_unique(array_filter(array_map('intval',$topicIds))) as $tid){
+    foreach(validatedTopicIds(jhd_parse_id_list($topicIds)) as $tid){
         $db->prepare("INSERT INTO lesson_topics (lesson_id, topic_id) VALUES (?,?) ON CONFLICT DO NOTHING")->execute([$lessonId,$tid]);
     }
 }
 function setBookTopics(int $bookId, array $topicIds): void {
     $db=getDB();
     $db->prepare("DELETE FROM book_topics WHERE book_id=?")->execute([$bookId]);
-    foreach(array_unique(array_filter(array_map('intval',$topicIds))) as $tid){
+    foreach(validatedTopicIds(jhd_parse_id_list($topicIds)) as $tid){
         $db->prepare("INSERT INTO book_topics (book_id, topic_id) VALUES (?,?) ON CONFLICT DO NOTHING")->execute([$bookId,$tid]);
+    }
+}
+
+function setTopicsFor(string $entityType, int $entityId, array $topicIds, ?int $primaryId = null): void {
+    if ($entityId < 1) return;
+    if ($entityType === 'post') {
+        setPostTopics($entityId, $topicIds, $primaryId);
+    } elseif ($entityType === 'lesson') {
+        setLessonTopics($entityId, $topicIds);
+    } elseif ($entityType === 'book') {
+        setBookTopics($entityId, $topicIds);
     }
 }
 
@@ -1651,7 +1714,8 @@ function getPostsByTopic(int $topicId, array $opts = []): array {
     $type = $opts['type'] ?? null;
     $limit = max(1, min(100, (int)($opts['limit'] ?? 6)));
     $offset = max(0, (int)($opts['offset'] ?? 0));
-    $sort = ($opts['sort'] ?? 'newest') === 'oldest' ? 'ASC' : 'DESC';
+    $sortKey = (string)($opts['sort'] ?? 'newest');
+    $manualIds = array_values(array_filter(array_map('intval', (array)($opts['manual_ids'] ?? [])), static fn(int $id): bool => $id > 0));
     try {
         $params = [];
         $where = ["p.status='published'", topicScopeWhere('pt', 'topic_id', $scope, $params)];
@@ -1667,9 +1731,24 @@ function getPostsByTopic(int $topicId, array $opts = []): array {
             $where[] = "p.post_type NOT IN ($marks)";
             foreach ($excludeTypes as $excludeType) $params[] = $excludeType;
         }
-        $stmt = getDB()->prepare("SELECT DISTINCT p.*, c.name AS cat_name FROM posts p JOIN post_topics pt ON pt.post_id=p.id LEFT JOIN categories c ON c.id=p.category_id WHERE " . implode(' AND ', $where) . " ORDER BY p.published_at $sort, p.id $sort LIMIT ? OFFSET ?");
+        $orderBy = match ($sortKey) {
+            'oldest'   => 'COALESCE(p.published_at, p.created_at) ASC, p.id ASC',
+            'popular'  => 'p.view_count DESC, COALESCE(p.published_at, p.created_at) DESC, p.id DESC',
+            'featured' => 'p.is_featured DESC, COALESCE(p.published_at, p.created_at) DESC, p.id DESC',
+            default    => 'COALESCE(p.published_at, p.created_at) DESC, p.id DESC',
+        };
+        $stmt = getDB()->prepare("SELECT DISTINCT p.*, c.name AS cat_name FROM posts p JOIN post_topics pt ON pt.post_id=p.id LEFT JOIN categories c ON c.id=p.category_id WHERE " . implode(' AND ', $where) . " ORDER BY $orderBy LIMIT ? OFFSET ?");
         $stmt->execute(array_merge($params, [$limit, $offset]));
-        return $stmt->fetchAll();
+        $rows = $stmt->fetchAll();
+        if ($sortKey === 'manual' && $manualIds && $offset === 0) {
+            $rank = array_flip($manualIds);
+            usort($rows, static function (array $a, array $b) use ($rank): int {
+                $ra = $rank[(int)($a['id'] ?? 0)] ?? 999999;
+                $rb = $rank[(int)($b['id'] ?? 0)] ?? 999999;
+                return $ra <=> $rb;
+            });
+        }
+        return $rows;
     } catch (PDOException $e) { return []; }
 }
 function countPostsByTopic(int $topicId, ?string $type = null, ?array $scopeIds = null): int {
@@ -1683,15 +1762,26 @@ function countPostsByTopic(int $topicId, ?string $type = null, ?array $scopeIds 
         return (int)$stmt->fetchColumn();
     } catch (PDOException $e) { return 0; }
 }
-function getLessonsByTopic(int $topicId, int $limit=6, int $offset=0, string $sort='newest', ?array $scopeIds = null): array {
+function getLessonsByTopic(int $topicId, int $limit=6, int $offset=0, string $sort='newest', ?array $scopeIds = null, array $manualIds = []): array {
     try {
         $params = [];
         $scope = $scopeIds ?? getTopicScopeIds($topicId);
         $where = ["l.status='published'", topicScopeWhere('lt', 'topic_id', $scope, $params)];
-        $order = $sort === 'oldest' ? 'ASC' : 'DESC';
-        $stmt = getDB()->prepare('SELECT DISTINCT l.* FROM lessons l JOIN lesson_topics lt ON lt.lesson_id=l.id WHERE ' . implode(' AND ', $where) . " ORDER BY l.created_at $order, l.id $order LIMIT ? OFFSET ?");
+        $orderBy = match ($sort) {
+            'oldest'       => 'l.created_at ASC, l.id ASC',
+            'featured'     => 'l.is_featured DESC, l.sort_order ASC, l.id DESC',
+            'lesson_order' => 'l.sort_order ASC, l.lesson_number ASC, l.id ASC',
+            default        => 'l.created_at DESC, l.id DESC',
+        };
+        $stmt = getDB()->prepare('SELECT DISTINCT l.* FROM lessons l JOIN lesson_topics lt ON lt.lesson_id=l.id WHERE ' . implode(' AND ', $where) . " ORDER BY $orderBy LIMIT ? OFFSET ?");
         $stmt->execute(array_merge($params, [max(1, min(100, $limit)), max(0, $offset)]));
-        return $stmt->fetchAll();
+        $rows = $stmt->fetchAll();
+        $cleanManual = array_values(array_filter(array_map('intval', $manualIds), static fn(int $id): bool => $id > 0));
+        if ($sort === 'manual' && $cleanManual && $offset === 0) {
+            $rank = array_flip($cleanManual);
+            usort($rows, static fn(array $a, array $b): int => ($rank[(int)($a['id'] ?? 0)] ?? 999999) <=> ($rank[(int)($b['id'] ?? 0)] ?? 999999));
+        }
+        return $rows;
     } catch (PDOException $e) { return []; }
 }
 function countLessonsByTopic(int $topicId, ?array $scopeIds = null): int {
@@ -1702,14 +1792,25 @@ function countLessonsByTopic(int $topicId, ?array $scopeIds = null): int {
         $stmt->execute($params); return (int)$stmt->fetchColumn();
     } catch (PDOException $e) { return 0; }
 }
-function getBooksByTopic(int $topicId, int $limit=6, int $offset=0, string $sort='newest', ?array $scopeIds = null): array {
+function getBooksByTopic(int $topicId, int $limit=6, int $offset=0, string $sort='newest', ?array $scopeIds = null, array $manualIds = []): array {
     try {
         $params = [];
         $scope = $scopeIds ?? getTopicScopeIds($topicId);
-        $order = $sort === 'oldest' ? 'ASC' : 'DESC';
-        $stmt = getDB()->prepare("SELECT DISTINCT b.* FROM books b JOIN book_topics bt ON bt.book_id=b.id WHERE b.status='published' AND " . topicScopeWhere('bt', 'topic_id', $scope, $params) . " ORDER BY b.created_at $order, b.id $order LIMIT ? OFFSET ?");
+        $orderBy = match ($sort) {
+            'oldest'   => 'b.created_at ASC, b.id ASC',
+            'featured' => 'b.is_featured DESC, b.sort_order ASC, b.id DESC',
+            'title'    => 'b.title ASC, b.id DESC',
+            default    => 'b.created_at DESC, b.id DESC',
+        };
+        $stmt = getDB()->prepare("SELECT DISTINCT b.* FROM books b JOIN book_topics bt ON bt.book_id=b.id WHERE b.status='published' AND " . topicScopeWhere('bt', 'topic_id', $scope, $params) . " ORDER BY $orderBy LIMIT ? OFFSET ?");
         $stmt->execute(array_merge($params, [max(1, min(100, $limit)), max(0, $offset)]));
-        return $stmt->fetchAll();
+        $rows = $stmt->fetchAll();
+        $cleanManual = array_values(array_filter(array_map('intval', $manualIds), static fn(int $id): bool => $id > 0));
+        if ($sort === 'manual' && $cleanManual && $offset === 0) {
+            $rank = array_flip($cleanManual);
+            usort($rows, static fn(array $a, array $b): int => ($rank[(int)($a['id'] ?? 0)] ?? 999999) <=> ($rank[(int)($b['id'] ?? 0)] ?? 999999));
+        }
+        return $rows;
     } catch (PDOException $e) { return []; }
 }
 function countBooksByTopic(int $topicId, ?array $scopeIds = null): int {
@@ -1719,6 +1820,43 @@ function countBooksByTopic(int $topicId, ?array $scopeIds = null): int {
         $stmt = getDB()->prepare("SELECT COUNT(DISTINCT b.id) FROM books b JOIN book_topics bt ON bt.book_id=b.id WHERE b.status='published' AND " . topicScopeWhere('bt', 'topic_id', $scope, $params));
         $stmt->execute($params); return (int)$stmt->fetchColumn();
     } catch (PDOException $e) { return 0; }
+}
+
+/**
+ * رسانه‌های صوتی و تصویری متصل به مطالب یا درس‌های یک موضوع علمی (فقط منتشرشده).
+ */
+function getMediaByTopic(int $topicId, int $limit = 6, string $sort = 'newest', ?array $scopeIds = null): array {
+    try {
+        $scope = $scopeIds ?? getTopicScopeIds($topicId);
+        if (!$scope) return [];
+        $marks = implode(',', array_fill(0, count($scope), '?'));
+        $order = $sort === 'oldest' ? 'ASC' : 'DESC';
+        $lim = max(1, min(48, $limit));
+        $sql = "SELECT DISTINCT m.id AS media_id, m.id, m.file_path AS path, m.file_path, m.kind AS media_kind, m.kind,
+                       COALESCE(NULLIF(m.title,''), p.title, l.title, 'رسانه') AS title,
+                       COALESCE(p.slug, l.slug, '') AS slug,
+                       COALESCE(p.post_type, '') AS post_type,
+                       p.featured_image AS featured_image, p.featured_image AS thumbnail,
+                       COALESCE(p.published_at, l.created_at, m.created_at) AS published_at,
+                       CASE WHEN p.id IS NOT NULL THEN 'post' WHEN l.id IS NOT NULL THEN 'lesson' ELSE 'media' END AS target,
+                       p.id AS post_id, l.id AS lesson_id
+                FROM media_files m
+                LEFT JOIN posts p   ON p.id = m.ref_id AND m.ref_type = 'post'   AND p.status = 'published'
+                LEFT JOIN lessons l ON l.id = m.ref_id AND m.ref_type = 'lesson' AND l.status = 'published'
+                WHERE m.kind IN ('audio','video')
+                  AND (
+                    (p.id IS NOT NULL AND EXISTS (SELECT 1 FROM post_topics pt WHERE pt.post_id = p.id AND pt.topic_id IN ($marks)))
+                    OR
+                    (l.id IS NOT NULL AND EXISTS (SELECT 1 FROM lesson_topics lt WHERE lt.lesson_id = l.id AND lt.topic_id IN ($marks)))
+                  )
+                ORDER BY published_at $order, m.id $order
+                LIMIT $lim";
+        $stmt = getDB()->prepare($sql);
+        $stmt->execute(array_merge($scope, $scope));
+        return $stmt->fetchAll();
+    } catch (Throwable) {
+        return [];
+    }
 }
 
 // ─── Lessons with collections ─────────────────────────────────────────────────
@@ -1737,6 +1875,10 @@ function getLessons(array $opts = []): array {
             $where[] = 'l.volume_id = ?';
             $params[] = (int)$opts['volume_id'];
         }
+        if (!empty($opts['topic'])) {
+            $where[] = 'EXISTS (SELECT 1 FROM lesson_topics lt WHERE lt.lesson_id = l.id AND lt.topic_id = ?)';
+            $params[] = (int)$opts['topic'];
+        }
         if (!empty($opts['featured'])) {
             $where[] = 'l.is_featured = 1';
         }
@@ -1749,13 +1891,20 @@ function getLessons(array $opts = []): array {
         $limit = max(1, min(100, (int)($opts['limit'] ?? 12)));
         $offset = max(0, (int)($opts['offset'] ?? 0));
         $whereStr = implode(' AND ', $where);
+        $sort = (string)($opts['sort'] ?? '');
+        $orderBy = match ($sort) {
+            'newest'       => 'l.created_at DESC, l.id DESC',
+            'oldest'       => 'l.created_at ASC, l.id ASC',
+            'lesson_order' => 'l.sort_order ASC, l.lesson_number ASC, l.id ASC',
+            default        => 'l.is_featured DESC, l.created_at DESC, l.id DESC',
+        };
         $stmt = $db->prepare(
             "SELECT l.*, lc.title AS collection_title, lc.slug AS collection_slug, lv.title AS volume_title, lv.slug AS volume_slug
              FROM lessons l
              LEFT JOIN lesson_collections lc ON lc.id = l.collection_id
              LEFT JOIN lesson_volumes lv ON lv.id = l.volume_id
              WHERE $whereStr
-             ORDER BY l.is_featured DESC, l.created_at DESC, l.id DESC
+             ORDER BY $orderBy
              LIMIT ? OFFSET ?"
         );
         $stmt->execute(array_merge($params, [$limit, $offset]));
@@ -1928,12 +2077,41 @@ function clearSettingCache(): void {
 }
 
 /**
+ * ذخیره یا به‌روزرسانی یک کلید در جدول settings با پاک‌سازی کش درخواست جاری.
+ */
+function setSetting(string $key, string $value): void {
+    $key = trim($key);
+    if ($key === '') return;
+    $db = jhd_db();
+    if ($db === null) return;
+    $stmt = $db->prepare('INSERT INTO settings (setting_key, value) VALUES (?, ?) ON CONFLICT (setting_key) DO UPDATE SET value = EXCLUDED.value');
+    $stmt->execute([$key, $value]);
+    clearSettingCache();
+}
+
+/**
  * تنظیمات نمایش صفحهٔ اصلی — ذخیره‌شده در settings تا بدون migration جدید
  * در MySQL و PostgreSQL هر دو قابل مدیریت باشد.
  */
 function jhd_homepage_settings(): array {
     $cfg = json_decode((string)getSetting('homepage_config', ''), true);
     return jhd_normalize_home_config(is_array($cfg) ? $cfg : []);
+}
+
+/** فهرست حالت‌های نمایش پشتیبانی‌شده برای بخش‌های صفحهٔ اصلی و صفحات داخلی. */
+function jhd_display_mode_options(): array {
+    return [
+        'auto'       => 'خودکار (ردیف فشرده دو ستونی)',
+        'rows'       => 'ردیف‌های فشرده',
+        'featured'   => 'نمایش شاخص (آیتم بزرگ + آیتم‌های فرعی)',
+        'list'       => 'نمایش لیستی (تک‌ستونی)',
+        'grid'       => 'نمایش شبکه‌ای / کارتی (۳ ستونه)',
+        'horizontal' => 'نمایش افقی (رسانه در کنار متن)',
+        'video'      => 'نمایش ویدیویی (قاب رسانه و پخش)',
+        'slider'     => 'نمایش اسلایدر / کاروسل افقی',
+        'minimal'    => 'نمایش فشرده (فقط عنوان و لینک)',
+        'combined'   => 'نمایش ترکیبی (شاخص در کنار فهرست فرعی)',
+    ];
 }
 
 /** Validated, backward-compatible JSON in the existing persistent settings table. */
@@ -1943,6 +2121,10 @@ function jhd_normalize_home_config(array $cfg): array {
     $out = $cfg; // retain unrecognized historical keys, never destroy old configuration
     $out['sections'] = $stored;
     $out['layout'] = [];
+    $allowedModes = array_keys(jhd_display_mode_options());
+    $allowedSelectionModes = ['auto', 'manual', 'topic', 'category', 'featured'];
+    $allowedSorts = ['newest', 'oldest', 'popular', 'featured', 'manual'];
+    $allowedMobileModes = ['same', 'compact', 'list', 'slider', 'minimal'];
     foreach ($labels as $key => $label) {
         $out['sections'][$key] = array_key_exists($key, $stored) ? (bool)$stored[$key] : true;
         if (!array_key_exists($key, $stored)) {
@@ -1954,14 +2136,42 @@ function jhd_normalize_home_config(array $cfg): array {
         }
         $item = is_array($cfg['layout'][$key] ?? null) ? $cfg['layout'][$key] : [];
         $itemMode = is_string($item['mode'] ?? null) ? $item['mode'] : 'auto';
+        $selectionMode = is_string($item['selection'] ?? null) ? $item['selection'] : (is_string($item['selection_mode'] ?? null) ? $item['selection_mode'] : 'auto');
+        $sortMode = is_string($item['sort'] ?? null) ? $item['sort'] : ($key === 'popular' ? 'popular' : 'newest');
+        $mobileMode = is_string($item['mobile_mode'] ?? null) ? $item['mobile_mode'] : 'same';
+        $rawManualIds = $item['manual_ids'] ?? [];
+        if (is_array($rawManualIds)) {
+            $rawManualIds = implode(',', $rawManualIds);
+        }
+        $cleanManualIdsArr = array_values(array_unique(array_filter(
+            array_map('intval', preg_split('/[\s,،]+/', (string)$rawManualIds) ?: []),
+            static fn(int $v): bool => $v > 0
+        )));
+        $moreUrl = trim(is_string($item['more_url'] ?? null) ? $item['more_url'] : '');
+        if ($moreUrl !== '' && !str_starts_with($moreUrl, '/') && safeExternalUrl($moreUrl) === '') {
+            $moreUrl = '';
+        }
+        $moreLabel = mb_substr(trim(is_string($item['more_label'] ?? null) ? $item['more_label'] : (is_string($item['more_text'] ?? null) ? $item['more_text'] : 'مشاهده همه')), 0, 60) ?: 'مشاهده همه';
+        $validSel = in_array($selectionMode, $allowedSelectionModes, true) ? $selectionMode : 'auto';
         $out['layout'][$key] = [
-            'title' => mb_substr(trim(is_string($item['title'] ?? null) ? $item['title'] : $label), 0, 100) ?: $label,
-            'order' => max(0, min(99, (int)($item['order'] ?? array_search($key, array_keys($labels))))),
-            'limit' => max(1, min(in_array($key, ['popular', 'latest'], true) ? 3 : 12, (int)($item['limit'] ?? 3))),
-            'category' => max(0, (int)($item['category'] ?? 0)),
-            // «خودکار»: در موبایل ردیف فشرده و در صفحه‌های بزرگ‌تر کاشی کوچک؛
-            // «ردیف‌ها»: همیشه ردیف افقی فشرده؛ «کاشی‌ها»: کارت بزرگ‌تر شبکه‌ای.
-            'mode' => in_array($itemMode, ['auto', 'rows', 'grid', 'list', 'horizontal', 'featured', 'slider', 'minimal'], true) ? $itemMode : 'auto',
+            'title'          => mb_substr(trim(is_string($item['title'] ?? null) ? $item['title'] : $label), 0, 100) ?: $label,
+            'order'          => max(0, min(99, (int)($item['order'] ?? array_search($key, array_keys($labels))))),
+            'limit'          => max(1, min(in_array($key, ['popular', 'latest'], true) ? 3 : 12, (int)($item['limit'] ?? 3))),
+            'category'       => max(0, (int)($item['category'] ?? 0)),
+            'topic_id'       => max(0, (int)($item['topic_id'] ?? 0)),
+            'mode'           => in_array($itemMode, $allowedModes, true) ? $itemMode : 'auto',
+            'selection'      => $validSel,
+            'selection_mode' => $validSel,
+            'sort'           => in_array($sortMode, $allowedSorts, true) ? $sortMode : 'newest',
+            'manual_ids'     => $cleanManualIdsArr,
+            'show_media'     => array_key_exists('show_media', $item) ? ((string)$item['show_media'] !== '0' && $item['show_media'] !== false ? 1 : 0) : 1,
+            'show_excerpt'   => array_key_exists('show_excerpt', $item) ? ((string)$item['show_excerpt'] !== '0' && $item['show_excerpt'] !== false ? 1 : 0) : 1,
+            'show_date'      => array_key_exists('show_date', $item) ? ((string)$item['show_date'] !== '0' && $item['show_date'] !== false ? 1 : 0) : 1,
+            'show_meta'      => array_key_exists('show_meta', $item) ? ((string)$item['show_meta'] !== '0' && $item['show_meta'] !== false ? 1 : 0) : 1,
+            'more_url'       => mb_substr($moreUrl, 0, 200),
+            'more_label'     => $moreLabel,
+            'more_text'      => $moreLabel,
+            'mobile_mode'    => in_array($mobileMode, $allowedMobileModes, true) ? $mobileMode : 'same',
         ];
     }
     $out['hero_post_id'] = max(0, (int)($cfg['hero_post_id'] ?? 0));
@@ -1975,6 +2185,192 @@ function jhd_normalize_home_config(array $cfg): array {
     $thumb = is_string($cfg['thumb'] ?? null) ? $cfg['thumb'] : 'sm';
     $out['thumb'] = in_array($thumb, ['sm', 'md'], true) ? $thumb : 'sm';
     return $out;
+}
+
+/**
+ * تنظیمات نمایش صفحات داخلی — مستقل از صفحهٔ اصلی، ذخیره‌شده در settings.
+ */
+function jhd_internal_pages_defaults(): array {
+    return [
+        'topics' => [
+            'label'       => 'صفحه فهرست موضوعات علمی (/topics)',
+            'mode'        => 'grid',
+            'sort'        => 'manual',
+            'per_page'    => 24,
+            'show_media'  => 1,
+            'show_excerpt'=> 1,
+            'show_counts' => 1,
+            'hide_empty'  => 0,
+        ],
+        'topic_detail' => [
+            'label'               => 'صفحه اختصاصی هر موضوع علمی (/topic/...)',
+            'mode'                => 'featured',
+            'sort'                => 'newest',
+            'per_page'            => 12,
+            'show_media'          => 1,
+            'show_excerpt'        => 1,
+            'show_date'           => 1,
+            'show_meta'           => 1,
+            'show_related_topics' => 1,
+            'show_subtopics'      => 1,
+        ],
+        'articles' => [
+            'label'       => 'صفحه مقالات و پژوهش‌ها (/articles)',
+            'mode'        => 'rows',
+            'sort'        => 'newest',
+            'per_page'    => 12,
+            'show_media'  => 1,
+            'show_excerpt'=> 1,
+            'show_date'   => 1,
+            'show_meta'   => 1,
+            'show_topics' => 1,
+        ],
+        'news' => [
+            'label'       => 'صفحه اخبار و رویدادها (/news)',
+            'mode'        => 'rows',
+            'sort'        => 'newest',
+            'per_page'    => 12,
+            'show_media'  => 1,
+            'show_excerpt'=> 1,
+            'show_date'   => 1,
+            'show_meta'   => 1,
+        ],
+        'reports' => [
+            'label'       => 'صفحه گزارش‌ها (/reports)',
+            'mode'        => 'rows',
+            'sort'        => 'newest',
+            'per_page'    => 12,
+            'show_media'  => 1,
+            'show_excerpt'=> 1,
+            'show_date'   => 1,
+            'show_meta'   => 1,
+        ],
+        'books' => [
+            'label'       => 'صفحه کتابخانه دیجیتال (/books)',
+            'mode'        => 'grid',
+            'sort'        => 'manual',
+            'per_page'    => 12,
+            'show_media'  => 1,
+            'show_excerpt'=> 1,
+            'show_meta'   => 1,
+        ],
+        'lessons' => [
+            'label'            => 'صفحه دروس و دوره‌های حوزوی (/lessons)',
+            'mode'             => 'grouped',
+            'sort'             => 'lesson_order',
+            'per_page'         => 12,
+            'show_collections' => 1,
+            'show_media'       => 1,
+            'show_excerpt'     => 1,
+            'show_meta'        => 1,
+        ],
+        'media' => [
+            'label'       => 'صفحه ویدیوها و صوت‌ها (/media)',
+            'mode'        => 'grid',
+            'sort'        => 'newest',
+            'per_page'    => 12,
+            'show_media'  => 1,
+            'show_date'   => 1,
+        ],
+        'speeches' => [
+            'label'       => 'صفحه سخنرانی‌ها (/speeches)',
+            'mode'        => 'grid',
+            'sort'        => 'newest',
+            'per_page'    => 12,
+            'show_media'  => 1,
+            'show_excerpt'=> 1,
+            'show_date'   => 1,
+        ],
+        'qa' => [
+            'label'       => 'صفحه پرسش و پاسخ (/qa)',
+            'mode'        => 'rows',
+            'sort'        => 'newest',
+            'per_page'    => 12,
+            'show_media'  => 1,
+            'show_excerpt'=> 1,
+            'show_date'   => 1,
+            'show_meta'   => 1,
+        ],
+        'post_detail' => [
+            'label'         => 'صفحه مطالعه مقاله / خبر / گزارش (/post/...)',
+            'mode'          => 'rows',
+            'sort'          => 'newest',
+            'per_page'      => 12,
+            'show_media'    => 1,
+            'show_excerpt'  => 1,
+            'show_date'     => 1,
+            'show_meta'     => 1,
+            'show_related'  => 1,
+            'related_limit' => 4,
+        ],
+        'book_detail' => [
+            'label'         => 'صفحه معرفی کتاب (/book/...)',
+            'mode'          => 'grid',
+            'sort'          => 'newest',
+            'per_page'      => 12,
+            'show_media'    => 1,
+            'show_excerpt'  => 1,
+            'show_date'     => 1,
+            'show_meta'     => 1,
+            'show_related'  => 1,
+            'related_limit' => 4,
+        ],
+        'lesson_detail' => [
+            'label'         => 'صفحه جلسه درس (/lesson/...)',
+            'mode'          => 'rows',
+            'sort'          => 'lesson_order',
+            'per_page'      => 12,
+            'show_media'    => 1,
+            'show_excerpt'  => 1,
+            'show_date'     => 1,
+            'show_meta'     => 1,
+            'show_related'  => 1,
+            'related_limit' => 6,
+        ],
+    ];
+}
+
+function jhd_normalize_internal_pages_config(array $cfg): array {
+    $defaults = jhd_internal_pages_defaults();
+    $allowedModes = array_merge(array_keys(jhd_display_mode_options()), ['grouped']);
+    $allowedSorts = ['newest', 'oldest', 'popular', 'featured', 'manual', 'lesson_order', 'title'];
+    $out = [];
+    foreach ($defaults as $pageKey => $def) {
+        $in = is_array($cfg[$pageKey] ?? null) ? $cfg[$pageKey] : [];
+        $mode = is_string($in['mode'] ?? null) ? $in['mode'] : $def['mode'];
+        if (!in_array($mode, $allowedModes, true)) $mode = $def['mode'];
+        if ($mode === 'grouped' && $pageKey !== 'lessons') $mode = $def['mode'];
+        $sort = is_string($in['sort'] ?? null) ? $in['sort'] : $def['sort'];
+        if (!in_array($sort, $allowedSorts, true)) $sort = $def['sort'];
+        $row = [
+            'label'         => $def['label'],
+            'mode'          => $mode,
+            'sort'          => $sort,
+            'per_page'      => max(1, min(48, (int)($in['per_page'] ?? $def['per_page']))),
+            'related_limit' => max(1, min(12, (int)($in['related_limit'] ?? ($def['related_limit'] ?? 4)))),
+        ];
+        foreach (['show_media', 'show_excerpt', 'show_date', 'show_meta', 'show_counts', 'hide_empty', 'show_related_topics', 'show_subtopics', 'show_topics', 'show_collections', 'show_related'] as $flag) {
+            $defaultVal = array_key_exists($flag, $def) ? (int)$def[$flag] : 1;
+            $row[$flag] = array_key_exists($flag, $in)
+                ? ((string)$in[$flag] !== '0' && $in[$flag] !== false ? 1 : 0)
+                : $defaultVal;
+        }
+        $out[$pageKey] = $row;
+    }
+    return $out;
+}
+
+function jhd_internal_pages_config(): array {
+    $raw = json_decode((string)getSetting('internal_pages_config', ''), true);
+    return jhd_normalize_internal_pages_config(is_array($raw) ? $raw : []);
+}
+
+function jhd_internal_page_config(string $pageKey): array {
+    $all = jhd_internal_pages_config();
+    return $all[$pageKey] ?? (jhd_internal_pages_defaults()[$pageKey] ?? [
+        'mode' => 'rows', 'sort' => 'newest', 'per_page' => 12,
+        'show_media' => 1, 'show_excerpt' => 1, 'show_date' => 1, 'show_meta' => 1,
+    ]);
 }
 
 /**
@@ -2101,9 +2497,23 @@ function jhd_home_lesson_collections(int $limit = 4): array {
  * اگر هیچ موضوع فعالی نباشد، فهرست خالی برمی‌گردد و بخش رندر نمی‌شود.
  */
 function jhd_home_topics(int $limit = 6): array {
-    $limit = max(1, min(12, $limit));
+    $limit = max(1, min(24, $limit));
     if (!jhd_db_ready()) return [];
-    return getTopics(['active' => 1, 'featured' => 1, 'limit' => $limit]);
+    $rows = getTopics(['active' => 1, 'featured' => 1]);
+    $out = [];
+    foreach ($rows as $row) {
+        $tid = (int)($row['id'] ?? 0);
+        $disp = jhd_topic_display($tid);
+        if (($disp['visibility'] ?? 'public') !== 'public') continue;
+        if (!in_array('home', $disp['placements'] ?? [], true)) continue;
+        if (($disp['empty_behavior'] ?? 'message') === 'hide_from_home') {
+            $counts = getTopicLinkedCounts($tid);
+            if ($counts['total'] < 1) continue;
+        }
+        $out[] = $row;
+        if (count($out) >= $limit) break;
+    }
+    return $out;
 }
 
 /**
@@ -2164,14 +2574,468 @@ function getPostsByIds(array $ids): array {
     }
 }
 
-// ─── Banners ──────────────────────────────────────────────────────────────────
+function getBooksByIds(array $ids): array {
+    $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn(int $id): bool => $id > 0)));
+    if (!$ids) return [];
+    try {
+        $db = getDB();
+        $marks = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = $db->prepare("SELECT * FROM books WHERE status = 'published' AND id IN ($marks)");
+        $stmt->execute($ids);
+        $byId = [];
+        foreach ($stmt->fetchAll() as $row) $byId[(int)$row['id']] = $row;
+        $ordered = [];
+        foreach ($ids as $id) if (isset($byId[$id])) $ordered[] = $byId[$id];
+        return $ordered;
+    } catch (Throwable) {
+        return [];
+    }
+}
 
-/** Per-topic related-content controls, stored additively in settings. */
+function getLessonsByIds(array $ids): array {
+    $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn(int $id): bool => $id > 0)));
+    if (!$ids) return [];
+    try {
+        $db = getDB();
+        $marks = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = $db->prepare(
+            "SELECT l.*, lc.title AS collection_title, lc.slug AS collection_slug, lv.title AS volume_title, lv.slug AS volume_slug
+             FROM lessons l
+             LEFT JOIN lesson_collections lc ON lc.id = l.collection_id
+             LEFT JOIN lesson_volumes lv ON lv.id = l.volume_id
+             WHERE l.status = 'published' AND l.id IN ($marks)"
+        );
+        $stmt->execute($ids);
+        $byId = [];
+        foreach ($stmt->fetchAll() as $row) $byId[(int)$row['id']] = $row;
+        $ordered = [];
+        foreach ($ids as $id) if (isset($byId[$id])) $ordered[] = $byId[$id];
+        return $ordered;
+    } catch (Throwable) {
+        return [];
+    }
+}
+
+function getTopicsByIds(array $ids): array {
+    $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn(int $id): bool => $id > 0)));
+    if (!$ids) return [];
+    try {
+        $db = getDB();
+        $marks = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = $db->prepare("SELECT * FROM topics WHERE is_active = 1 AND id IN ($marks)");
+        $stmt->execute($ids);
+        $byId = [];
+        foreach ($stmt->fetchAll() as $row) $byId[(int)$row['id']] = $row;
+        $ordered = [];
+        foreach ($ids as $id) if (isset($byId[$id])) $ordered[] = $byId[$id];
+        return $ordered;
+    } catch (Throwable) {
+        return [];
+    }
+}
+
+// ─── Topics Display & Safe Lifecycle Management ──────────────────────────────
+
+function jhd_topic_placement_labels(): array {
+    return [
+        'home'           => 'صفحه اصلی (هاب موضوعات علمی)',
+        'topics_archive' => 'فهرست موضوعات علمی (/topics)',
+        'articles'       => 'صفحه مقالات و پژوهش‌ها (/articles)',
+        'books'          => 'صفحه کتابخانه دیجیتال (/books)',
+        'lessons'        => 'صفحه دروس و دوره‌ها (/lessons)',
+        'news'           => 'صفحه اخبار و گزارش‌ها (/news)',
+        'media'          => 'صفحه رسانه و ویدیوها (/media)',
+        'sidebar'        => 'ستون کناری و نوار راهنمای صفحات داخلی',
+    ];
+}
+
+/** Per-topic related-content and placement controls, stored additively in settings. */
 function jhd_topic_display(int $id): array {
-    $raw=json_decode(getSetting('topic_display_'.$id,''),true);
-    $raw=is_array($raw)?$raw:[];
-    return ['mode'=>in_array($raw['mode'] ?? '',['grid','list','horizontal','minimal','featured','slider'],true)?$raw['mode']:'featured',
-        'limit'=>max(1,min(24,(int)($raw['limit'] ?? 12)))];
+    $raw = json_decode(getSetting('topic_display_' . $id, ''), true);
+    $raw = is_array($raw) ? $raw : [];
+    $allowedModes = ['rows', 'grid', 'list', 'horizontal', 'minimal', 'featured', 'slider', 'video', 'combined'];
+    $allowedSorts = ['newest', 'oldest', 'popular', 'featured', 'manual'];
+    $allowedPlacements = array_keys(jhd_topic_placement_labels());
+    $allowedSections = ['posts', 'books', 'lessons', 'media'];
+    $allowedVisibilities = ['public', 'hidden_lists', 'inactive'];
+    $allowedEmptyBehaviors = ['message', 'hide_from_home', 'custom_message'];
+
+    $placements = [];
+    if (isset($raw['placements'])) {
+        $rawPl = is_array($raw['placements'])
+            ? $raw['placements']
+            : array_filter(array_map('trim', explode(',', (string)$raw['placements'])));
+        foreach ($rawPl as $pl) {
+            if (is_string($pl) && in_array($pl, $allowedPlacements, true)) {
+                $placements[] = $pl;
+            }
+        }
+        $placements = array_values(array_unique($placements));
+    } else {
+        $topicRow = $id > 0 ? getTopicById($id) : null;
+        $isFeat = (int)($topicRow['is_featured'] ?? 0) === 1;
+        $placements = $isFeat ? ['home', 'topics_archive', 'articles', 'books', 'lessons'] : ['topics_archive', 'articles', 'books', 'lessons'];
+    }
+
+    $sectionOrder = [];
+    if (!empty($raw['section_order'])) {
+        $parts = is_array($raw['section_order']) ? $raw['section_order'] : (preg_split('/[\s,،]+/', (string)$raw['section_order']) ?: []);
+        foreach ($parts as $sec) {
+            $sec = trim((string)$sec);
+            if (in_array($sec, $allowedSections, true) && !in_array($sec, $sectionOrder, true)) {
+                $sectionOrder[] = $sec;
+            }
+        }
+    }
+    foreach ($allowedSections as $sec) {
+        if (!in_array($sec, $sectionOrder, true)) $sectionOrder[] = $sec;
+    }
+
+    $parseIdList = static function (mixed $val): array {
+        if (is_array($val)) {
+            return array_values(array_unique(array_filter(array_map('intval', $val), static fn(int $v): bool => $v > 0)));
+        }
+        if (is_string($val) && trim($val) !== '') {
+            return array_values(array_unique(array_filter(
+                array_map('intval', preg_split('/[\s,،]+/', $val) ?: []),
+                static fn(int $v): bool => $v > 0
+            )));
+        }
+        return [];
+    };
+
+    $defaultInternal = jhd_internal_page_config('topic_detail');
+    $defaultMode = in_array($defaultInternal['mode'] ?? '', $allowedModes, true) ? (string)$defaultInternal['mode'] : 'featured';
+    $defaultLimit = max(1, min(24, (int)($defaultInternal['per_page'] ?? 12)));
+
+    return [
+        'mode'               => in_array($raw['mode'] ?? '', $allowedModes, true) ? (string)$raw['mode'] : $defaultMode,
+        'limit'              => max(1, min(24, (int)($raw['limit'] ?? $defaultLimit))),
+        'sort'               => in_array($raw['sort'] ?? '', $allowedSorts, true) ? (string)$raw['sort'] : 'newest',
+        'placements'         => $placements,
+        'section_order'      => $sectionOrder,
+        'show_media'         => array_key_exists('show_media', $raw) ? ((string)$raw['show_media'] !== '0' && $raw['show_media'] !== false ? 1 : 0) : 1,
+        'show_excerpt'       => array_key_exists('show_excerpt', $raw) ? ((string)$raw['show_excerpt'] !== '0' && $raw['show_excerpt'] !== false ? 1 : 0) : 1,
+        'show_date'          => array_key_exists('show_date', $raw) ? ((string)$raw['show_date'] !== '0' && $raw['show_date'] !== false ? 1 : 0) : 1,
+        'show_meta'          => array_key_exists('show_meta', $raw) ? ((string)$raw['show_meta'] !== '0' && $raw['show_meta'] !== false ? 1 : 0) : 1,
+        'related_topic_ids'  => array_values(array_filter($parseIdList($raw['related_topic_ids'] ?? []), static fn(int $tid): bool => $tid !== $id)),
+        'empty_behavior'     => in_array($raw['empty_behavior'] ?? '', $allowedEmptyBehaviors, true) ? (string)$raw['empty_behavior'] : 'message',
+        'empty_message'      => mb_substr(trim((string)($raw['empty_message'] ?? '')), 0, 240),
+        'visibility'         => in_array($raw['visibility'] ?? '', $allowedVisibilities, true) ? (string)$raw['visibility'] : 'public',
+        'manual_post_ids'    => $parseIdList($raw['manual_post_ids'] ?? []),
+        'manual_book_ids'    => $parseIdList($raw['manual_book_ids'] ?? []),
+        'manual_lesson_ids'  => $parseIdList($raw['manual_lesson_ids'] ?? []),
+    ];
+}
+
+function jhd_save_topic_display(int $id, array $input): array {
+    if ($id < 1) return [];
+    $existing = json_decode(getSetting('topic_display_' . $id, ''), true);
+    $existing = is_array($existing) ? $existing : [];
+    $merged = array_merge($existing, $input);
+
+    $allowedModes = ['rows', 'grid', 'list', 'horizontal', 'minimal', 'featured', 'slider', 'video', 'combined'];
+    $allowedSorts = ['newest', 'oldest', 'popular', 'featured', 'manual'];
+    $allowedPlacements = array_keys(jhd_topic_placement_labels());
+    $allowedSections = ['posts', 'books', 'lessons', 'media'];
+    $allowedVisibilities = ['public', 'hidden_lists', 'inactive'];
+    $allowedEmptyBehaviors = ['message', 'hide_from_home', 'custom_message'];
+
+    $parseIdList = static function (mixed $val): array {
+        if (is_array($val)) {
+            return array_values(array_unique(array_filter(array_map('intval', $val), static fn(int $v): bool => $v > 0)));
+        }
+        if (is_string($val) && trim($val) !== '') {
+            return array_values(array_unique(array_filter(
+                array_map('intval', preg_split('/[\s,،]+/', $val) ?: []),
+                static fn(int $v): bool => $v > 0
+            )));
+        }
+        return [];
+    };
+
+    $placements = [];
+    if (isset($merged['placements'])) {
+        $rawPl = is_array($merged['placements'])
+            ? $merged['placements']
+            : array_filter(array_map('trim', explode(',', (string)$merged['placements'])));
+        foreach ($rawPl as $pl) {
+            if (is_string($pl) && in_array($pl, $allowedPlacements, true)) {
+                $placements[] = $pl;
+            }
+        }
+        $placements = array_values(array_unique($placements));
+    } else {
+        $placements = ['home', 'topics_archive', 'articles', 'books', 'lessons'];
+    }
+
+    $sectionOrder = [];
+    $secInput = $merged['section_order'] ?? ['posts', 'books', 'lessons', 'media'];
+    $secParts = is_array($secInput) ? $secInput : (preg_split('/[\s,،]+/', (string)$secInput) ?: []);
+    foreach ($secParts as $sec) {
+        $sec = trim((string)$sec);
+        if (in_array($sec, $allowedSections, true) && !in_array($sec, $sectionOrder, true)) {
+            $sectionOrder[] = $sec;
+        }
+    }
+    foreach ($allowedSections as $sec) {
+        if (!in_array($sec, $sectionOrder, true)) $sectionOrder[] = $sec;
+    }
+
+    $clean = [
+        'mode'               => in_array($merged['mode'] ?? '', $allowedModes, true) ? (string)$merged['mode'] : 'featured',
+        'limit'              => max(1, min(24, (int)($merged['limit'] ?? 12))),
+        'sort'               => in_array($merged['sort'] ?? '', $allowedSorts, true) ? (string)$merged['sort'] : 'newest',
+        'placements'         => $placements,
+        'section_order'      => $sectionOrder,
+        'show_media'         => array_key_exists('show_media', $merged) ? ((string)$merged['show_media'] !== '0' && $merged['show_media'] !== false ? 1 : 0) : 1,
+        'show_excerpt'       => array_key_exists('show_excerpt', $merged) ? ((string)$merged['show_excerpt'] !== '0' && $merged['show_excerpt'] !== false ? 1 : 0) : 1,
+        'show_date'          => array_key_exists('show_date', $merged) ? ((string)$merged['show_date'] !== '0' && $merged['show_date'] !== false ? 1 : 0) : 1,
+        'show_meta'          => array_key_exists('show_meta', $merged) ? ((string)$merged['show_meta'] !== '0' && $merged['show_meta'] !== false ? 1 : 0) : 1,
+        'related_topic_ids'  => array_values(array_filter(validatedTopicIds($parseIdList($merged['related_topic_ids'] ?? [])), static fn(int $tid): bool => $tid !== $id)),
+        'empty_behavior'     => in_array($merged['empty_behavior'] ?? '', $allowedEmptyBehaviors, true) ? (string)$merged['empty_behavior'] : 'message',
+        'empty_message'      => mb_substr(trim((string)($merged['empty_message'] ?? '')), 0, 240),
+        'visibility'         => in_array($merged['visibility'] ?? '', $allowedVisibilities, true) ? (string)$merged['visibility'] : 'public',
+        'manual_post_ids'    => $parseIdList($merged['manual_post_ids'] ?? []),
+        'manual_book_ids'    => $parseIdList($merged['manual_book_ids'] ?? []),
+        'manual_lesson_ids'  => $parseIdList($merged['manual_lesson_ids'] ?? []),
+    ];
+
+    setSetting('topic_display_' . $id, (string)json_encode($clean, JSON_UNESCAPED_UNICODE));
+    return $clean;
+}
+
+/**
+ * شمارش دقیق همهٔ آیتم‌های متصل به یک موضوع (مستقیم، شامل پیش‌نویس و منتشرشده)
+ * برای نمایش در جدول مدیریت و مرحلهٔ تأیید حذف/انتقال موضوع.
+ */
+function getTopicLinkedCounts(int $topicId): array {
+    $out = [
+        'posts_total'       => 0,
+        'posts_published'   => 0,
+        'books_total'       => 0,
+        'books_published'   => 0,
+        'lessons_total'     => 0,
+        'lessons_published' => 0,
+        'children_count'    => 0,
+        'media_count'       => 0,
+        'total'             => 0,
+        'published_total'   => 0,
+    ];
+    if ($topicId < 1) return $out;
+    try {
+        $db = getDB();
+        $stmt = $db->prepare("SELECT COUNT(DISTINCT p.id) AS total, SUM(CASE WHEN p.status='published' THEN 1 ELSE 0 END) AS pub FROM post_topics pt JOIN posts p ON p.id = pt.post_id WHERE pt.topic_id = ?");
+        $stmt->execute([$topicId]);
+        $r = $stmt->fetch() ?: [];
+        $out['posts_total'] = (int)($r['total'] ?? 0);
+        $out['posts_published'] = (int)($r['pub'] ?? 0);
+
+        $stmt = $db->prepare("SELECT COUNT(DISTINCT b.id) AS total, SUM(CASE WHEN b.status='published' THEN 1 ELSE 0 END) AS pub FROM book_topics bt JOIN books b ON b.id = bt.book_id WHERE bt.topic_id = ?");
+        $stmt->execute([$topicId]);
+        $r = $stmt->fetch() ?: [];
+        $out['books_total'] = (int)($r['total'] ?? 0);
+        $out['books_published'] = (int)($r['pub'] ?? 0);
+
+        $stmt = $db->prepare("SELECT COUNT(DISTINCT l.id) AS total, SUM(CASE WHEN l.status='published' THEN 1 ELSE 0 END) AS pub FROM lesson_topics lt JOIN lessons l ON l.id = lt.lesson_id WHERE lt.topic_id = ?");
+        $stmt->execute([$topicId]);
+        $r = $stmt->fetch() ?: [];
+        $out['lessons_total'] = (int)($r['total'] ?? 0);
+        $out['lessons_published'] = (int)($r['pub'] ?? 0);
+
+        $stmt = $db->prepare("SELECT COUNT(*) FROM topics WHERE parent_id = ?");
+        $stmt->execute([$topicId]);
+        $out['children_count'] = (int)$stmt->fetchColumn();
+
+        $stmt = $db->prepare(
+            "SELECT COUNT(DISTINCT m.id) FROM media_files m
+             WHERE (m.ref_type='post' AND EXISTS (SELECT 1 FROM post_topics pt WHERE pt.post_id=m.ref_id AND pt.topic_id=?))
+                OR (m.ref_type='lesson' AND EXISTS (SELECT 1 FROM lesson_topics lt WHERE lt.lesson_id=m.ref_id AND lt.topic_id=?))"
+        );
+        $stmt->execute([$topicId, $topicId]);
+        $out['media_count'] = (int)$stmt->fetchColumn();
+
+        $out['total'] = $out['posts_total'] + $out['books_total'] + $out['lessons_total'];
+        $out['published_total'] = $out['posts_published'] + $out['books_published'] + $out['lessons_published'];
+    } catch (Throwable) {
+    }
+    return $out;
+}
+
+/**
+ * انتقال یا قطع ارتباط امن محتواهای متصل به یک موضوع علمی بدون حذف خود مقالات/کتاب‌ها/دروس/فایل‌ها.
+ */
+function jhd_transfer_or_unlink_topic_relations(int $sourceTopicId, string $strategy = 'unlink', int $targetTopicId = 0): array {
+    if ($sourceTopicId < 1) return ['ok' => false, 'error' => 'شناسه موضوع نامعتبر است.'];
+    $strategy = in_array($strategy, ['transfer', 'unlink'], true) ? $strategy : 'unlink';
+    if ($strategy === 'transfer') {
+        if ($targetTopicId < 1 || $targetTopicId === $sourceTopicId) {
+            return ['ok' => false, 'error' => 'برای انتقال محتوا، باید یک موضوع مقصد معتبر انتخاب کنید.'];
+        }
+        $targetRow = getTopicById($targetTopicId);
+        if (!$targetRow) {
+            return ['ok' => false, 'error' => 'موضوع مقصد انتخاب‌شده در دیتابیس یافت نشد.'];
+        }
+    }
+
+    $counts = getTopicLinkedCounts($sourceTopicId);
+    $db = getDB();
+    $ownTx = !$db->inTransaction();
+    if ($ownTx) $db->beginTransaction();
+    try {
+        if ($strategy === 'transfer' && $targetTopicId > 0) {
+            // 1. انتقال post_topics بدون ایجاد رکورد تکراری
+            $stmt = $db->prepare('SELECT post_id, is_primary FROM post_topics WHERE topic_id = ?');
+            $stmt->execute([$sourceTopicId]);
+            $postLinks = $stmt->fetchAll();
+            $insPost = $db->prepare('INSERT INTO post_topics (post_id, topic_id, is_primary) VALUES (?, ?, ?) ON CONFLICT DO NOTHING');
+            foreach ($postLinks as $pl) {
+                try {
+                    $insPost->execute([(int)$pl['post_id'], $targetTopicId, (int)($pl['is_primary'] ?? 0)]);
+                } catch (PDOException) {
+                    $db->prepare('INSERT INTO post_topics (post_id, topic_id) VALUES (?, ?) ON CONFLICT DO NOTHING')
+                       ->execute([(int)$pl['post_id'], $targetTopicId]);
+                }
+            }
+            $db->prepare('DELETE FROM post_topics WHERE topic_id = ?')->execute([$sourceTopicId]);
+
+            // 2. انتقال book_topics بدون ایجاد رکورد تکراری
+            $stmt = $db->prepare('SELECT book_id FROM book_topics WHERE topic_id = ?');
+            $stmt->execute([$sourceTopicId]);
+            $bookLinks = $stmt->fetchAll(PDO::FETCH_COLUMN);
+            $insBook = $db->prepare('INSERT INTO book_topics (book_id, topic_id) VALUES (?, ?) ON CONFLICT DO NOTHING');
+            foreach ($bookLinks as $bid) {
+                $insBook->execute([(int)$bid, $targetTopicId]);
+            }
+            $db->prepare('DELETE FROM book_topics WHERE topic_id = ?')->execute([$sourceTopicId]);
+
+            // 3. انتقال lesson_topics بدون ایجاد رکورد تکراری
+            $stmt = $db->prepare('SELECT lesson_id FROM lesson_topics WHERE topic_id = ?');
+            $stmt->execute([$sourceTopicId]);
+            $lessonLinks = $stmt->fetchAll(PDO::FETCH_COLUMN);
+            $insLesson = $db->prepare('INSERT INTO lesson_topics (lesson_id, topic_id) VALUES (?, ?) ON CONFLICT DO NOTHING');
+            foreach ($lessonLinks as $lid) {
+                $insLesson->execute([(int)$lid, $targetTopicId]);
+            }
+            $db->prepare('DELETE FROM lesson_topics WHERE topic_id = ?')->execute([$sourceTopicId]);
+
+            // 4. انتقال زیرموضوع‌ها (با جلوگیری از چرخه اگر مقصد فرزند مبدأ باشد)
+            if ((int)($targetRow['parent_id'] ?? 0) === $sourceTopicId) {
+                $sourceRow = getTopicById($sourceTopicId);
+                $db->prepare('UPDATE topics SET parent_id = ? WHERE id = ?')
+                   ->execute([$sourceRow['parent_id'] ?? null, $targetTopicId]);
+            }
+            $db->prepare('UPDATE topics SET parent_id = ? WHERE parent_id = ? AND id <> ?')
+               ->execute([$targetTopicId, $sourceTopicId, $targetTopicId]);
+        } else {
+            // قطع ارتباط امن: فقط ردیف‌های جدول‌های رابط حذف می‌شوند؛ خود محتواها دست‌نخورده می‌مانند.
+            $db->prepare('DELETE FROM post_topics WHERE topic_id = ?')->execute([$sourceTopicId]);
+            $db->prepare('DELETE FROM book_topics WHERE topic_id = ?')->execute([$sourceTopicId]);
+            $db->prepare('DELETE FROM lesson_topics WHERE topic_id = ?')->execute([$sourceTopicId]);
+            $sourceRow = getTopicById($sourceTopicId);
+            $db->prepare('UPDATE topics SET parent_id = ? WHERE parent_id = ?')
+               ->execute([$sourceRow['parent_id'] ?? null, $sourceTopicId]);
+        }
+
+        if ($ownTx) $db->commit();
+        return ['ok' => true, 'strategy' => $strategy, 'counts' => $counts];
+    } catch (Throwable $e) {
+        if ($ownTx && $db->inTransaction()) $db->rollBack();
+        return ['ok' => false, 'error' => 'عملیات انتقال/قطع ارتباط موضوع انجام نشد: ' . $e->getMessage()];
+    }
+}
+
+/**
+ * موضوعات علمی مرتبط با یک موضوع (بر اساس انتخاب صریح مدیر + اشتراک محتوا یا هم‌والدی).
+ */
+function getRelatedTopicsForTopic(int $topicId, array|int $explicitIds = [], int $limit = 6): array {
+    if (is_int($explicitIds)) {
+        $limit = $explicitIds;
+        $disp = jhd_topic_display($topicId);
+        $explicitIds = is_array($disp['related_topic_ids'] ?? null) ? $disp['related_topic_ids'] : [];
+    } elseif (!$explicitIds) {
+        $disp = jhd_topic_display($topicId);
+        $explicitIds = is_array($disp['related_topic_ids'] ?? null) ? $disp['related_topic_ids'] : [];
+    }
+    if ($topicId < 1 || $limit < 1) return [];
+    $out = [];
+    $seen = [$topicId => true];
+    if ($explicitIds) {
+        foreach (getTopicsByIds($explicitIds) as $row) {
+            $id = (int)($row['id'] ?? 0);
+            if ($id < 1 || isset($seen[$id])) continue;
+            $disp = jhd_topic_display($id);
+            if (($disp['visibility'] ?? 'public') === 'inactive') continue;
+            $seen[$id] = true;
+            $out[] = $row;
+            if (count($out) >= $limit) return $out;
+        }
+    }
+    try {
+        $db = getDB();
+        $topic = getTopicById($topicId);
+        $parentId = (int)($topic['parent_id'] ?? 0);
+        if ($parentId > 0 && !isset($seen[$parentId])) {
+            $parent = getTopicById($parentId);
+            if ($parent && (int)($parent['is_active'] ?? 0) === 1) {
+                $seen[$parentId] = true;
+                $out[] = $parent;
+            }
+        }
+        // موضوعاتی که با این موضوع مطلب مشترک دارند یا هم‌والد هستند
+        $stmt = $db->prepare(
+            "SELECT DISTINCT t.*
+             FROM topics t
+             LEFT JOIN post_topics pt2 ON pt2.topic_id = t.id
+             LEFT JOIN post_topics pt1 ON pt1.post_id = pt2.post_id AND pt1.topic_id = ?
+             WHERE t.is_active = 1 AND t.id <> ?
+               AND (pt1.post_id IS NOT NULL OR (? > 0 AND t.parent_id = ?))
+             ORDER BY t.is_featured DESC, t.sort_order ASC, t.id ASC
+             LIMIT ?"
+        );
+        $stmt->execute([$topicId, $topicId, $parentId, $parentId, $limit * 2]);
+        foreach ($stmt->fetchAll() as $row) {
+            $id = (int)($row['id'] ?? 0);
+            if ($id < 1 || isset($seen[$id])) continue;
+            $disp = jhd_topic_display($id);
+            if (($disp['visibility'] ?? 'public') === 'inactive') continue;
+            $seen[$id] = true;
+            $out[] = $row;
+            if (count($out) >= $limit) break;
+        }
+    } catch (Throwable) {
+    }
+    return $out;
+}
+
+/**
+ * فهرست موضوعات علمی فعال برای یک جایگاه مشخص (home, topics_archive, articles, books, lessons, news, media, sidebar).
+ */
+function getTopicsForPlacement(string $placement, int $limit = 12, bool $featuredOnly = false): array {
+    $opts = ['active' => 1];
+    if ($featuredOnly) $opts['featured'] = 1;
+    $all = getTopics($opts);
+    if (!$all) return [];
+    $counts = jhd_topic_content_counts(array_column($all, 'id'));
+    $filtered = [];
+    foreach ($all as $t) {
+        $tid = (int)($t['id'] ?? 0);
+        if ($tid < 1) continue;
+        $disp = jhd_topic_display($tid);
+        if (($disp['visibility'] ?? 'public') !== 'public') continue;
+        if (!in_array($placement, $disp['placements'] ?? [], true)) continue;
+        $c = $counts[$tid] ?? ['posts' => 0, 'books' => 0, 'lessons' => 0];
+        $totalPub = (int)$c['posts'] + (int)$c['books'] + (int)$c['lessons'];
+        if ($placement === 'home' && ($disp['empty_behavior'] ?? 'message') === 'hide_from_home' && $totalPub === 0) {
+            continue;
+        }
+        $t['_counts'] = $c;
+        $t['_total_published'] = $totalPub;
+        $t['_display'] = $disp;
+        $filtered[] = $t;
+        if ($limit > 0 && count($filtered) >= $limit) break;
+    }
+    return $filtered;
 }
 
 /** Banner placement/scheduling lives in settings; no live schema mutation. */
@@ -2680,9 +3544,316 @@ function getBooks(array $opts = []): array {
         if($topic){ $where[]="EXISTS (SELECT 1 FROM book_topics bt WHERE bt.book_id=b.id AND bt.topic_id=?)"; $params[]=(int)$topic; }
         if($featured){ $where[]="b.is_featured=1"; }
         $whereStr=implode(' AND ',$where);
-        $stmt=$db->prepare("SELECT b.* FROM books b WHERE $whereStr ORDER BY b.is_featured DESC, b.created_at DESC LIMIT ? OFFSET ?");
+        $sort = (string)($opts['sort'] ?? '');
+        $orderBy = match ($sort) {
+            'newest'   => 'b.created_at DESC, b.id DESC',
+            'oldest'   => 'b.created_at ASC, b.id ASC',
+            'title'    => 'b.title ASC, b.id DESC',
+            'manual'   => 'b.is_featured DESC, b.sort_order ASC, b.created_at DESC, b.id DESC',
+            'featured' => 'b.is_featured DESC, b.created_at DESC, b.id DESC',
+            default    => 'b.is_featured DESC, b.created_at DESC',
+        };
+        $stmt=$db->prepare("SELECT b.* FROM books b WHERE $whereStr ORDER BY $orderBy LIMIT ? OFFSET ?");
         $stmt->execute(array_merge($params,[$limit,$offset])); return $stmt->fetchAll();
     } catch (PDOException $e) { return []; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * انتخاب هوشمند رسانهٔ شاخص (تصویر، ویدیو، صوت، سند)
+ * ──────────────────────────────────────────────────────────────────────────
+ * قواعد الزامی:
+ *   • حالت ۱: تصویر شاخص معتبر دارد ← از تصویر انتخاب‌شده استفاده شود.
+ *   • حالت ۲: تصویر ندارد ولی ویدیو معتبر دارد ← خود ویدیو به‌عنوان رسانهٔ
+ *     شاخص (پیش‌نمایش ویدیو یا فریم ویدیو با دکمه پخش) استفاده شود. هرگز فریم
+ *     اول ویدیو به صورت خودکار به‌عنوان تصویر استخراج نمی‌شود و محتوای ویدیویی
+ *     به دلیل نداشتن تصویر از بخش شاخص حذف نمی‌شود.
+ *   • حالت ۳: هم تصویر و هم ویدیو دارد ← انتخاب صریح ادمین اولویت دارد.
+ *   • حالت ۴: فقط صوت یا فقط سند دارد ← قاب صوتی یا کارت سند مناسب بدون
+ *     تصویر جعلی یا بی‌ربط نمایش داده شود.
+ *   • مسیر فایل (file_path) هرگز با شناسهٔ عددی رکورد (media_id) اشتباه نشود.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+function jhd_is_usable_media_path(?string $path, string $expectedKind = ''): bool {
+    if ($path === null) return false;
+    $path = trim($path);
+    if ($path === '' || $path === 'null' || $path === 'undefined' || $path === '0') return false;
+    // یک شناسهٔ عددی خام هرگز مسیر فایل معتبر نیست
+    if (ctype_digit($path)) return false;
+    if (preg_match('/[\x00-\x1f\x7f\\\\]/', $path) || str_contains($path, '..')) return false;
+    if (preg_match('~^(?:javascript|data|vbscript|file):~i', $path)) return false;
+
+    $urlPath = (string)(parse_url($path, PHP_URL_PATH) ?: '');
+    if ($urlPath === '' || !str_contains($urlPath, '.')) return false;
+    $ext = strtolower(pathinfo($urlPath, PATHINFO_EXTENSION));
+    if ($ext === '') return false;
+
+    $extMap = [
+        'image'    => ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'avif'],
+        'video'    => ['mp4', 'webm', 'mov', 'mkv', 'm4v', 'ogv'],
+        'audio'    => ['mp3', 'ogg', 'wav', 'm4a', 'aac', 'flac', 'opus'],
+        'document' => ['pdf', 'doc', 'docx'],
+    ];
+    if ($expectedKind !== '' && isset($extMap[$expectedKind])) {
+        if (!in_array($ext, $extMap[$expectedKind], true)) return false;
+    } else {
+        $allExts = array_merge(...array_values($extMap));
+        if (!in_array($ext, $allExts, true)) return false;
+    }
+
+    $rel = ltrim($urlPath, '/');
+    if (!preg_match('~^https?://~i', $path) && str_starts_with($rel, 'uploads/')) {
+        $seedFixtures = [
+            'uploads/images/seed-cover.png',
+            'uploads/videos/seed-video.mp4',
+            'uploads/audios/seed-audio.mp3',
+            'uploads/documents/seed-doc.pdf',
+            'uploads/documents/seed-doc.docx',
+        ];
+        if (!in_array($rel, $seedFixtures, true) && (!function_exists('storageBackend') || storageBackend() === 'local')) {
+            $rootDir = defined('ROOT_PATH') ? ROOT_PATH : dirname(__DIR__);
+            if (!is_file($rootDir . '/' . $rel)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+function jhd_featured_media_pref_options(): array {
+    return [
+        'auto'     => 'تشخیص هوشمند خودکار (تصویر ← ویدیو ← صوت ← سند)',
+        'image'    => 'اولویت با تصویر شاخص',
+        'video'    => 'اولویت با ویدیو شاخص (نمایش قاب ویدیو در کارت و بخش ویژه)',
+        'audio'    => 'اولویت با فایل صوتی (نمایش قاب صوتی)',
+        'document' => 'اولویت با سند پیوست (PDF / Word)',
+        'none'     => 'بدون رسانه شاخص (فقط متن)',
+    ];
+}
+
+function jhd_get_featured_media_pref(string $entityType, int $entityId): array {
+    $entityType = in_array($entityType, ['post', 'book', 'lesson', 'topic'], true) ? $entityType : 'post';
+    $default = ['mode' => 'auto', 'media_id' => 0, 'file_path' => ''];
+    if ($entityId < 1) return $default;
+    $raw = json_decode(getSetting('featured_media_' . $entityType . '_' . $entityId, ''), true);
+    if (!is_array($raw)) return $default;
+    $mode = is_string($raw['mode'] ?? null) ? $raw['mode'] : 'auto';
+    if (!array_key_exists($mode, jhd_featured_media_pref_options())) $mode = 'auto';
+    $mediaId = max(0, (int)($raw['media_id'] ?? 0));
+    $filePath = is_string($raw['file_path'] ?? null) ? trim($raw['file_path']) : '';
+    if ($filePath !== '' && !jhd_is_usable_media_path($filePath)) {
+        $filePath = '';
+    }
+    return ['mode' => $mode, 'media_id' => $mediaId, 'file_path' => $filePath];
+}
+
+function jhd_save_featured_media_pref(string $entityType, int $entityId, array $pref): array {
+    $entityType = in_array($entityType, ['post', 'book', 'lesson', 'topic'], true) ? $entityType : 'post';
+    if ($entityId < 1) return ['mode' => 'auto', 'media_id' => 0, 'file_path' => ''];
+    $mode = is_string($pref['mode'] ?? null) ? trim($pref['mode']) : 'auto';
+    if (!array_key_exists($mode, jhd_featured_media_pref_options())) $mode = 'auto';
+    $mediaId = max(0, (int)($pref['media_id'] ?? 0));
+    $filePath = is_string($pref['file_path'] ?? null) ? trim($pref['file_path']) : '';
+    if ($filePath !== '' && !jhd_is_usable_media_path($filePath)) {
+        $filePath = '';
+    }
+    $clean = ['mode' => $mode, 'media_id' => $mediaId, 'file_path' => $filePath];
+    setSetting('featured_media_' . $entityType . '_' . $entityId, (string)json_encode($clean, JSON_UNESCAPED_UNICODE));
+    return $clean;
+}
+
+/**
+ * تشخیص هوشمند رسانهٔ شاخص برای هر نوع محتوا (post, book, lesson, topic, media).
+ *
+ * @return array{
+ *   kind: 'image'|'video'|'audio'|'document'|'none',
+ *   url: string,
+ *   path: string,
+ *   poster: string,
+ *   media_id: int,
+ *   doc_type: string,
+ *   has_image: bool,
+ *   has_video: bool,
+ *   has_audio: bool,
+ *   has_document: bool,
+ *   pref_mode: string
+ * }
+ */
+function jhd_resolve_featured_media(array $item, string $entityType = 'post'): array {
+    $id = (int)($item['id'] ?? ($item['post_id'] ?? ($item['lesson_id'] ?? 0)));
+    $pref = ($id > 0 && in_array($entityType, ['post', 'book', 'lesson', 'topic'], true))
+        ? jhd_get_featured_media_pref($entityType, $id)
+        : ['mode' => 'auto', 'media_id' => 0, 'file_path' => ''];
+    if (!empty($item['featured_media_pref']) && is_string($item['featured_media_pref'])) {
+        $override = trim($item['featured_media_pref']);
+        if (array_key_exists($override, jhd_featured_media_pref_options())) {
+            $pref['mode'] = $override;
+        }
+    }
+
+    $imgPath = '';
+    $vidPath = '';
+    $vidMediaId = 0;
+    $audPath = '';
+    $audMediaId = 0;
+    $docPath = '';
+    $docMediaId = 0;
+
+    // ۱. بررسی تصویر شاخص روی رکورد یا گالری
+    foreach (['featured_image', 'cover_image', 'thumbnail'] as $imgCol) {
+        $cand = trim((string)($item[$imgCol] ?? ''));
+        if ($cand !== '' && jhd_is_usable_media_path($cand, 'image')) {
+            $imgPath = $cand;
+            break;
+        }
+    }
+    if ($imgPath === '' && $entityType === 'post' && $id > 0 && function_exists('getPostFeaturedImages')) {
+        foreach (getPostFeaturedImages($id) as $fi) {
+            $cand = trim((string)($fi['image_path'] ?? ''));
+            if ($cand !== '' && jhd_is_usable_media_path($cand, 'image')) {
+                $imgPath = $cand;
+                break;
+            }
+        }
+    }
+
+    // ۲. بررسی ویدیو روی رکورد یا جدول media_files
+    foreach (['featured_video', 'video_file'] as $vidCol) {
+        $cand = trim((string)($item[$vidCol] ?? ''));
+        if ($cand !== '' && jhd_is_usable_media_path($cand, 'video')) {
+            $vidPath = $cand;
+            break;
+        }
+    }
+    if ($entityType === 'media') {
+        $mKind = (string)($item['media_kind'] ?? ($item['kind'] ?? ''));
+        $mPath = trim((string)($item['path'] ?? ($item['file_path'] ?? '')));
+        if ($mKind === 'video' && jhd_is_usable_media_path($mPath, 'video')) {
+            $vidPath = $mPath;
+            $vidMediaId = (int)($item['media_id'] ?? ($item['id'] ?? 0));
+        } elseif ($mKind === 'audio' && jhd_is_usable_media_path($mPath, 'audio')) {
+            $audPath = $mPath;
+            $audMediaId = (int)($item['media_id'] ?? ($item['id'] ?? 0));
+        }
+    }
+
+    // ۳. بررسی صوت و سند روی رکورد
+    $candAud = trim((string)($item['audio_file'] ?? ''));
+    if ($candAud !== '' && jhd_is_usable_media_path($candAud, 'audio')) {
+        $audPath = $candAud;
+    }
+    foreach (['pdf_file', 'word_file', 'document_file'] as $docCol) {
+        $candDoc = trim((string)($item[$docCol] ?? ''));
+        if ($candDoc !== '' && jhd_is_usable_media_path($candDoc, 'document')) {
+            $docPath = $candDoc;
+            break;
+        }
+    }
+
+    // ۴. بررسی جدول media_files برای post/lesson/book در صورت نیاز
+    if ($id > 0 && in_array($entityType, ['post', 'lesson', 'book'], true)) {
+        if (!function_exists('getMediaFor')) {
+            require_once __DIR__ . '/media.php';
+        }
+    }
+    if ($id > 0 && in_array($entityType, ['post', 'lesson', 'book'], true) && function_exists('getMediaFor')) {
+        if ($vidPath === '') {
+            if ($entityType === 'post' && function_exists('getPostFeaturedVideos')) {
+                foreach (getPostFeaturedVideos($id) as $fv) {
+                    $cand = trim((string)($fv['file_path'] ?? ''));
+                    if (jhd_is_usable_media_path($cand, 'video')) {
+                        $vidPath = $cand;
+                        $vidMediaId = (int)($fv['id'] ?? 0);
+                        break;
+                    }
+                }
+            }
+            if ($vidPath === '') {
+                foreach (getMediaFor($entityType, $id, 'video') as $mv) {
+                    $cand = trim((string)($mv['file_path'] ?? ''));
+                    if (jhd_is_usable_media_path($cand, 'video')) {
+                        $vidPath = $cand;
+                        $vidMediaId = (int)($mv['id'] ?? 0);
+                        break;
+                    }
+                }
+            }
+        }
+        if ($audPath === '') {
+            foreach (getMediaFor($entityType, $id, 'audio') as $ma) {
+                $cand = trim((string)($ma['file_path'] ?? ''));
+                if (jhd_is_usable_media_path($cand, 'audio')) {
+                    $audPath = $cand;
+                    $audMediaId = (int)($ma['id'] ?? 0);
+                    break;
+                }
+            }
+        }
+        if ($docPath === '') {
+            foreach (getMediaFor($entityType, $id, 'document') as $md) {
+                $cand = trim((string)($md['file_path'] ?? ''));
+                if (jhd_is_usable_media_path($cand, 'document')) {
+                    $docPath = $cand;
+                    $docMediaId = (int)($md['id'] ?? 0);
+                    break;
+                }
+            }
+        }
+    }
+
+    $hasImage = $imgPath !== '';
+    $hasVideo = $vidPath !== '';
+    $hasAudio = $audPath !== '';
+    $hasDocument = $docPath !== '';
+
+    $imgUrl = $hasImage ? imgUrl($imgPath) : '';
+    $vidUrl = $hasVideo ? imgUrl($vidPath) : '';
+    $audUrl = $hasAudio ? imgUrl($audPath) : '';
+    $docUrl = $hasDocument ? imgUrl($docPath) : '';
+    $docExt = $hasDocument ? strtolower(pathinfo((string)(parse_url($docPath, PHP_URL_PATH) ?: $docPath), PATHINFO_EXTENSION)) : '';
+    $docType = in_array($docExt, ['doc', 'docx'], true) ? 'Word' : ($hasDocument ? 'PDF' : '');
+
+    $base = [
+        'has_image'    => $hasImage,
+        'has_video'    => $hasVideo,
+        'has_audio'    => $hasAudio,
+        'has_document' => $hasDocument,
+        'pref_mode'    => $pref['mode'],
+        'poster'       => $imgUrl,
+        'doc_type'     => $docType,
+    ];
+
+    $mode = $pref['mode'];
+    if ($mode === 'none') {
+        return $base + ['kind' => 'none', 'url' => '', 'path' => '', 'media_id' => 0];
+    }
+    if ($mode === 'video' && $hasVideo) {
+        return $base + ['kind' => 'video', 'url' => $vidUrl, 'path' => $vidPath, 'media_id' => $vidMediaId];
+    }
+    if ($mode === 'image' && $hasImage) {
+        return $base + ['kind' => 'image', 'url' => $imgUrl, 'path' => $imgPath, 'media_id' => 0];
+    }
+    if ($mode === 'audio' && $hasAudio) {
+        return $base + ['kind' => 'audio', 'url' => $audUrl, 'path' => $audPath, 'media_id' => $audMediaId];
+    }
+    if ($mode === 'document' && $hasDocument) {
+        return $base + ['kind' => 'document', 'url' => $docUrl, 'path' => $docPath, 'media_id' => $docMediaId];
+    }
+
+    // اولویت خودکار: تصویر (حالت ۱) ← ویدیو (حالت ۲) ← صوت (حالت ۴ الف) ← سند (حالت ۴ ب)
+    if ($hasImage) {
+        return $base + ['kind' => 'image', 'url' => $imgUrl, 'path' => $imgPath, 'media_id' => 0];
+    }
+    if ($hasVideo) {
+        return $base + ['kind' => 'video', 'url' => $vidUrl, 'path' => $vidPath, 'media_id' => $vidMediaId];
+    }
+    if ($hasAudio) {
+        return $base + ['kind' => 'audio', 'url' => $audUrl, 'path' => $audPath, 'media_id' => $audMediaId];
+    }
+    if ($hasDocument) {
+        return $base + ['kind' => 'document', 'url' => $docUrl, 'path' => $docPath, 'media_id' => $docMediaId];
+    }
+
+    return $base + ['kind' => 'none', 'url' => '', 'path' => '', 'media_id' => 0];
 }
 function countBooks(array $opts = []): int {
     ensureBooksTable();

@@ -56,7 +56,10 @@ $homepageEnabled = $homepageCfg['sections'];
 $homepageHeroId = $homepageCfg['hero_post_id'];
 // ریل‌های انتهای مطلب: کلیدهای تازه در همان جدول settings (بدون migration).
 $railsCfg = jhd_content_rails_settings();
+$internalPagesCfg = jhd_internal_pages_config();
+$internalPagesDefs = jhd_internal_pages_defaults();
 $homepageCategories = $db->query('SELECT id, name FROM categories ORDER BY name')->fetchAll();
+$homepageTopics = getTopics();
 
 $homepagePosts = [];
 try {
@@ -198,6 +201,21 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         }
         $railsCfg = jhd_normalize_rails_config($railsCfg);
         $railsConfigValue = json_encode($railsCfg, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        $internalPagesPosted = !empty($_POST['internal_pages_present']);
+        if ($internalPagesPosted) {
+            $postedInternal = $_POST['internal_pages'] ?? [];
+            if (!is_array($postedInternal)) { http_response_code(400); exit('Invalid internal pages setting'); }
+            foreach ($postedInternal as $pItem) {
+                if (!is_array($pItem)) { http_response_code(400); exit('Invalid internal pages setting'); }
+                foreach ($pItem as $pVal) {
+                    if (!is_string($pVal)) { http_response_code(400); exit('Invalid internal pages setting'); }
+                }
+            }
+            $internalPagesCfg = jhd_normalize_internal_pages_config($postedInternal);
+        }
+        $internalPagesConfigValue = json_encode($internalPagesCfg, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
         $homepageCfg = jhd_normalize_home_config($homepageCfg);
         if ($homepagePanelPosted && $homepageCfg['hero_mode'] === 'manual' && !jhd_home_feature($homepageCfg)) {
             $error = 'مطلب شاخص معتبر نیست؛ یک محتوای منتشرشده انتخاب کنید.';
@@ -234,6 +252,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 }
                 upsertSetting($db, 'homepage_config', $homepageConfigValue);
                 upsertSetting($db, 'content_rails_config', $railsConfigValue);
+                if ($internalPagesPosted) {
+                    upsertSetting($db, 'internal_pages_config', $internalPagesConfigValue);
+                }
                 if ($newLogo !== '') upsertSetting($db, 'site_logo', $newLogo);
                 $db->commit();
 
@@ -304,38 +325,129 @@ $sets = array_merge($sets, $formValues);
                         <?php /* نشانگر پنهان: بدون آن، «تیکِ خالی» با «درخواستِ ناقص» فرقی ندارد. */ ?>
                         <input type="hidden" name="homepage_sections_present" value="1">
                         <div class="row g-2">
-                            <?php foreach ($homepageSectionLabels as $sectionKey => $sectionLabel): ?>
+                            <?php
+                            $allHomeModes = jhd_display_mode_options();
+                            foreach ($homepageSectionLabels as $sectionKey => $sectionLabel):
+                                $secCfg = $homepageCfg['layout'][$sectionKey];
+                            ?>
                             <div class="col-12 col-sm-6">
-                                <label class="form-check border rounded-3 p-2 d-flex gap-2 align-items-center">
-                                    <input class="form-check-input m-0" type="checkbox" name="homepage_sections[]" value="<?= sanitize($sectionKey) ?>" <?= !empty($homepageEnabled[$sectionKey]) ? 'checked' : '' ?>>
-                                    <span><?= sanitize($sectionLabel) ?></span>
-                                </label>
-                                <label class="form-label">عنوان نمایشی
-                                  <input class="form-control" name="homepage_layout[<?= $sectionKey ?>][title]" maxlength="100" value="<?= sanitize($homepageCfg['layout'][$sectionKey]['title']) ?>">
-                                </label>
-                                <div class="d-flex gap-2">
-                                  <label>ترتیب (کوچک‌تر، بالاتر)<input class="form-control" type="number" min="0" max="99" name="homepage_layout[<?= $sectionKey ?>][order]" value="<?= $homepageCfg['layout'][$sectionKey]['order'] ?>"></label>
-                                  <label>تعداد<input class="form-control" type="number" min="1" max="<?= in_array($sectionKey, ['latest','popular'], true) ? 3 : 12 ?>" name="homepage_layout[<?= $sectionKey ?>][limit]" value="<?= $homepageCfg['layout'][$sectionKey]['limit'] ?>"></label>
+                                <div class="border rounded-3 p-2 h-100 bg-light bg-opacity-25">
+                                    <label class="form-check border rounded-3 p-2 d-flex gap-2 align-items-center bg-white mb-2">
+                                        <input class="form-check-input m-0" type="checkbox" name="homepage_sections[]" value="<?= sanitize($sectionKey) ?>" <?= !empty($homepageEnabled[$sectionKey]) ? 'checked' : '' ?>>
+                                        <span class="fw-bold"><?= sanitize($sectionLabel) ?></span>
+                                    </label>
+                                    <label class="form-label small mb-1">عنوان نمایشی بخش
+                                      <input class="form-control form-control-sm" name="homepage_layout[<?= $sectionKey ?>][title]" maxlength="100" value="<?= sanitize($secCfg['title']) ?>">
+                                    </label>
+                                    <div class="d-flex gap-2 mb-2">
+                                      <label class="small flex-grow-1">ترتیب (کوچک‌تر، بالاتر)<input class="form-control form-control-sm" type="number" min="0" max="99" name="homepage_layout[<?= $sectionKey ?>][order]" value="<?= (int)$secCfg['order'] ?>"></label>
+                                      <label class="small flex-grow-1">تعداد آیتم<input class="form-control form-control-sm" type="number" min="1" max="24" name="homepage_layout[<?= $sectionKey ?>][limit]" value="<?= (int)$secCfg['limit'] ?>"></label>
+                                    </div>
+                                    <?php if ($sectionKey !== 'feature'): ?>
+                                    <label class="form-label small mb-1">حالت نمایش کارت‌ها
+                                      <select class="form-select form-select-sm" name="homepage_layout[<?= $sectionKey ?>][mode]">
+                                        <?php foreach ($allHomeModes as $modeValue => $modeLabel): ?>
+                                        <option value="<?= $modeValue ?>" <?= $secCfg['mode'] === $modeValue ? 'selected' : '' ?>><?= sanitize($modeLabel) ?></option>
+                                        <?php endforeach; ?>
+                                      </select>
+                                    </label>
+                                    <?php endif; ?>
+                                    <div class="row g-1 mb-2">
+                                      <div class="col-6">
+                                        <label class="form-label small mb-1">روش انتخاب محتوا</label>
+                                        <select class="form-select form-select-sm" name="homepage_layout[<?= $sectionKey ?>][selection]">
+                                          <?php foreach (['auto' => 'خودکار', 'featured' => 'اولویت شاخص‌ها', 'topic' => 'موضوع علمی', 'manual' => 'انتخاب دستی'] as $selKey => $selLbl): ?>
+                                            <option value="<?= $selKey ?>" <?= ($secCfg['selection'] ?? 'auto') === $selKey ? 'selected' : '' ?>><?= $selLbl ?></option>
+                                          <?php endforeach; ?>
+                                        </select>
+                                      </div>
+                                      <div class="col-6">
+                                        <label class="form-label small mb-1">ترتیب آیتم‌ها</label>
+                                        <select class="form-select form-select-sm" name="homepage_layout[<?= $sectionKey ?>][sort]">
+                                          <?php foreach (['newest' => 'جدیدترین', 'oldest' => 'قدیمی‌ترین', 'popular' => 'پربازدیدترین', 'featured' => 'شاخص‌ها اول', 'manual' => 'ترتیب دستی'] as $sKey => $sLbl): ?>
+                                            <option value="<?= $sKey ?>" <?= ($secCfg['sort'] ?? 'newest') === $sKey ? 'selected' : '' ?>><?= $sLbl ?></option>
+                                          <?php endforeach; ?>
+                                        </select>
+                                      </div>
+                                    </div>
+                                    <?php if (in_array($sectionKey, ['popular','latest','news','writing','research'], true)): ?>
+                                    <label class="form-label small mb-1">دسته‌بندی
+                                      <select class="form-select form-select-sm" name="homepage_layout[<?= $sectionKey ?>][category]">
+                                        <option value="0">همهٔ دسته‌ها</option>
+                                        <?php foreach ($homepageCategories as $cat): ?>
+                                        <option value="<?= (int)$cat['id'] ?>" <?= (int)$secCfg['category'] === (int)$cat['id'] ? 'selected' : '' ?>><?= sanitize($cat['name']) ?></option>
+                                        <?php endforeach; ?>
+                                      </select>
+                                    </label>
+                                    <?php endif; ?>
+                                    <label class="form-label small mb-1">موضوع علمی مرتبط (اختیاری)
+                                      <select class="form-select form-select-sm" name="homepage_layout[<?= $sectionKey ?>][topic_id]">
+                                        <option value="0">— همه موضوعات —</option>
+                                        <?php foreach ($homepageTopics as $ht): ?>
+                                        <option value="<?= (int)$ht['id'] ?>" <?= (int)($secCfg['topic_id'] ?? 0) === (int)$ht['id'] ? 'selected' : '' ?>><?= sanitize($ht['name']) ?></option>
+                                        <?php endforeach; ?>
+                                      </select>
+                                    </label>
+
+                                    <details class="mt-2 small">
+                                      <summary class="text-muted" style="cursor:pointer">تنظیمات پیشرفته بخش (اجزای کارت، موبایل، لینک هدر و چیدمان دستی)</summary>
+                                      <div class="pt-2">
+                                        <div class="row g-1 mb-2">
+                                          <div class="col-6">
+                                            <label class="form-label small mb-0">تصویر/ویدیو</label>
+                                            <select class="form-select form-select-sm" name="homepage_layout[<?= $sectionKey ?>][show_media]">
+                                              <option value="1" <?= !empty($secCfg['show_media']) ? 'selected' : '' ?>>نمایش</option>
+                                              <option value="0" <?= empty($secCfg['show_media']) ? 'selected' : '' ?>>پنهان</option>
+                                            </select>
+                                          </div>
+                                          <div class="col-6">
+                                            <label class="form-label small mb-0">خلاصه متن</label>
+                                            <select class="form-select form-select-sm" name="homepage_layout[<?= $sectionKey ?>][show_excerpt]">
+                                              <option value="1" <?= !empty($secCfg['show_excerpt']) ? 'selected' : '' ?>>نمایش</option>
+                                              <option value="0" <?= empty($secCfg['show_excerpt']) ? 'selected' : '' ?>>پنهان</option>
+                                            </select>
+                                          </div>
+                                          <div class="col-6">
+                                            <label class="form-label small mb-0">تاریخ انتشار</label>
+                                            <select class="form-select form-select-sm" name="homepage_layout[<?= $sectionKey ?>][show_date]">
+                                              <option value="1" <?= !empty($secCfg['show_date']) ? 'selected' : '' ?>>نمایش</option>
+                                              <option value="0" <?= empty($secCfg['show_date']) ? 'selected' : '' ?>>پنهان</option>
+                                            </select>
+                                          </div>
+                                          <div class="col-6">
+                                            <label class="form-label small mb-0">نویسنده/متا</label>
+                                            <select class="form-select form-select-sm" name="homepage_layout[<?= $sectionKey ?>][show_meta]">
+                                              <option value="1" <?= !empty($secCfg['show_meta']) ? 'selected' : '' ?>>نمایش</option>
+                                              <option value="0" <?= empty($secCfg['show_meta']) ? 'selected' : '' ?>>پنهان</option>
+                                            </select>
+                                          </div>
+                                        </div>
+                                        <div class="mb-2">
+                                          <label class="form-label small mb-0">حالت نمایش اختصاصی در موبایل</label>
+                                          <select class="form-select form-select-sm" name="homepage_layout[<?= $sectionKey ?>][mobile_mode]">
+                                            <option value="inherit" <?= ($secCfg['mobile_mode'] ?? 'inherit') === 'inherit' ? 'selected' : '' ?>>هماهنگ با دسکتاپ</option>
+                                            <?php foreach ($allHomeModes as $mVal => $mLbl): ?>
+                                              <option value="<?= $mVal ?>" <?= ($secCfg['mobile_mode'] ?? 'inherit') === $mVal ? 'selected' : '' ?>><?= sanitize($mLbl) ?></option>
+                                            <?php endforeach; ?>
+                                          </select>
+                                        </div>
+                                        <div class="row g-1 mb-2">
+                                          <div class="col-6">
+                                            <label class="form-label small mb-0">متن لینک هدر</label>
+                                            <input class="form-control form-control-sm" name="homepage_layout[<?= $sectionKey ?>][more_label]" value="<?= sanitize((string)($secCfg['more_label'] ?? 'مشاهده همه')) ?>">
+                                          </div>
+                                          <div class="col-6">
+                                            <label class="form-label small mb-0">نشانی صفحه اختصاصی</label>
+                                            <input class="form-control form-control-sm" dir="ltr" name="homepage_layout[<?= $sectionKey ?>][more_url]" value="<?= sanitize((string)($secCfg['more_url'] ?? '')) ?>" placeholder="خالی = پیش‌فرض">
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <label class="form-label small mb-0">شناسه‌های انتخاب دستی (با ویرگول، مثلاً 3,7,12)</label>
+                                          <input class="form-control form-control-sm" dir="ltr" name="homepage_layout[<?= $sectionKey ?>][manual_ids]" value="<?= sanitize(implode(',', $secCfg['manual_ids'] ?? [])) ?>">
+                                        </div>
+                                      </div>
+                                    </details>
                                 </div>
-                                <?php if ($sectionKey !== 'feature'): ?>
-                                <label class="form-label">حالت کارت‌ها
-                                  <select class="form-select" name="homepage_layout[<?= $sectionKey ?>][mode]">
-                                    <?php foreach (['auto' => 'خودکار: ردیف فشرده در موبایل، کاشی کوچک در دسکتاپ', 'rows' => 'همیشه ردیف افقی فشرده', 'grid' => 'کاشی بزرگ شبکه‌ای', 'list'=>'فهرست با خلاصه', 'horizontal'=>'کارت افقی', 'featured'=>'مطلب شاخص و کارت‌های کناری', 'slider'=>'ردیف اسلایدی قابل پیمایش', 'minimal'=>'فقط تیتر و پیوند'] as $modeValue => $modeLabel): ?>
-                                    <option value="<?= $modeValue ?>" <?= $homepageCfg['layout'][$sectionKey]['mode'] === $modeValue ? 'selected' : '' ?>><?= $modeLabel ?></option>
-                                    <?php endforeach; ?>
-                                  </select>
-                                </label>
-                                <?php endif; ?>
-                                <?php if (in_array($sectionKey, ['popular','latest','news','writing','research'], true)): ?>
-                                <label class="form-label">دسته‌بندی
-                                  <select class="form-select" name="homepage_layout[<?= $sectionKey ?>][category]">
-                                    <option value="0">همهٔ دسته‌ها</option>
-                                    <?php foreach ($homepageCategories as $cat): ?>
-                                    <option value="<?= (int)$cat['id'] ?>" <?= $homepageCfg['layout'][$sectionKey]['category'] === (int)$cat['id'] ? 'selected' : '' ?>><?= sanitize($cat['name']) ?></option>
-                                    <?php endforeach; ?>
-                                  </select>
-                                </label>
-                                <?php endif; ?>
                             </div>
                             <?php endforeach; ?>
                         </div>
@@ -416,6 +528,113 @@ $sets = array_merge($sets, $formValues);
                             </label>
                             <div class="form-text">این آستانه برای بخش «پربازدیدترین‌ها» در صفحهٔ اصلی هم اعمال می‌شود.</div>
                         </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="admin-card mb-4" aria-labelledby="admin-internal-pages-heading">
+                <div class="admin-card-header" id="admin-internal-pages-heading">مدیریت نمایش صفحات داخلی (موضوعات، آرشیوها و صفحات تکی)</div>
+                <div class="admin-card-body">
+                    <p class="admin-settings-help">از این بخش می‌توانید نحوه نمایش، ترتیب محتوا، تعداد آیتم‌ها و نمایش یا پنهان‌سازی اجزای کارت را برای هر صفحهٔ داخلی به‌صورت مستقل از صفحهٔ اصلی تنظیم کنید.</p>
+                    <input type="hidden" name="internal_pages_present" value="1">
+                    <div class="row g-2">
+                        <?php
+                        $internalModes = jhd_display_mode_options();
+                        foreach ($internalPagesDefs as $pageKey => $pageDef):
+                            $pCfg = $internalPagesCfg[$pageKey] ?? $pageDef;
+                            $isSinglePage = in_array($pageKey, ['post', 'lesson', 'book'], true);
+                        ?>
+                        <div class="col-12 col-md-6">
+                            <div class="border rounded-3 p-2 h-100 bg-light bg-opacity-25">
+                                <div class="fw-bold small mb-2 text-primary"><i class="bi bi-file-earmark-richtext ms-1"></i><?= sanitize($pageDef['label']) ?></div>
+                                <?php if (!$isSinglePage): ?>
+                                <div class="row g-1 mb-2">
+                                    <div class="col-12">
+                                        <label class="form-label small mb-1">حالت نمایش کارت‌ها</label>
+                                        <select class="form-select form-select-sm" name="internal_pages[<?= $pageKey ?>][mode]">
+                                            <?php foreach ($internalModes as $mVal => $mLbl): ?>
+                                                <option value="<?= $mVal ?>" <?= ($pCfg['mode'] ?? 'grid') === $mVal ? 'selected' : '' ?>><?= sanitize($mLbl) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div class="col-7">
+                                        <label class="form-label small mb-1">ترتیب پیش‌فرض محتوا</label>
+                                        <select class="form-select form-select-sm" name="internal_pages[<?= $pageKey ?>][sort]">
+                                            <?php foreach (['newest' => 'جدیدترین', 'oldest' => 'قدیمی‌ترین', 'popular' => 'پربازدیدترین', 'featured' => 'شاخص‌ها اول'] as $sVal => $sLbl): ?>
+                                                <option value="<?= $sVal ?>" <?= ($pCfg['sort'] ?? 'newest') === $sVal ? 'selected' : '' ?>><?= $sLbl ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div class="col-5">
+                                        <label class="form-label small mb-1">تعداد در صفحه</label>
+                                        <input type="number" min="1" max="48" class="form-control form-control-sm" name="internal_pages[<?= $pageKey ?>][per_page]" value="<?= (int)($pCfg['per_page'] ?? 12) ?>">
+                                    </div>
+                                </div>
+                                <div class="row g-1">
+                                    <div class="col-6">
+                                        <label class="form-label small mb-0">تصویر/ویدیو</label>
+                                        <select class="form-select form-select-sm" name="internal_pages[<?= $pageKey ?>][show_media]">
+                                            <option value="1" <?= !empty($pCfg['show_media']) ? 'selected' : '' ?>>نمایش</option>
+                                            <option value="0" <?= empty($pCfg['show_media']) ? 'selected' : '' ?>>پنهان</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small mb-0">خلاصه متن</label>
+                                        <select class="form-select form-select-sm" name="internal_pages[<?= $pageKey ?>][show_excerpt]">
+                                            <option value="1" <?= !empty($pCfg['show_excerpt']) ? 'selected' : '' ?>>نمایش</option>
+                                            <option value="0" <?= empty($pCfg['show_excerpt']) ? 'selected' : '' ?>>پنهان</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small mb-0">تاریخ و متا</label>
+                                        <select class="form-select form-select-sm" name="internal_pages[<?= $pageKey ?>][show_date]">
+                                            <option value="1" <?= !empty($pCfg['show_date']) ? 'selected' : '' ?>>نمایش</option>
+                                            <option value="0" <?= empty($pCfg['show_date']) ? 'selected' : '' ?>>پنهان</option>
+                                        </select>
+                                        <input type="hidden" name="internal_pages[<?= $pageKey ?>][show_meta]" value="<?= !empty($pCfg['show_meta']) ? '1' : '0' ?>">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small mb-0">نوار موضوعات</label>
+                                        <select class="form-select form-select-sm" name="internal_pages[<?= $pageKey ?>][show_filter_bar]">
+                                            <option value="1" <?= !empty($pCfg['show_filter_bar']) ? 'selected' : '' ?>>نمایش</option>
+                                            <option value="0" <?= empty($pCfg['show_filter_bar']) ? 'selected' : '' ?>>پنهان</option>
+                                        </select>
+                                        <input type="hidden" name="internal_pages[<?= $pageKey ?>][show_topics]" value="1">
+                                    </div>
+                                </div>
+                                <?php else: ?>
+                                <div class="row g-1">
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">نمایش مطالب/موارد مرتبط</label>
+                                        <select class="form-select form-select-sm" name="internal_pages[<?= $pageKey ?>][show_related]">
+                                            <option value="1" <?= !empty($pCfg['show_related']) ? 'selected' : '' ?>>فعال</option>
+                                            <option value="0" <?= empty($pCfg['show_related']) ? 'selected' : '' ?>>غیرفعال</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">تعداد موارد مرتبط</label>
+                                        <input type="number" min="1" max="12" class="form-control form-control-sm" name="internal_pages[<?= $pageKey ?>][related_limit]" value="<?= (int)($pCfg['related_limit'] ?? 4) ?>">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small mb-0">نمایش برچسب موضوعات علمی</label>
+                                        <select class="form-select form-select-sm" name="internal_pages[<?= $pageKey ?>][show_topics]">
+                                            <option value="1" <?= !empty($pCfg['show_topics']) ? 'selected' : '' ?>>نمایش</option>
+                                            <option value="0" <?= empty($pCfg['show_topics']) ? 'selected' : '' ?>>پنهان</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small mb-0">حالت کارت‌های مرتبط</label>
+                                        <select class="form-select form-select-sm" name="internal_pages[<?= $pageKey ?>][mode]">
+                                            <?php foreach ($internalModes as $mVal => $mLbl): ?>
+                                                <option value="<?= $mVal ?>" <?= ($pCfg['mode'] ?? 'grid') === $mVal ? 'selected' : '' ?>><?= sanitize($mLbl) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <?php endforeach; ?>
                     </div>
                 </div>
             </section>

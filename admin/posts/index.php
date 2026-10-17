@@ -74,11 +74,11 @@ $topics   = getTopicFlatTree();   // فهرست تختِ درختی برای ف�
 <form method="get" class="admin-card mb-4" role="search">
     <div class="admin-card-body">
         <div class="row g-2 align-items-end">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label small text-muted">جستجو در عنوان، خلاصه و متن</label>
                 <input type="text" name="q" class="form-control" placeholder="جستجو..." value="<?= sanitize($search) ?>">
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label small text-muted">نوع محتوا</label>
                 <select name="type" class="form-select">
                     <option value="">همه انواع</option>
@@ -87,7 +87,18 @@ $topics   = getTopicFlatTree();   // فهرست تختِ درختی برای ف�
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
+                <label class="form-label small text-muted">موضوع علمی</label>
+                <select name="topic" class="form-select">
+                    <option value="0">همه موضوعات</option>
+                    <?php foreach ($topics as $tp): ?>
+                    <option value="<?= (int)$tp['id'] ?>" <?= $topic === (int)$tp['id'] ? 'selected' : '' ?>>
+                        <?= str_repeat('— ', (int)($tp['depth'] ?? 0)) . sanitize($tp['name']) ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-2">
                 <label class="form-label small text-muted">وضعیت انتشار</label>
                 <select name="status" class="form-select">
                     <option value="">همه وضعیت‌ها</option>
@@ -103,8 +114,8 @@ $topics   = getTopicFlatTree();   // فهرست تختِ درختی برای ف�
                     <option value="video" <?= $media === 'video' ? 'selected' : '' ?>>دارای ویدیو/صوت</option>
                 </select>
             </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search ms-1"></i>اعمال فیلتر</button>
+            <div class="col-md-1">
+                <button type="submit" class="btn btn-primary w-100" title="اعمال فیلتر"><i class="bi bi-search"></i></button>
             </div>
         </div>
     </div>
@@ -159,7 +170,22 @@ $topics   = getTopicFlatTree();   // فهرست تختِ درختی برای ف�
                             </div>
                         </td>
                         <td><?= postTypeBadge($p['post_type']) ?></td>
-                        <td class="text-muted small"><?= sanitize($p['cat_name'] ?: '—') ?></td>
+                        <td class="text-muted small">
+                            <?php
+                            $pTopics = getTopicsFor('post', (int)$p['id']);
+                            if ($pTopics):
+                                foreach ($pTopics as $pt):
+                            ?>
+                                <a href="<?= sanitize(adminUrl('topics', ['edit' => (int)$pt['id']])) ?>" class="badge bg-light text-dark border text-decoration-none me-1"><?= sanitize($pt['name']) ?></a>
+                            <?php
+                                endforeach;
+                            elseif (!empty($p['cat_name'])):
+                                echo sanitize($p['cat_name']);
+                            else:
+                                echo '—';
+                            endif;
+                            ?>
+                        </td>
                         <td class="text-muted small" style="white-space:nowrap">
                             <i class="bi bi-images" title="تصویرها"></i> <?= (int)($p['image_count'] ?? 0) ?>
                             <?php if ((int)($p['media_count'] ?? 0) > 0): ?>

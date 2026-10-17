@@ -3,10 +3,14 @@ $pageTitle='پرسش و پاسخ';
 $pageDesc='پرسش و پاسخ‌های دینی و علمی — پاسخ‌های مستند بر اساس قرآن و روایات.';
 require_once __DIR__.'/../includes/header.php';
 require_once __DIR__.'/../includes/functions.php';
+$pageCfg = jhd_internal_page_config('qa');
 $search=trim($_GET['q'] ?? '');
+$sort = (string)($_GET['sort'] ?? ($pageCfg['sort'] ?? 'newest'));
+if (!in_array($sort, ['newest', 'oldest', 'popular', 'featured'], true)) $sort = 'newest';
 $page=max(1,(int)($_GET['page'] ?? 1));
-$limit=12; $offset=($page-1)*$limit;
-$opts=['type'=>'qa','limit'=>$limit,'offset'=>$offset];
+$limit=(int)($pageCfg['per_page'] ?? 12); $offset=($page-1)*$limit;
+$opts=['type'=>'qa','limit'=>$limit,'offset'=>$offset,'sort'=>$sort==='featured'?'newest':$sort];
+if($sort==='featured') $opts['featured']=1;
 if($search) $opts['search']=$search;
 $posts=getPosts($opts);
 $total=countPosts(array_merge(['type'=>'qa'], $search?['search'=>$search]:[]));
@@ -22,7 +26,7 @@ $noindexSeo = ($total === 0);
 <?= renderCategoryChips(['qa'], url('qa'), 'همه پرسش‌ها') ?>
 <?php if(empty($posts)): ?><?= renderEmptyState('bi-question-circle', 'هنوز پرسشی در این بخش ثبت نشده است.', url(), 'بازگشت به صفحه اصلی') ?>
 <?php else: ?>
-<?= jhd_post_archive($posts, ['page' => $page, 'search' => $search, 'cta' => 'مشاهده پاسخ']) ?>
+<?= jhd_post_archive($posts, array_merge($pageCfg, ['page' => $page, 'search' => $search, 'sort' => $sort, 'cta' => 'مشاهده پاسخ'])) ?>
 <?php if($pages>1): ?><div class="mt-4"><?= paginate($total,$limit,$page, url('qa', ['q' => $search, 'page' => '%d'])) ?></div><?php endif; ?>
 <?php endif; ?>
 </div></div>

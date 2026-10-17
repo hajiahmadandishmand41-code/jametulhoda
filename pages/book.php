@@ -66,9 +66,11 @@ $breadcrumbs = [
 $breadcrumbsJsonLd = breadcrumbsJsonLd($breadcrumbs);
 $bookJsonLd = bookJsonLd($book);
 
+$bookPageCfg = jhd_internal_page_config('book');
+$resolvedBookMedia = jhd_resolve_featured_media($book, 'book');
 $topics = getTopicsForBook((int)$book['id']);
 $attachments = getMediaFor('book', (int)$book['id'], 'document');
-$related = getRelatedBooks((int)$book['id'], 6);
+$related = !empty($bookPageCfg['show_related']) ? getRelatedBooks((int)$book['id'], (int)($bookPageCfg['related_limit'] ?? 6)) : [];
 require __DIR__.'/../includes/header.php';
 ?>
 
@@ -78,7 +80,7 @@ require __DIR__.'/../includes/header.php';
 </ol></nav>
 </div></div>
 
-<article class="container py-4 py-md-5 jhd-book-detail">
+<article class="container py-4 py-md-5 jhd-book-detail" data-featured-media="<?= sanitize((string)$resolvedBookMedia['kind']) ?>">
 <?php
 $bookDetailUrl = bookUrl($book);
 $bookDownloadPdfUrl = $bookDetailUrl . (str_contains($bookDetailUrl, '?') ? '&' : '?') . 'download=pdf';
@@ -180,11 +182,15 @@ $bookDownloadWordUrl = $bookDetailUrl . (str_contains($bookDetailUrl, '?') ? '&'
 <?= jhd_share_row($bookCanonical, (string)$book['title']) ?>
 
 <?php if ($related): ?>
-<section class="jhd-book-related jhd-book-section" aria-labelledby="book-related-title">
+<section class="jhd-book-related jhd-book-section" aria-labelledby="book-related-title" data-display-mode="<?= sanitize((string)($bookPageCfg['mode'] ?? 'grid')) ?>">
   <h2 id="book-related-title" class="jhd-book-section-title"><i class="bi bi-collection" aria-hidden="true"></i>کتاب‌های مرتبط</h2>
-  <?= jhd_grid_open() ?>
-  <?php foreach ($related as $rb) echo renderBookCard($rb); ?>
-  <?= jhd_grid_close() ?>
+  <?php if (($bookPageCfg['mode'] ?? 'grid') === 'grid'): ?>
+    <?= jhd_grid_open() ?>
+    <?php foreach ($related as $rb) echo renderBookCard($rb, $bookPageCfg); ?>
+    <?= jhd_grid_close() ?>
+  <?php else: ?>
+    <?= jhd_render_section_items($related, 'book', (string)($bookPageCfg['mode'] ?? 'grid'), $bookPageCfg) ?>
+  <?php endif; ?>
 </section>
 <?php endif; ?>
 </article>

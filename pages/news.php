@@ -11,16 +11,19 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 startPublicSession();
 
+$pageCfg = jhd_internal_page_config('news');
 $search = trim($_GET['q'] ?? '');
 $category = max(0, (int)($_GET['cat'] ?? 0));
-$sort = (string)($_GET['sort'] ?? 'newest');
-if (!in_array($sort, ['newest', 'oldest', 'popular'], true)) $sort = 'newest';
+$defaultSort = in_array((string)($pageCfg['sort'] ?? 'newest'), ['newest', 'oldest', 'popular', 'featured'], true) ? (string)$pageCfg['sort'] : 'newest';
+$sort = (string)($_GET['sort'] ?? $defaultSort);
+if (!in_array($sort, ['newest', 'oldest', 'popular', 'featured'], true)) $sort = 'newest';
 $archiveCategories = getCategories();
 $page   = max(1, (int)($_GET['page'] ?? 1));
-$limit  = POSTS_PER_PAGE;
+$limit  = (int)($pageCfg['per_page'] ?? POSTS_PER_PAGE);
 $offset = ($page - 1) * $limit;
 
-$opts = ['types' => ['news', 'announcement'], 'limit' => $limit, 'offset' => $offset, 'sort' => $sort];
+$opts = ['types' => ['news', 'announcement'], 'limit' => $limit, 'offset' => $offset, 'sort' => $sort === 'featured' ? 'newest' : $sort];
+if ($sort === 'featured') $opts['featured'] = 1;
 if ($category) $opts['cat'] = $category;
 if ($search) $opts['search'] = $search;
 
@@ -109,7 +112,7 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
         <?php else: ?>
 
-        <?= jhd_post_archive($posts, ['page' => $page, 'search' => $search, 'sort' => $sort]) ?>
+        <?= jhd_post_archive($posts, array_merge($pageCfg, ['page' => $page, 'search' => $search, 'sort' => $sort])) ?>
 
     <?php $rails = jhd_listing_rails($posts); ?>
     <?= jhd_discovery_band([
