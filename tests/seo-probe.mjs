@@ -99,6 +99,8 @@ try {
   const modeUrl = new URL(canonical(modeProbe.text), BASE);
   queryMode = modeUrl.pathname.endsWith('/index.php') && modeUrl.searchParams.has('p');
 } catch { /* the content-index checks below report a bad/missing canonical */ }
+const expectedTopicsIndexUrl = queryMode ? abs('/index.php?p=topics') : abs('/topics');
+record('sitemap includes the scientific-topics index', locs.includes(expectedTopicsIndexUrl), expectedTopicsIndexUrl);
 const publicQueryRoutes = new Set([
   'about', 'announcement', 'announcements', 'article', 'articles', 'audio', 'audios', 'book', 'books',
   'category', 'contact', 'event', 'events', 'lesson', 'lessons', 'media', 'news',
@@ -132,6 +134,14 @@ const queryUrlIsPublic = (value) => {
 };
 const leaked = locs.filter((u) => forbidden.test(u.replace(/^https?:\/\/[^/]+/, '')) || !queryUrlIsPublic(u));
 record('/sitemap.xml contains only public canonical URLs', leaked.length === 0, leaked.slice(0, 5).join(', '));
+
+const robotsLines = robots.text.split(/\r?\n/);
+const robotsDisallows = robotsLines.filter((line) => /^\s*Disallow:/i.test(line));
+const blockedNoindexRoutes = robotsDisallows.filter((line) => /\/(?:login|register|logout|account|profile|password-change|search|read)(?:\/|$|\*)/i.test(line));
+record('robots.txt allows crawlers to read public noindex/redirect routes', blockedNoindexRoutes.length === 0, blockedNoindexRoutes.join(', ') || 'no public noindex surfaces are disallowed');
+const blanketQueryBlocks = robotsDisallows.filter((line) => /(?:\*\?p=\s*$|\/index\.php\?p=\s*$)/i.test(line));
+record('robots.txt does not blanket-block legacy query redirects', blanketQueryBlocks.length === 0, blanketQueryBlocks.join(', ') || 'legacy query URLs remain crawlable');
+record('robots.txt still blocks admin and internal API paths', ['/admin', '/api/'].every((path) => robotsDisallows.some((line) => line.trim().replace(/^Disallow:\s*/i, '').endsWith(path))), robotsDisallows.join(' | '));
 
 // 2. Favicon / logo identity --------------------------------------------------
 console.log('\n--- Logo & favicon identity ---');
@@ -203,7 +213,7 @@ record('PNG icon link is square and sized',
 // which the sitemap (correctly) cannot cover.
 console.log('\n--- Content type indexes ---');
 const indexQueryRoute = {
-  '/news': 'news', '/articles': 'articles', '/reports': 'reports',
+  '/news': 'news', '/articles': 'articles', '/topics': 'topics', '/reports': 'reports',
   '/announcements': 'announcements', '/programs': 'programs',
   '/religious-activities': 'religious-activities', '/speeches': 'speeches', '/qa': 'qa',
   '/lessons': 'lessons', '/books': 'books', '/media': 'media',
@@ -211,6 +221,7 @@ const indexQueryRoute = {
 for (const [path, label] of [
   ['/news', 'news'],
   ['/articles', 'article'],
+  ['/topics', 'topics'],
   ['/reports', 'report'],
   ['/announcements', 'announcement'],
   ['/programs', 'program'],
@@ -254,6 +265,7 @@ const PREFIX_LABEL = [
   ['/speech/', 'speech'],
   ['/lessons/', 'lesson'],
   ['/books/', 'book'],
+  ['/topics/', 'topic'],
   ['/category/', 'category'],
   ['/video/', 'video'],
   ['/audio/', 'audio'],
@@ -264,7 +276,7 @@ const queryDetailLabel = {
   announcement: 'announcement', article: 'article', audio: 'audio', book: 'book',
   category: 'category', event: 'event', lesson: 'lesson', news: 'news', qa: 'Q&A',
   post: 'news', program: 'program', religious: 'religious activity', report: 'report',
-  research: 'research', speech: 'speech', video: 'video',
+  research: 'research', speech: 'speech', topic: 'topic', video: 'video',
 };
 for (const loc of locs) {
   const parsed = new URL(loc);
@@ -399,7 +411,7 @@ for (const [legacy, expected] of legacyPairs) {
 
 // 6. Pages that must stay out of the index ------------------------------------
 console.log('\n--- Noindex surfaces ---');
-for (const path of ['/search', '/login', '/register']) {
+for (const path of ['/search', '/login', '/register', '/topics?q=mahdaviat']) {
   const res = await get(path, { redirect: 'manual' });
   if (res.status === 200) {
     const rob = metaContent(res.text, 'name', 'robots');

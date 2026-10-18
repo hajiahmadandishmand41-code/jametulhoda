@@ -46,7 +46,7 @@ function jhd_sitemap_url(string $relative, string $origin): string {
         throw new RuntimeException('Invalid sitemap URL');
     }
     $path = substr((string)($parts['path'] ?? '/'), strlen(BASE_PATH));
-    if (preg_match('~^/(?:admin|login|register|logout|account|profile|password-change|search|read|php|install|api|config|includes|pages|storage|uploads|tests|bin|assets|topic|topics)(?:[/.]|$)~i', $path)) {
+    if (preg_match('~^/(?:admin|login|register|logout|account|profile|password-change|search|read|php|install|api|config|includes|pages|storage|uploads|tests|bin|assets)(?:[/.]|$)~i', $path)) {
         throw new RuntimeException('Non-indexable sitemap URL');
     }
     parse_str((string)($parts['query'] ?? ''), $query);
@@ -58,7 +58,7 @@ function jhd_sitemap_url(string $relative, string $origin): string {
         'news','articles','reports','books','lessons','media','audios','events','programs',
         'announcements','religious-activities','qa','speeches','about','contact',
         'post','article','research','report','event','announcement','program','religious',
-        'speech','book','lesson','category','audio','video',
+        'speech','book','lesson','topic','topics','category','audio','video',
     ], true)) throw new RuntimeException('Private query route');
     return $loc;
 }
@@ -75,7 +75,7 @@ function jhd_sitemap_entries(PDO $db): array {
         if ($date !== null) $entry['lastmod'] = $date;
         $entries[$loc] = $entry;
     };
-    foreach (['', 'about', 'contact'] as $route) $add(url($route));
+    foreach (['', 'about', 'contact', 'topics'] as $route) $add(url($route));
 
     // status='published' is the public controllers' publication rule. Do not
     // introduce a new scheduler: future event dates are intentionally public.
@@ -132,6 +132,35 @@ function jhd_sitemap_entries(PDO $db): array {
         $rows = $db->query("SELECT c.slug FROM categories c WHERE COALESCE(c.slug,'')<>'' AND EXISTS (SELECT 1 FROM posts p WHERE p.category_id=c.id AND p.status='published') ORDER BY c.id");
         foreach ($rows->fetchAll() as $row) $add(categoryUrl($row));
     }
+    // Public topic detail pages use the same hierarchy-aware canonical URL helper as page templates.
+    // Prime every row first so parent/child URLs require no per-topic database lookups.
+    $topicRows = $db->query("SELECT * FROM topics ORDER BY sort_order ASC, name ASC, id ASC")->fetchAll();
+    if (function_exists('jhd_prime_topic_cache')) jhd_prime_topic_cache($topicRows);
+
+    // Read topic visibility settings through this PDO handle so sitemap generation
+    // uses the same database snapshot as its content queries. No rows are modified.
+    $topicDisplayById = [];
+    foreach ($db->query("SELECT setting_key, value FROM settings")->fetchAll() as $setting) {
+        $key = (string)($setting['setting_key'] ?? '');
+        if (!preg_match('/^topic_display_(\d+)$/D', $key, $match)) continue;
+        $display = json_decode((string)($setting['value'] ?? ''), true);
+        if (is_array($display)) $topicDisplayById[(int)$match[1]] = $display;
+    }
+    foreach ($topicRows as $topic) {
+        if ((int)($topic['is_active'] ?? 0) !== 1 || trim((string)($topic['slug'] ?? '')) === '') continue;
+        $topicId = (int)($topic['id'] ?? 0);
+        if ($topicId < 1) continue;
+        $display = $topicDisplayById[$topicId] ?? [];
+        $visibility = in_array($display['visibility'] ?? 'public', ['public', 'hidden_lists', 'inactive'], true)
+            ? (string)($display['visibility'] ?? 'public')
+            : 'public';
+        // pages/topic.php returns 404 for topics marked inactive.
+        if ($visibility === 'inactive') continue;
+        $detailUrl = topicUrl($topic);
+        if ($detailUrl === url('topics')) continue; // Avoid an empty-slug duplicate of the archive.
+        $add($detailUrl, $topic);
+    }
+
     if ($optional['lesson_collections']) {
         $rows = $db->query("SELECT c.id,c.slug,c.updated_at,c.created_at FROM lesson_collections c WHERE c.is_active=1 AND COALESCE(c.slug,'')<>'' AND EXISTS (SELECT 1 FROM lessons l WHERE l.collection_id=c.id AND l.status='published') ORDER BY c.id");
         foreach ($rows->fetchAll() as $row) $add(collectionUrl($row), $row);
