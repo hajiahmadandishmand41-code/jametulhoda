@@ -27,19 +27,12 @@ if (!in_array(APP_ENV, ['production', 'local'], true)) {
 }
 $base = rtrim(BASE_PATH, '/');
 foreach ([
-    '/admin', '/login', '/logout', '/register', '/account', '/profile',
-    '/password-change', '/search', '/read', '/install', '/php/', '/migrate',
+    '/admin', '/install', '/php/', '/migrate',
     '/api/', '/bin/', '/config/', '/database/', '/includes/', '/pages/', '/storage/', '/tests/',
 ] as $path) echo "Disallow: {$base}{$path}\n";
 
-if (JHD_PRETTY_URLS) {
-    // Legacy query URLs redirect to the clean canonical paths on Vercel.
-    echo "Disallow: {$base}/*?p=\nDisallow: {$base}/index.php?p=\n";
-} else {
-    // Keep public query-mode content crawlable while excluding private forms.
-    foreach (['login','register','logout','account','profile','password-change','search','read','admin'] as $route) {
-        echo "Disallow: {$base}/*?p={$route}\n";
-        echo "Disallow: {$base}/*&p={$route}\n";
-    }
-}
+// Do not blanket-block public noindex pages or legacy query URLs. Crawlers must
+// be able to observe their noindex tags and follow redirects to canonical URLs.
+// The admin query route remains disallowed, in addition to the /admin path.
+echo "Disallow: {$base}/*?p=admin\nDisallow: {$base}/*&p=admin\n";
 echo "Allow: {$base}/\nSitemap: {$sitemapUrl}\n";
