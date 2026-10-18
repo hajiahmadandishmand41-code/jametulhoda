@@ -10,13 +10,17 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 startPublicSession();
 
+$pageCfg = jhd_internal_page_config('reports');
 $search = trim($_GET['q'] ?? '');
+$sort = (string)($_GET['sort'] ?? ($pageCfg['sort'] ?? 'newest'));
+if (!in_array($sort, ['newest', 'oldest', 'popular', 'featured'], true)) $sort = 'newest';
 
 $page = max(1, (int)($_GET['page'] ?? 1));
-$limit = 12;
+$limit = (int)($pageCfg['per_page'] ?? 12);
 $offset = ($page - 1) * $limit;
 
-$opts = ['type' => 'report', 'limit' => $limit, 'offset' => $offset];
+$opts = ['type' => 'report', 'limit' => $limit, 'offset' => $offset, 'sort' => $sort === 'featured' ? 'newest' : $sort];
+if ($sort === 'featured') $opts['featured'] = 1;
 if ($search) $opts['search'] = $search;
 
 $posts = getPosts($opts);
@@ -102,7 +106,7 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
     <?php else: ?>
     <?= renderCategoryChips(['report'], url('reports'), 'همه گزارش‌ها') ?>
-    <?= jhd_post_archive($posts, ['page' => $page, 'search' => $search ?? '', 'cta' => 'ادامه مطلب']) ?>
+    <?= jhd_post_archive($posts, array_merge($pageCfg, ['page' => $page, 'search' => $search ?? '', 'sort' => $sort, 'cta' => 'ادامه مطلب'])) ?>
 
 
     <?= jhd_discovery_band([

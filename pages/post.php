@@ -177,6 +177,9 @@ if (!empty($featuredImagePaths[0])) {
     $ogImageAlt = (string)$post['title'];
 }
 
+$postPageCfg = jhd_internal_page_config('post');
+$postMediaPref = jhd_get_featured_media_pref('post', (int)$post['id']);
+$resolvedPostMedia = jhd_resolve_featured_media($post, 'post');
 require_once __DIR__ . '/../includes/header.php';
 ?>
 <div class="breadcrumb-bar"><div class="container"><nav aria-label="breadcrumb"><ol class="breadcrumb mb-0">
@@ -187,7 +190,7 @@ require_once __DIR__ . '/../includes/header.php';
 
 <div class="jhd-section"><div class="container"><div class="row g-4">
 <div class="col-lg-8">
-<article class="jhd-article" itemscope itemtype="https://schema.org/Article">
+<article class="jhd-article" data-featured-media="<?= sanitize((string)$resolvedPostMedia['kind']) ?>" itemscope itemtype="https://schema.org/Article">
     <header class="jhd-article-head">
         <div class="d-flex flex-wrap gap-2 mb-2">
             <span class="jhd-card-badge jhd-card-badge--inline"><?= sanitize(postTypeLabel((string)$post['post_type'])) ?></span>
@@ -203,19 +206,24 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
     </header>
 
-    <?php if (count($featuredImagePaths) > 1): ?>
-    <!-- چند تصویر شاخص: همان نگارخانهٔ استاندارد سایت، در بالای مطلب -->
-    <section class="jhd-featured-media" aria-label="تصاویر شاخص مطلب">
-        <?= jhd_gallery(array_map(static function (string $path) use ($featuredImages, $post): array {
-            $alt = (string)$post['title'];
-            foreach ($featuredImages as $row) if ((string)$row['image_path'] === $path && !empty($row['alt_text'])) $alt = (string)$row['alt_text'];
-            return ['path' => $path, 'alt' => $alt];
-        }, $featuredImagePaths), ['title' => 'تصاویر شاخص']) ?>
-    </section>
-    <?php elseif ($featuredImagePaths): ?>
-    <figure class="jhd-article-figure">
-        <img src="<?= imgUrl($featuredImagePaths[0]) ?>" alt="<?= sanitize($post['title']) ?>" loading="eager" fetchpriority="high" decoding="async" itemprop="image">
-    </figure>
+    <?php
+    $renderImageBlock = ($postMediaPref['mode'] ?? 'auto') !== 'none' && !empty($featuredImagePaths);
+    $videoFirst = (($postMediaPref['mode'] ?? 'auto') === 'video') && !empty($postVideos);
+    ?>
+    <?php if (!$videoFirst && $renderImageBlock): ?>
+        <?php if (count($featuredImagePaths) > 1): ?>
+        <section class="jhd-featured-media" aria-label="تصاویر شاخص مطلب">
+            <?= jhd_gallery(array_map(static function (string $path) use ($featuredImages, $post): array {
+                $alt = (string)$post['title'];
+                foreach ($featuredImages as $row) if ((string)$row['image_path'] === $path && !empty($row['alt_text'])) $alt = (string)$row['alt_text'];
+                return ['path' => $path, 'alt' => $alt];
+            }, $featuredImagePaths), ['title' => 'تصاویر شاخص']) ?>
+        </section>
+        <?php else: ?>
+        <figure class="jhd-article-figure">
+            <img src="<?= imgUrl($featuredImagePaths[0]) ?>" alt="<?= sanitize($post['title']) ?>" loading="eager" fetchpriority="high" decoding="async" itemprop="image">
+        </figure>
+        <?php endif; ?>
     <?php endif; ?>
 
     <?php if ($postVideos): ?>
@@ -237,6 +245,22 @@ require_once __DIR__ . '/../includes/header.php';
         <div class="d-flex gap-2 mt-2"><button type="button" class="btn btn-outline-primary btn-sm" id="postVideoPrev"><i class="bi bi-skip-end-fill"></i> قبلی</button><button type="button" class="btn btn-outline-primary btn-sm" id="postVideoNext">بعدی <i class="bi bi-skip-start-fill"></i></button></div>
         <?php endif; ?>
     </section>
+    <?php endif; ?>
+
+    <?php if ($videoFirst && $renderImageBlock): ?>
+        <?php if (count($featuredImagePaths) > 1): ?>
+        <section class="jhd-featured-media mt-3" aria-label="تصاویر شاخص مطلب">
+            <?= jhd_gallery(array_map(static function (string $path) use ($featuredImages, $post): array {
+                $alt = (string)$post['title'];
+                foreach ($featuredImages as $row) if ((string)$row['image_path'] === $path && !empty($row['alt_text'])) $alt = (string)$row['alt_text'];
+                return ['path' => $path, 'alt' => $alt];
+            }, $featuredImagePaths), ['title' => 'تصاویر شاخص']) ?>
+        </section>
+        <?php else: ?>
+        <figure class="jhd-article-figure mt-3">
+            <img src="<?= imgUrl($featuredImagePaths[0]) ?>" alt="<?= sanitize($post['title']) ?>" loading="lazy" decoding="async" itemprop="image">
+        </figure>
+        <?php endif; ?>
     <?php endif; ?>
 
     <?php if ($postAudios): ?>
@@ -314,9 +338,10 @@ require_once __DIR__ . '/../includes/header.php';
     <?php endif; ?>
 
     <?= jhd_share_row($postCanonicalUrl, (string)$post['title']) ?>
-    <?php if ($related): ?>
-    <section class="mt-4" aria-labelledby="related-heading"><h2 class="h4" id="related-heading">مطالب مرتبط</h2>
-      <div class="row g-2"><?php foreach ($related as $item) echo renderPostCard($item, ['col' => 'col-12 col-md-6', 'compact' => true]); ?></div>
+    <?php if (!empty($postPageCfg['show_related']) && $related): ?>
+    <?php $relSlice = array_slice($related, 0, (int)($postPageCfg['related_limit'] ?? 4)); ?>
+    <section class="mt-4" aria-labelledby="related-heading" data-display-mode="<?= sanitize((string)($postPageCfg['mode'] ?? 'rows')) ?>"><h2 class="h4" id="related-heading">مطالب مرتبط</h2>
+      <?= jhd_render_section_items($relSlice, 'post', (string)($postPageCfg['mode'] ?? 'auto'), $postPageCfg) ?>
     </section>
     <?php endif; ?>
 

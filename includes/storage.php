@@ -17,6 +17,12 @@ function &contentUploadScope(): array {
  * never contended.
  */
 function uploadJournalDB(): PDO {
+    try {
+        $main = getDB();
+        if ($main->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite' && $main->inTransaction()) {
+            return $main;
+        }
+    } catch (Throwable) {}
     static $db;
     return $db ??= newDatabaseConnection();
 }

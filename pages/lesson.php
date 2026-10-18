@@ -87,9 +87,14 @@ require_once __DIR__.'/../includes/header.php';
 
 <div class="jhd-section">
  <div class="container">
+<?php
+$lessonPageCfg = jhd_internal_page_config('lesson');
+$lessonMediaPref = jhd_get_featured_media_pref('lesson', (int)$lesson['id']);
+$resolvedLessonMedia = jhd_resolve_featured_media($lesson, 'lesson');
+?>
   <div class="row g-4">
    <div class="col-lg-8">
-    <article class="jhd-article" itemscope itemtype="https://schema.org/LearningResource">
+    <article class="jhd-article" data-featured-media="<?= sanitize((string)$resolvedLessonMedia['kind']) ?>" itemscope itemtype="https://schema.org/LearningResource">
       <header class="jhd-article-head">
         <div class="jhd-cat-strip">
           <?php if ($lesson['collection_title']): ?><a class="jhd-chip" href="<?= collectionUrl($lesson['collection_slug']) ?>"><?= sanitize($lesson['collection_title']) ?></a><?php endif; ?>
