@@ -1,0 +1,13 @@
+diff --git a/README.md b/README.md
+index fb24dd9..f88f53a 100644
+--- a/README.md
++++ b/README.md
+@@ -27,7 +27,7 @@ Empire is a multi-vendor e-commerce platform built on **Spree Commerce 6.0.4** (
+ | Storefront | Next.js 16.4.6 + React 19.3 + TypeScript + Tailwind 4 |
+ | Database | PostgreSQL 18 |
+ | Jobs / cache / cable | Solid Queue / Solid Cache / Solid Cable (PostgreSQL-backed; no Redis required) |
+-| Spree CLI | `@spree/cli` 3.7.0 (wraps Docker Compose for humans) |
++| Spree CLI | `@spree/cli` 3.8.0 (wraps Docker Compose for humans) |
+ 
+ ## Quick start (development, requires Docker)
+ 
